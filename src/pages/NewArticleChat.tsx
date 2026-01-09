@@ -12,7 +12,8 @@ import { ArticlePreview } from "@/components/ArticlePreview";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, ArrowLeft, Save, FileText, Eye, MessageCircle, Mic, Cloud, CloudUpload } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, ArrowLeft, Save, FileText, Eye, MessageCircle, Mic, Cloud, CloudUpload, Sparkles } from "lucide-react";
 
 interface ArticleData {
   title: string;
@@ -264,6 +265,14 @@ export default function NewArticleChat() {
             </Sheet>
           )}
         </div>
+
+        {/* Welcome Message */}
+        <Alert className="mx-6 mt-4 bg-primary/5 border-primary/20">
+          <Sparkles className="h-4 w-4" />
+          <AlertDescription>
+            Digite o tema do artigo e clique em gerar. <strong>O sistema cuida do resto.</strong>
+          </AlertDescription>
+        </Alert>
 
         {/* Chat Area - Full Width & Height */}
         <div className="flex-1 flex items-center justify-center p-6 bg-muted/30">

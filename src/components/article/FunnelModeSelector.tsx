@@ -39,6 +39,7 @@ const FUNNEL_OPTIONS = [
     color: 'text-amber-500',
     bgColor: 'bg-amber-500/10',
     borderColor: 'border-amber-500/30',
+    recommended: true,
   },
   {
     value: 'bottom' as FunnelMode,
@@ -94,8 +95,11 @@ export function FunnelModeSelector({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Modo de Funil</Label>
-          <Badge variant="secondary" className="text-xs">Obrigatório</Badge>
+          <Badge variant="outline" className="text-xs">Opcional</Badge>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Não sabe qual escolher? O sistema já usa "Meio de Funil" como padrão inteligente.
+        </p>
         
         <RadioGroup
           value={funnelMode}
@@ -130,6 +134,9 @@ export function FunnelModeSelector({
                       <div className="flex items-center gap-2">
                         <Icon className={`h-4 w-4 ${option.color}`} />
                         <span className="font-medium text-sm">{option.label}</span>
+                        {'recommended' in option && option.recommended && (
+                          <Badge className="text-xs bg-primary text-primary-foreground">Recomendado</Badge>
+                        )}
                       </div>
                       <Badge variant="outline" className="text-xs">
                         {option.subtitle}

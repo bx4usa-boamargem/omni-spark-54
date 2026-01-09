@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { CreateContentGrid } from "@/components/content/CreateContentGrid";
 import { FunnelModal } from "@/components/content/FunnelModal";
@@ -28,7 +29,8 @@ import {
   Send, 
   RefreshCw, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
 
 interface GenerationParams {
@@ -810,7 +812,7 @@ export default function NewArticle() {
                   <span className="gradient-text">✨ Gerador de Artigos</span>
                 </CardTitle>
                 <CardDescription>
-                  Descreva o tema e a IA criará um artigo completo otimizado para SEO
+                  Digite o tema e clique em gerar. O sistema cuida do resto.
                 </CardDescription>
               </CardHeader>
               <CardContent>
