@@ -46,38 +46,54 @@ export function useGSCConnection(blogId: string | undefined) {
   }, [fetchConnection]);
 
   const connect = useCallback(async () => {
-    if (!blogId) return;
+    if (!blogId) {
+      console.error("useGSCConnection.connect: blogId is missing");
+      setError("Blog não identificado. Recarregue a página.");
+      return;
+    }
 
+    console.log("useGSCConnection.connect: Starting GSC connection for blogId:", blogId);
     setIsConnecting(true);
     setError(null);
+    
     try {
+      // Get user ID for state
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+
+      console.log("useGSCConnection.connect: Calling get-gsc-config with blogId:", blogId);
       const { data: configData, error: configError } = await supabase.functions.invoke(
-        "get-gsc-config"
+        "get-gsc-config",
+        { body: { blogId, userId } }
       );
 
-      if (configError) throw configError;
+      console.log("useGSCConnection.connect: get-gsc-config response:", configData, configError);
 
-      if (!configData?.configured) {
-        throw new Error("Google OAuth não está configurado. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET.");
+      if (configError) {
+        throw new Error(`Erro ao obter configuração: ${configError.message}`);
       }
 
-      const { clientId, redirectUri } = configData;
-      const scope = "https://www.googleapis.com/auth/webmasters.readonly";
-      const state = encodeURIComponent(JSON.stringify({ blogId, returnTo: window.location.pathname }));
+      if (!configData?.configured) {
+        throw new Error("Google OAuth não está configurado. Entre em contato com o suporte.");
+      }
 
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `response_type=code&` +
-        `scope=${encodeURIComponent(scope)}&` +
-        `access_type=offline&` +
-        `prompt=consent&` +
-        `state=${state}`;
-
-      window.location.href = authUrl;
+      // Use the authorizationUrl returned by the edge function (includes PKCE)
+      if (configData.authorizationUrl) {
+        console.log("useGSCConnection.connect: Redirecting to authorizationUrl");
+        
+        // Store code_verifier in sessionStorage for callback
+        if (configData.codeVerifier) {
+          sessionStorage.setItem(`gsc_code_verifier_${blogId}`, configData.codeVerifier);
+          console.log("useGSCConnection.connect: Stored code_verifier in sessionStorage");
+        }
+        
+        window.location.href = configData.authorizationUrl;
+      } else {
+        throw new Error("URL de autorização não retornada pelo servidor.");
+      }
     } catch (err) {
-      console.error("Error initiating GSC connection:", err);
-      setError(err instanceof Error ? err.message : "Failed to connect");
+      console.error("useGSCConnection.connect: Error initiating GSC connection:", err);
+      setError(err instanceof Error ? err.message : "Falha ao conectar. Tente novamente.");
       setIsConnecting(false);
     }
   }, [blogId]);
