@@ -51,15 +51,133 @@ interface ArticleRequest {
   source?: 'chat' | 'instagram' | 'youtube' | 'pdf' | 'url' | 'form';
 }
 
-// Validation rules per content source
-const sourceValidationRules: Record<string, { minPercent: number; minWords: number; maxWords?: number; autoRetry: boolean }> = {
-  chat: { minPercent: 0.70, minWords: 500, maxWords: 800, autoRetry: false },
-  instagram: { minPercent: 0.70, minWords: 600, maxWords: 1000, autoRetry: true },
-  youtube: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true },
-  pdf: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true },
-  url: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true },
-  form: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true },
+// Validation rules per content source with max retries for expansion
+const sourceValidationRules: Record<string, { minPercent: number; minWords: number; maxWords?: number; autoRetry: boolean; maxRetries: number }> = {
+  chat: { minPercent: 0.70, minWords: 500, maxWords: 800, autoRetry: false, maxRetries: 0 },
+  instagram: { minPercent: 0.70, minWords: 600, maxWords: 1000, autoRetry: true, maxRetries: 2 },
+  youtube: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true, maxRetries: 2 },
+  pdf: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true, maxRetries: 2 },
+  url: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true, maxRetries: 2 },
+  form: { minPercent: 0.85, minWords: 1500, maxWords: 3000, autoRetry: true, maxRetries: 2 },
 };
+
+// Word Count Enforcer: Expands article content until it meets minimum word count
+async function expandArticleContent(
+  content: string,
+  title: string,
+  targetWordCount: number,
+  currentWordCount: number,
+  textModel: string,
+  LOVABLE_API_KEY: string,
+  maxRetries: number = 2
+): Promise<{ content: string; wordCount: number; retries: number }> {
+  let expandedContent = content;
+  let wordCount = currentWordCount;
+  let retryCount = 0;
+  const minAcceptable = targetWordCount * 0.90; // 90% of target is acceptable
+
+  while (wordCount < minAcceptable && retryCount < maxRetries) {
+    retryCount++;
+    console.log(`Word Count Enforcer: Expansion attempt ${retryCount}/${maxRetries} - Current: ${wordCount} words, Target: ${targetWordCount}`);
+
+    const expansionPrompt = `# TAREFA: EXPANSÃO OBRIGATÓRIA DE ARTIGO
+
+O artigo abaixo tem apenas ${wordCount} palavras, mas PRECISA ter no mínimo ${targetWordCount} palavras.
+
+## REGRAS DE EXPANSÃO (TODAS OBRIGATÓRIAS):
+
+1. **MANTER** a mesma estrutura de H2s (NÃO adicionar nem remover seções)
+2. **MANTER** o mesmo título: "${title}"
+3. **MANTER** o mesmo tom de conversa e linguagem
+4. **MANTER** todos os blockquotes (>) e emojis (💡⚠️📌) existentes
+
+5. **EXPANDIR** cada seção H2 com:
+   - Mais exemplos práticos do dia a dia do dono
+   - Mais detalhes técnicos explicados de forma simples
+   - Mais benefícios e consequências reais
+   - Mais dicas acionáveis e específicas
+   - Mais cenários "Imagine que..." ou "Por exemplo..."
+   - Mais perguntas retóricas que engajam o leitor
+
+6. **PARÁGRAFOS CURTOS**: Máximo 1-3 linhas cada (NÃO escreva parágrafos longos)
+7. **LISTAS**: Use bullets frequentemente para organizar informações
+8. **NEGRITO**: Use **negrito** para pontos-chave
+
+9. **NÃO REMOVER** nenhum conteúdo existente - apenas ADICIONAR
+10. **NÃO ALTERAR** o bloco de imagens ou FAQs
+
+O resultado DEVE ter no mínimo ${targetWordCount} palavras. Se necessário, dobre cada seção.
+
+## ARTIGO PARA EXPANDIR:
+
+${expandedContent}
+
+---
+
+Retorne APENAS o conteúdo expandido em Markdown, sem explicações ou comentários.`;
+
+    try {
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: textModel,
+          messages: [
+            { 
+              role: 'system', 
+              content: `Você é um redator SEO especialista em expandir artigos para donos de pequenos negócios.
+
+Sua ÚNICA tarefa é AUMENTAR significativamente o conteúdo mantendo qualidade e estrutura.
+
+REGRAS ABSOLUTAS:
+- NUNCA reduza o tamanho do artigo
+- SEMPRE expanda cada seção com mais detalhes, exemplos e dicas
+- Mantenha parágrafos curtos (1-3 linhas)
+- Use linguagem de conversa WhatsApp entre empresários
+- Adicione cenários reais do dia a dia do dono
+- O resultado deve ter no mínimo ${targetWordCount} palavras` 
+            },
+            { role: 'user', content: expansionPrompt }
+          ],
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`Word Count Enforcer: Expansion retry ${retryCount} failed with status ${response.status}`);
+        break;
+      }
+
+      const data = await response.json();
+      const newContent = data.choices?.[0]?.message?.content;
+
+      if (newContent) {
+        const newWordCount = newContent.split(/\s+/).filter(Boolean).length;
+        console.log(`Word Count Enforcer: Expansion ${retryCount} result: ${wordCount} → ${newWordCount} words (${newWordCount > wordCount ? '+' : ''}${newWordCount - wordCount})`);
+
+        if (newWordCount > wordCount) {
+          expandedContent = newContent;
+          wordCount = newWordCount;
+        } else {
+          console.warn(`Word Count Enforcer: Expansion ${retryCount} did not increase word count, stopping`);
+          break;
+        }
+      } else {
+        console.error(`Word Count Enforcer: Empty response in retry ${retryCount}`);
+        break;
+      }
+    } catch (error) {
+      console.error(`Word Count Enforcer: Expansion retry ${retryCount} error:`, error);
+      break;
+    }
+  }
+
+  console.log(`Word Count Enforcer: Complete - Final word count: ${wordCount} after ${retryCount} retries`);
+  return { content: expandedContent, wordCount, retries: retryCount };
+}
 
 const sourceNames: Record<string, string> = {
   chat: 'Chat IA',
@@ -641,7 +759,7 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
             },
             content: {
               type: 'string',
-              description: `Full article in Markdown (MINIMUM ${targetWordCount} words, EXACTLY ${section_count} H2 sections). MUST include: 1) Penultimate H2 titled "Resumo: X passos/dicas para Y" with bullet list summarizing ALL key points, 2) Final H2 titled "Direto ao ponto: Por onde começar?" with natural CTA, inspirational blockquote (>), and bold call-to-action. Follow mandatory structure with short paragraphs (1-3 lines), bullet lists, blockquotes.`
+              description: `CRITICAL: Full article in Markdown with MINIMUM ${targetWordCount} words. This is a HARD requirement - articles with fewer words will be rejected. Use EXACTLY ${section_count} H2 sections. Each section should have at least 200-300 words with detailed examples, practical tips, and real-world scenarios. MUST include: 1) Penultimate H2 titled "Resumo: X passos/dicas para Y" with bullet list summarizing ALL key points, 2) Final H2 titled "Direto ao ponto: Por onde começar?" with natural CTA, inspirational blockquote (>), and bold call-to-action. Follow mandatory structure with short paragraphs (1-3 lines), bullet lists, blockquotes.`
             },
             faq: {
               type: 'array',
@@ -835,90 +953,54 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
       generatedWordCount = rules.maxWords;
     }
     
-    // Validate minimum word count with auto-retry for rich sources
-    if (generatedWordCount < minAcceptableWords) {
+    // Word Count Enforcer: Validate and expand if needed
+    if (generatedWordCount < minAcceptableWords && rules.autoRetry && rules.maxRetries > 0) {
       console.warn(`AI_OUTPUT_TOO_SHORT: ${generatedWordCount} words < ${minAcceptableWords} minimum for ${source}`);
+      console.log(`Word Count Enforcer: Starting expansion with max ${rules.maxRetries} retries...`);
+
+      // Preserve the original images block before expansion (expansion doesn't regenerate it)
+      const originalImagesBlock = articleData.images;
+      const originalFaq = articleData.faq;
+      const originalImagePrompts = articleData.image_prompts;
+
+      // Run Word Count Enforcer
+      const expansion = await expandArticleContent(
+        articleData.content as string,
+        articleData.title as string,
+        targetWordCount,
+        generatedWordCount,
+        textModel,
+        LOVABLE_API_KEY,
+        rules.maxRetries
+      );
+
+      // Update article content with expanded version
+      articleData.content = expansion.content;
+      generatedWordCount = expansion.wordCount;
+
+      // Restore preserved blocks (expansion only changes content)
+      articleData.images = originalImagesBlock;
+      articleData.faq = originalFaq;
+      articleData.image_prompts = originalImagePrompts;
+
+      console.log(`Word Count Enforcer: Complete - ${generatedWordCount} words after ${expansion.retries} expansion attempts`);
+    }
+
+    // Final validation after expansion attempts
+    if (generatedWordCount < minAcceptableWords) {
+      const errorData = {
+        code: 'AI_OUTPUT_TOO_SHORT',
+        message: `O artigo gerado tem ${generatedWordCount} palavras após ${rules.maxRetries || 0} tentativas de expansão. Mínimo: ${Math.round(minAcceptableWords)} palavras.`,
+        suggestion: ['chat', 'instagram'].includes(source)
+          ? 'Para artigos mais extensos (1500-3000 palavras), utilize importação de PDF, YouTube ou URL com mais conteúdo de referência.'
+          : 'Tente novamente ou forneça mais conteúdo de referência sobre o tema.',
+        generatedWords: generatedWordCount,
+        requiredWords: Math.round(minAcceptableWords),
+        source,
+        expansionAttempts: rules.maxRetries || 0
+      };
       
-      // Check if this source supports auto-retry
-      if (rules.autoRetry) {
-        console.log(`Auto-retry enabled for ${source}, attempting content expansion...`);
-        
-        // Build expansion prompt
-        const expansionPrompt = `O artigo abaixo tem apenas ${generatedWordCount} palavras, mas precisa de no mínimo ${targetWordCount} palavras.
-
-EXPANDA o conteúdo mantendo a mesma estrutura, mas:
-1. Adicione mais exemplos práticos em cada seção
-2. Desenvolva mais os cenários do dia a dia do dono
-3. Inclua mais dicas específicas e acionáveis
-4. Expanda as explicações com mais detalhes
-
-ARTIGO ORIGINAL PARA EXPANDIR:
-${articleData.content}
-
-REGRAS IMPORTANTES:
-- Mantenha a mesma estrutura de H2s
-- Mantenha o mesmo tom de conversa
-- NÃO adicione novas seções, apenas expanda as existentes
-- O resultado deve ter no mínimo ${targetWordCount} palavras
-- Retorne APENAS o conteúdo expandido em Markdown`;
-
-        try {
-          const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: textModel,
-              messages: [
-                { role: 'system', content: 'Você é um redator SEO especialista em expandir artigos para donos de pequenos negócios. Expanda o conteúdo mantendo o tom de conversa direto e prático.' },
-                { role: 'user', content: expansionPrompt }
-              ]
-            }),
-          });
-
-          if (retryResponse.ok) {
-            const retryData = await retryResponse.json();
-            const expandedContent = retryData.choices?.[0]?.message?.content;
-            
-            if (expandedContent) {
-              const expandedWordCount = expandedContent.split(/\s+/).filter(Boolean).length;
-              console.log(`Expansion successful: ${generatedWordCount} -> ${expandedWordCount} words`);
-              
-              if (expandedWordCount >= minAcceptableWords * 0.9) {
-                // Use expanded content
-                articleData.content = expandedContent;
-                generatedWordCount = expandedWordCount;
-                console.log(`Using expanded content with ${expandedWordCount} words`);
-              } else {
-                console.warn(`Expansion still too short: ${expandedWordCount} words`);
-              }
-            }
-          } else {
-            console.error(`Retry request failed: ${retryResponse.status}`);
-          }
-        } catch (retryError) {
-          console.error('Retry expansion failed:', retryError);
-        }
-      }
-      
-      // Check again after potential retry
-      if (generatedWordCount < minAcceptableWords) {
-        // Create structured error with user-friendly message
-        const errorData = {
-          code: 'AI_OUTPUT_TOO_SHORT',
-          message: `O artigo gerado tem ${generatedWordCount} palavras, mas o mínimo para ${sourceNames[source] || source} é ${Math.round(minAcceptableWords)} palavras.`,
-          suggestion: ['chat', 'instagram'].includes(source)
-            ? 'Para artigos mais extensos (1500-3000 palavras), utilize importação de PDF, YouTube ou URL com mais conteúdo de referência.'
-            : 'Tente novamente ou forneça mais conteúdo de referência sobre o tema.',
-          generatedWords: generatedWordCount,
-          requiredWords: Math.round(minAcceptableWords),
-          source
-        };
-        
-        throw new Error(JSON.stringify(errorData));
-      }
+      throw new Error(JSON.stringify(errorData));
     }
 
     // Get niche for image prompts
