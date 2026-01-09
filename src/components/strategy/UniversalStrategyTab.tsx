@@ -287,11 +287,12 @@ export function UniversalStrategyTab({ blogId }: UniversalStrategyTabProps) {
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-primary" />
             Identidade do Negócio
+            <Badge variant="outline" className="text-xs ml-2">Essencial</Badge>
           </CardTitle>
           <SectionHelper
             title=""
             description="Informações básicas para personalizar tom e contexto dos artigos."
-            action="Preencha nome e tipo de negócio."
+            action="Preencha apenas o nome da empresa para começar. O resto pode ficar para depois."
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -344,11 +345,12 @@ export function UniversalStrategyTab({ blogId }: UniversalStrategyTabProps) {
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             Público-Alvo
+            <Badge variant="outline" className="text-xs ml-2">Opcional</Badge>
           </CardTitle>
           <SectionHelper
             title=""
             description="Cliente ideal. A IA usa para criar conteúdo relevante."
-            action="Seja específico sobre dores e desejos."
+            action="Se você não souber, deixe em branco. A IA usará um público genérico."
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -441,10 +443,12 @@ export function UniversalStrategyTab({ blogId }: UniversalStrategyTabProps) {
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
             Sua Oferta
+            <Badge variant="outline" className="text-xs ml-2">Opcional</Badge>
           </CardTitle>
           <SectionHelper
             title=""
             description="Produto ou serviço oferecido. Base para CTAs naturais."
+            action="Opcional. A IA consegue gerar artigos mesmo sem isso."
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -529,11 +533,12 @@ export function UniversalStrategyTab({ blogId }: UniversalStrategyTabProps) {
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-primary" />
             Conversão
+            <Badge variant="outline" className="text-xs ml-2">Opcional</Badge>
           </CardTitle>
           <SectionHelper
             title=""
             description="Ação desejada após leitura. Define tom dos CTAs."
-            action="Escolha o canal principal (WhatsApp, formulário)."
+            action="Se não configurar, usamos 'link genérico' como padrão."
           />
         </CardHeader>
         <CardContent className="space-y-4">
