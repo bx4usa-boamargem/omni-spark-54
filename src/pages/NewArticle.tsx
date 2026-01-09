@@ -161,7 +161,7 @@ export default function NewArticle() {
     
     switch (sourceId) {
       case 'chat':
-        navigate('/articles/new-chat');
+        navigate('/app/articles/new-chat');
         break;
       case 'ai-suggestion':
         setAiSuggestionModalOpen(true);

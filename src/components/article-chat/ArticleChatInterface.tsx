@@ -12,7 +12,6 @@ import {
   Loader2, 
   Mic,
   MicOff,
-  FileText,
   Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -187,8 +186,8 @@ export function ArticleChatInterface({
       
       if (data.type === 'article' && data.article) {
         toast({
-          title: "Artigo gerado!",
-          description: "Seu artigo foi criado com sucesso."
+          title: "Artigo criado com IA!",
+          description: "Criado com base na sua Estratégia. Você pode gerar quantos quiser."
         });
         onArticleGenerated(data.article);
       } else {
@@ -315,8 +314,8 @@ export function ArticleChatInterface({
               </>
             ) : (
               <>
-                <FileText className="h-4 w-4" />
-                Gerar Artigo Completo
+              <Sparkles className="h-4 w-4" />
+              Criar Artigo com IA
               </>
             )}
           </Button>
