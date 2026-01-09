@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { BarChart3, FileText, Image } from "lucide-react";
+import { usePlatformAdminCheck } from "@/hooks/usePlatformAdminCheck";
 
 interface UsageData {
   articles_generated: number;
@@ -15,6 +16,7 @@ interface UsageTrackerProps {
 }
 
 export function UsageTracker({ userId }: UsageTrackerProps) {
+  const { isPlatformAdmin } = usePlatformAdminCheck();
   const [usage, setUsage] = useState<UsageData>({
     articles_generated: 0,
     articles_limit: 30,
@@ -85,14 +87,17 @@ export function UsageTracker({ userId }: UsageTrackerProps) {
           <span className="font-medium">{usage.images_generated}</span>
         </div>
 
-        <div className="pt-2 border-t">
-          <div className="flex justify-between text-sm">
-            <span>Custo estimado:</span>
-            <span className="font-bold text-primary">
-              ~R$ {estimatedCost.toFixed(2)}
-            </span>
+        {/* Custo estimado - apenas para admins */}
+        {isPlatformAdmin && (
+          <div className="pt-2 border-t">
+            <div className="flex justify-between text-sm">
+              <span>Custo estimado:</span>
+              <span className="font-bold text-primary">
+                ~R$ {estimatedCost.toFixed(2)}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

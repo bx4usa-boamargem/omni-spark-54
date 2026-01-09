@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell } from "lucide-react";
+import { Bell, FileText, Image, Zap, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,14 +16,52 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
-interface Notification {
+interface OpportunityNotification {
   id: string;
   opportunity_id: string;
   title: string;
   message: string | null;
   sent_at: string;
   read_at: string | null;
+  type: 'opportunity';
 }
+
+interface AutomationNotification {
+  id: string;
+  notification_type: string;
+  title: string;
+  message: string | null;
+  article_id: string | null;
+  created_at: string;
+  read_at: string | null;
+  type: 'automation';
+}
+
+type Notification = OpportunityNotification | AutomationNotification;
+
+const getNotificationIcon = (notification: Notification) => {
+  if (notification.type === 'opportunity') {
+    return <Zap className="h-4 w-4 text-yellow-500" />;
+  }
+  
+  const autoNotif = notification as AutomationNotification;
+  switch (autoNotif.notification_type) {
+    case 'article_generated':
+      return <FileText className="h-4 w-4 text-primary" />;
+    case 'images_generated':
+      return <Image className="h-4 w-4 text-blue-500" />;
+    case 'article_published':
+      return <CheckCircle className="h-4 w-4 text-green-500" />;
+    case 'automation_scheduled':
+      return <Zap className="h-4 w-4 text-primary" />;
+    case 'automation_failed':
+      return <AlertCircle className="h-4 w-4 text-destructive" />;
+    case 'article_renewed':
+      return <RefreshCw className="h-4 w-4 text-blue-500" />;
+    default:
+      return <Bell className="h-4 w-4 text-muted-foreground" />;
+  }
+};
 
 export function NotificationBell() {
   const { user } = useAuth();
@@ -38,25 +76,43 @@ export function NotificationBell() {
     if (!user || !blog) return;
 
     async function fetchNotifications() {
-      const { data } = await supabase
+      // Fetch opportunity notifications
+      const { data: opportunityData } = await supabase
         .from("opportunity_notification_history")
         .select("*")
         .eq("user_id", user!.id)
         .eq("blog_id", blog!.id)
         .eq("notification_type", "in_app")
         .order("sent_at", { ascending: false })
-        .limit(20);
+        .limit(10);
 
-      if (data) {
-        setNotifications(data);
-      }
+      // Fetch automation notifications
+      const { data: automationData } = await supabase
+        .from("automation_notifications")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("blog_id", blog!.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      // Combine and sort by date
+      const combined: Notification[] = [
+        ...(opportunityData || []).map(n => ({ ...n, type: 'opportunity' as const })),
+        ...(automationData || []).map(n => ({ ...n, type: 'automation' as const }))
+      ].sort((a, b) => {
+        const dateA = new Date(a.type === 'opportunity' ? a.sent_at : (a as AutomationNotification).created_at);
+        const dateB = new Date(b.type === 'opportunity' ? b.sent_at : (b as AutomationNotification).created_at);
+        return dateB.getTime() - dateA.getTime();
+      }).slice(0, 20);
+
+      setNotifications(combined);
     }
 
     fetchNotifications();
 
-    // Subscribe to new notifications
-    const channel = supabase
-      .channel("notifications")
+    // Subscribe to new opportunity notifications
+    const opportunityChannel = supabase
+      .channel("opportunity_notifications")
       .on(
         "postgres_changes",
         {
@@ -66,39 +122,78 @@ export function NotificationBell() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          if (payload.new.notification_type === "in_app") {
-            setNotifications((prev) => [payload.new as Notification, ...prev]);
+          if ((payload.new as { notification_type: string }).notification_type === "in_app") {
+            const newNotif: OpportunityNotification = {
+              ...(payload.new as Omit<OpportunityNotification, 'type'>),
+              type: 'opportunity' as const
+            };
+            setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
           }
         }
       )
       .subscribe();
 
+    // Subscribe to new automation notifications
+    const automationChannel = supabase
+      .channel("automation_notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "automation_notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotif: AutomationNotification = {
+            ...(payload.new as Omit<AutomationNotification, 'type'>),
+            type: 'automation' as const
+          };
+          setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(opportunityChannel);
+      supabase.removeChannel(automationChannel);
     };
   }, [user, blog]);
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = async (notification: Notification) => {
+    const table = notification.type === 'opportunity' 
+      ? 'opportunity_notification_history' 
+      : 'automation_notifications';
+    
     await supabase
-      .from("opportunity_notification_history")
+      .from(table)
       .update({ read_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", notification.id);
 
     setNotifications((prev) =>
       prev.map((n) =>
-        n.id === id ? { ...n, read_at: new Date().toISOString() } : n
+        n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n
       )
     );
   };
 
   const markAllAsRead = async () => {
-    const unreadIds = notifications.filter((n) => !n.read_at).map((n) => n.id);
-    if (unreadIds.length === 0) return;
+    const unreadOpportunities = notifications.filter((n) => !n.read_at && n.type === 'opportunity').map((n) => n.id);
+    const unreadAutomations = notifications.filter((n) => !n.read_at && n.type === 'automation').map((n) => n.id);
+    
+    if (unreadOpportunities.length > 0) {
+      await supabase
+        .from("opportunity_notification_history")
+        .update({ read_at: new Date().toISOString() })
+        .in("id", unreadOpportunities);
+    }
 
-    await supabase
-      .from("opportunity_notification_history")
-      .update({ read_at: new Date().toISOString() })
-      .in("id", unreadIds);
+    if (unreadAutomations.length > 0) {
+      await supabase
+        .from("automation_notifications")
+        .update({ read_at: new Date().toISOString() })
+        .in("id", unreadAutomations);
+    }
 
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
@@ -106,9 +201,26 @@ export function NotificationBell() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    markAsRead(notification.id);
+    markAsRead(notification);
     setOpen(false);
-    navigate("/articles?tab=opportunities");
+    
+    if (notification.type === 'opportunity') {
+      navigate("/articles?tab=opportunities");
+    } else {
+      const autoNotif = notification as AutomationNotification;
+      if (autoNotif.article_id) {
+        navigate(`/articles/${autoNotif.article_id}/edit`);
+      } else {
+        navigate("/articles");
+      }
+    }
+  };
+
+  const getNotificationDate = (notification: Notification): Date => {
+    if (notification.type === 'opportunity') {
+      return new Date((notification as OpportunityNotification).sent_at);
+    }
+    return new Date((notification as AutomationNotification).created_at);
   };
 
   return (
@@ -158,20 +270,25 @@ export function NotificationBell() {
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start gap-3">
-                    {!notification.read_at && (
-                      <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                    )}
-                    <div className={cn("flex-1 min-w-0", notification.read_at && "ml-5")}>
-                      <p className="font-medium text-sm truncate">
-                        {notification.title}
-                      </p>
+                    <div className="mt-0.5 flex-shrink-0">
+                      {getNotificationIcon(notification)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {!notification.read_at && (
+                          <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                        )}
+                        <p className="font-medium text-sm truncate">
+                          {notification.title}
+                        </p>
+                      </div>
                       {notification.message && (
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
                           {notification.message}
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(notification.sent_at), {
+                        {formatDistanceToNow(getNotificationDate(notification), {
                           addSuffix: true,
                           locale: ptBR,
                         })}

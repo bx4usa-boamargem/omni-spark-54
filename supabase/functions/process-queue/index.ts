@@ -39,6 +39,13 @@ interface EditorialTemplate {
   category_default?: string;
 }
 
+// Calculate internal image count based on word count (automatic standard)
+function calculateInternalImageCount(wordCount: number): number {
+  if (wordCount <= 1000) return 1;      // Short article: 1 cover + 1 internal
+  if (wordCount <= 1500) return 2;      // Medium article: 1 cover + 2 internal
+  return 3;                              // Long article: 1 cover + 3 internal
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -291,12 +298,34 @@ serve(async (req) => {
 
         // ========== GENERATE CONTENT IMAGES ==========
         const contentImages: ContentImage[] = [];
-        const imagePrompts: ImagePrompt[] = articleData.image_prompts || [];
+        let imagePrompts: ImagePrompt[] = articleData.image_prompts || [];
+        
+        // Calculate expected internal images based on word count
+        const wordCount = articleData.content?.split(/\s+/).length || 1000;
+        const expectedInternalImages = calculateInternalImageCount(wordCount);
+        console.log(`Article has ${wordCount} words, expecting ${expectedInternalImages} internal images`);
+
+        // If we don't have enough image prompts from AI, generate them based on H2 sections
+        if (shouldGenerateImage && imagePrompts.length < expectedInternalImages) {
+          const h2Matches = articleData.content?.match(/<h2[^>]*>(.*?)<\/h2>/gi) || [];
+          const sections = h2Matches.map((h2: string) => h2.replace(/<[^>]*>/g, '').trim());
+          
+          for (let i = imagePrompts.length; i < expectedInternalImages && i < sections.length; i++) {
+            const niche = editorialTemplate?.target_niche || 'professional services';
+            imagePrompts.push({
+              context: sections[i] || `Section ${i + 1}`,
+              prompt: `Realistic photo: ${sections[i] || 'professional setting'}. Related to ${niche}. Authentic, natural lighting.`,
+              after_section: i + 1
+            });
+          }
+        }
 
         if (shouldGenerateImage && imagePrompts.length > 0) {
-          console.log(`Generating ${imagePrompts.length} content images...`);
+          // Limit to expected number of internal images
+          const imagesToGenerate = imagePrompts.slice(0, expectedInternalImages);
+          console.log(`Generating ${imagesToGenerate.length} content images...`);
           
-          for (const imgPrompt of imagePrompts) {
+          for (const imgPrompt of imagesToGenerate) {
             try {
               console.log(`Generating image for context: ${imgPrompt.context}`);
               
@@ -322,7 +351,7 @@ serve(async (req) => {
                   const base64Data = contentImageData.imageBase64.replace(/^data:image\/\w+;base64,/, '');
                   const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
                   
-                  const contentFileName = `${item.blog_id}/${slug}-${imgPrompt.context}-${Date.now()}.png`;
+                  const contentFileName = `${item.blog_id}/${slug}-${imgPrompt.context.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
                   
                   const { error: contentUploadError } = await supabase.storage
                     .from('article-images')
@@ -357,7 +386,7 @@ serve(async (req) => {
             }
           }
           
-          console.log(`Generated ${contentImages.length} content images total`);
+          console.log(`Generated ${contentImages.length} of ${expectedInternalImages} expected content images`);
         }
 
         // Check for auto_publish setting
@@ -401,6 +430,18 @@ serve(async (req) => {
         // Update usage tracking
         const currentMonth = new Date().toISOString().substring(0, 7) + '-01';
         
+        // Create automation notification
+        await supabase
+          .from('automation_notifications')
+          .insert({
+            user_id: item.blogs.user_id,
+            blog_id: item.blog_id,
+            notification_type: shouldPublish ? 'article_published' : 'article_generated',
+            title: shouldPublish ? 'Artigo publicado!' : 'Artigo gerado',
+            message: `"${articleData.title}" ${shouldPublish ? 'foi publicado automaticamente' : 'está pronto para revisão'}. ${imagesGeneratedCount} imagem(ns) gerada(s).`,
+            article_id: article.id
+          });
+        
         // First try to get existing record
         const { data: existingUsage } = await supabase
           .from('usage_tracking')
@@ -437,6 +478,19 @@ serve(async (req) => {
       } catch (itemError: unknown) {
         console.error(`Failed to process item ${item.id}:`, itemError);
         const errorMessage = itemError instanceof Error ? itemError.message : 'Unknown error';
+        
+        // Create failure notification
+        if (item.blogs?.user_id) {
+          await supabase
+            .from('automation_notifications')
+            .insert({
+              user_id: item.blogs.user_id,
+              blog_id: item.blog_id,
+              notification_type: 'automation_failed',
+              title: 'Falha na automação',
+              message: `Erro ao gerar "${item.suggested_theme}". Será reprocessado automaticamente.`
+            });
+        }
         
         // Update queue item with error
         await supabase

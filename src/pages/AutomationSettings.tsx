@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useBlog } from "@/hooks/useBlog";
+import { usePlatformAdminCheck } from "@/hooks/usePlatformAdminCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export default function AutomationSettings() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { blog, loading: blogLoading } = useBlog();
+  const { isPlatformAdmin } = usePlatformAdminCheck();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(true);
@@ -415,30 +417,32 @@ export default function AutomationSettings() {
             </CardContent>
           </Card>
 
-          {/* Estimativa de Custo */}
-          <Card className="bg-primary/5 border-primary/20">
-            <CardHeader>
-              <CardTitle className="text-lg">Estimativa de Custo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Artigos por período:</span>
-                  <span className="font-medium">{settings.articles_per_period}</span>
+          {/* Estimativa de Custo - Apenas para admins */}
+          {isPlatformAdmin && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-lg">Estimativa de Custo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Artigos por período:</span>
+                    <span className="font-medium">{settings.articles_per_period}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Custo estimado por artigo:</span>
+                    <span className="font-medium">~R$ 0,30 - R$ 0,55</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 mt-2">
+                    <span className="font-medium">Total por período:</span>
+                    <span className="font-bold text-primary">
+                      ~R$ {(settings.articles_per_period * 0.3).toFixed(2)} - R$ {(settings.articles_per_period * 0.55).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>Custo estimado por artigo:</span>
-                  <span className="font-medium">~R$ 0,30 - R$ 0,55</span>
-                </div>
-                <div className="flex justify-between border-t pt-2 mt-2">
-                  <span className="font-medium">Total por período:</span>
-                  <span className="font-bold text-primary">
-                    ~R$ {(settings.articles_per_period * 0.3).toFixed(2)} - R$ {(settings.articles_per_period * 0.55).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </DashboardLayout>
