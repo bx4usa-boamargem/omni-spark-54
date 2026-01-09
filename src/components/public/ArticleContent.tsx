@@ -13,7 +13,13 @@ const contextLabels: Record<string, string> = {
   hero: 'Imagem de capa',
   problem: 'Ilustração do problema',
   solution: 'Ilustração da solução',
-  result: 'Ilustração do resultado'
+  result: 'Ilustração do resultado',
+  insight: 'Insight visual',
+  section: 'Imagem da seção',
+  section_1: 'Imagem da seção 1',
+  section_2: 'Imagem da seção 2',
+  section_3: 'Imagem da seção 3',
+  section_4: 'Imagem da seção 4'
 };
 
 // Generate slug from text for TOC linking
@@ -122,9 +128,33 @@ export const ArticleContent = ({ content, contentImages = [] }: ArticleContentPr
         flushList();
         elements.push(
           <div key={index} className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r-lg my-4">
-            <span className="font-bold text-blue-700 dark:text-blue-400">📌 Dica</span>
+            <span className="font-bold text-blue-700 dark:text-blue-400">📌 Dica Prática</span>
             <p className="text-blue-900 dark:text-blue-200 mt-1" dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.slice(3)) }} />
           </div>
+        );
+        return;
+      }
+
+      // NEW: Special blocks - Summary (✅ Resumo Rápido)
+      if (trimmedLine.startsWith("✅ ")) {
+        flushList();
+        elements.push(
+          <div key={index} className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 p-4 rounded-r-lg my-4">
+            <span className="font-bold text-green-700 dark:text-green-400">✅ Resumo Rápido</span>
+            <p className="text-green-900 dark:text-green-200 mt-1" dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.slice(3)) }} />
+          </div>
+        );
+        return;
+      }
+
+      // NEW: Special blocks - Pull Quote (❝ Citação Destacada)
+      if (trimmedLine.startsWith("❝ ") || trimmedLine.startsWith("❞ ")) {
+        flushList();
+        const quoteContent = trimmedLine.replace(/^[❝❞]\s?/, '');
+        elements.push(
+          <blockquote key={index} className="bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-primary p-6 my-8 rounded-r-lg">
+            <p className="text-xl italic font-serif text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: processLinks(quoteContent) }} />
+          </blockquote>
         );
         return;
       }

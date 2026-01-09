@@ -3,9 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-article-structured`;
 
 export interface ImagePrompt {
-  context: 'problem' | 'solution' | 'result';
+  context: 'problem' | 'solution' | 'result' | 'section_1' | 'section_2' | 'section_3' | 'section_4';
   prompt: string;
   after_section: number;
+  section_title?: string;
+  visual_concept?: string;
 }
 
 export interface ArticleData {
@@ -41,6 +43,9 @@ interface EditorialTemplate {
 
 export type GenerationStage = 'analyzing' | 'structuring' | 'generating' | 'finalizing' | null;
 
+// NEW: Editorial Model Type
+export type EditorialModel = 'traditional' | 'strategic' | 'visual_guided';
+
 export interface StreamArticleOptions {
   theme: string;
   keywords?: string[];
@@ -57,6 +62,7 @@ export interface StreamArticleOptions {
   source?: 'chat' | 'instagram' | 'youtube' | 'pdf' | 'url' | 'form';
   funnelMode?: 'top' | 'middle' | 'bottom';
   articleGoal?: 'educar' | 'autoridade' | 'apoiar_vendas' | 'converter' | null;
+  editorialModel?: EditorialModel;
   onDelta: (text: string) => void;
   onDone: (article: ArticleData | null) => void;
   onError: (error: string) => void;
@@ -118,7 +124,8 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
   const { 
     theme, keywords, tone, category, blogId, imageCount, wordCount,
     sectionCount, includeFaq, includeConclusion, includeVisualBlocks, optimizeForAI,
-    source, funnelMode, articleGoal, onDelta, onDone, onError, onStage, onProgress 
+    source, funnelMode, articleGoal, editorialModel,
+    onDelta, onDone, onError, onStage, onProgress 
   } = options;
 
   try {
@@ -162,7 +169,8 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
         source: source || 'form',
         blog_id: blogId,
         funnel_mode: funnelMode || 'middle',
-        article_goal: articleGoal || null
+        article_goal: articleGoal || null,
+        editorial_model: editorialModel || 'traditional'
       }),
     });
 
