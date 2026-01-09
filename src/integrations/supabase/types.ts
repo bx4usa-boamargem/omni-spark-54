@@ -671,6 +671,57 @@ export type Database = {
           },
         ]
       }
+      automation_notifications: {
+        Row: {
+          article_id: string | null
+          blog_id: string
+          created_at: string | null
+          id: string
+          message: string | null
+          notification_type: string
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          article_id?: string | null
+          blog_id: string
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          notification_type: string
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          article_id?: string | null
+          blog_id?: string
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          notification_type?: string
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_notifications_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_notifications_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_automation: {
         Row: {
           articles_per_period: number | null
