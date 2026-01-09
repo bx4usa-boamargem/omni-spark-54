@@ -152,28 +152,46 @@ export function KeywordsTab({ blogId, keywordAnalyses, setKeywordAnalyses }: Key
     }
   };
 
-  const handleConnectGSC = () => {
-    if (!googleClientId) {
-      toast.error("Google OAuth não configurado. Entre em contato com o suporte.");
-      return;
-    }
-
+  const handleConnectGSC = async () => {
+    console.log("KeywordsTab.handleConnectGSC: Starting connection, blogId:", blogId);
+    
     setIsConnecting(true);
 
-    const redirectUri = `${window.location.origin}/strategy`;
-    const scope = "https://www.googleapis.com/auth/webmasters.readonly";
-    const state = JSON.stringify({ blogId, action: "gsc_connect" });
+    try {
+      // Call the edge function with blogId to get authorizationUrl
+      const { data, error } = await supabase.functions.invoke("get-gsc-config", {
+        body: { blogId }
+      });
 
-    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authUrl.searchParams.set("client_id", googleClientId);
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("scope", scope);
-    authUrl.searchParams.set("access_type", "offline");
-    authUrl.searchParams.set("prompt", "consent");
-    authUrl.searchParams.set("state", state);
+      console.log("KeywordsTab.handleConnectGSC: get-gsc-config response:", data, error);
 
-    window.location.href = authUrl.toString();
+      if (error) {
+        throw new Error(`Erro ao obter configuração: ${error.message}`);
+      }
+
+      if (!data?.configured) {
+        toast.error("Google OAuth não configurado. Entre em contato com o suporte.");
+        setIsConnecting(false);
+        return;
+      }
+
+      if (data.authorizationUrl) {
+        // Store code_verifier for callback
+        if (data.codeVerifier) {
+          sessionStorage.setItem(`gsc_code_verifier_${blogId}`, data.codeVerifier);
+          console.log("KeywordsTab.handleConnectGSC: Stored code_verifier");
+        }
+        
+        console.log("KeywordsTab.handleConnectGSC: Redirecting to Google OAuth");
+        window.location.href = data.authorizationUrl;
+      } else {
+        throw new Error("URL de autorização não retornada.");
+      }
+    } catch (err) {
+      console.error("KeywordsTab.handleConnectGSC: Error:", err);
+      toast.error(err instanceof Error ? err.message : "Erro ao conectar");
+      setIsConnecting(false);
+    }
   };
 
   // Handle OAuth callback
@@ -500,13 +518,13 @@ export function KeywordsTab({ blogId, keywordAnalyses, setKeywordAnalyses }: Key
               </div>
             </div>
           ) : (
-            <Button onClick={handleConnectGSC} disabled={isConnecting || !googleClientId}>
+            <Button onClick={handleConnectGSC} disabled={isConnecting}>
               {isConnecting ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <ExternalLink className="h-4 w-4 mr-2" />
               )}
-              Conectar Google Search Console
+              {isConnecting ? "Conectando..." : "Conectar Google Search Console"}
             </Button>
           )}
         </CardContent>

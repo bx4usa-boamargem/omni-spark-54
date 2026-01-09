@@ -162,7 +162,13 @@ export default function GoogleIntegration() {
   }, [blog?.id, fetchConnection]);
 
   const handleConnect = async () => {
-    if (!blog?.id) return;
+    console.log("GoogleIntegration.handleConnect: Starting, blog?.id:", blog?.id);
+    
+    if (!blog?.id) {
+      console.error("GoogleIntegration.handleConnect: blog.id is missing");
+      setErrorMessage("Blog não identificado. Recarregue a página.");
+      return;
+    }
 
     setStatus('connecting');
     setErrorMessage(null);
@@ -170,10 +176,14 @@ export default function GoogleIntegration() {
     try {
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
+      console.log("GoogleIntegration.handleConnect: userId:", userId);
 
+      console.log("GoogleIntegration.handleConnect: Calling get-gsc-config...");
       const { data, error } = await supabase.functions.invoke('get-gsc-config', {
         body: { blogId: blog.id, userId }
       });
+
+      console.log("GoogleIntegration.handleConnect: Response:", data, error);
 
       if (error) throw error;
 
@@ -185,13 +195,19 @@ export default function GoogleIntegration() {
 
       // Store code verifier for PKCE
       if (data.codeVerifier) {
-        sessionStorage.setItem('gsc_code_verifier', data.codeVerifier);
+        sessionStorage.setItem(`gsc_code_verifier_${blog.id}`, data.codeVerifier);
+        console.log("GoogleIntegration.handleConnect: Stored code_verifier");
       }
 
       // Redirect to Google OAuth
-      window.location.href = data.authorizationUrl;
+      if (data.authorizationUrl) {
+        console.log("GoogleIntegration.handleConnect: Redirecting to OAuth URL");
+        window.location.href = data.authorizationUrl;
+      } else {
+        throw new Error("URL de autorização não retornada pelo servidor.");
+      }
     } catch (e) {
-      console.error('Error connecting:', e);
+      console.error('GoogleIntegration.handleConnect: Error:', e);
       setStatus('error');
       setErrorMessage('Não foi possível iniciar conexão com o Google.');
     }
