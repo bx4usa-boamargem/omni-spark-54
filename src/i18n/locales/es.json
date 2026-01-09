@@ -1,0 +1,730 @@
+{
+  "sidebar": {
+    "home": "Inicio",
+    "content": "Contenidos",
+    "ebooks": "Ebooks",
+    "new": "Nuevo",
+    "strategy": "Estrategia",
+    "seoAnalysis": "Análisis SEO",
+    "automations": "Automatizaciones",
+    "referrals": "Referidos",
+    "landingPage": "Landing Page",
+    "integrations": "Integraciones",
+    "help": "Ayuda",
+    "blogEditor": "Editor del Blog",
+    "viewBlog": "Ver Blog",
+    "account": "Cuenta",
+    "settings": "Configuración",
+    "adminPanel": "Panel Admin",
+    "quickAccess": "Acceso Rápido",
+    "signOut": "Cerrar sesión",
+    "createContent": "Crear contenido"
+  },
+  "integrations": {
+    "title": "Integraciones",
+    "subtitle": "Conecta Omniseen a diversas herramientas",
+    "categories": {
+      "blog": "Plataformas de Blog",
+      "blogDescription": "Conecta tu blog para publicación automática",
+      "monitoring": "Monitoreo y Marketing",
+      "monitoringDescription": "Monitorea rendimiento y rastrea visitantes",
+      "distribution": "Distribución de Contenido",
+      "distributionDescription": "Comparte tu contenido en múltiples canales"
+    },
+    "status": {
+      "active": "Activa",
+      "inactive": "Inactiva",
+      "comingSoon": "Próximamente"
+    },
+    "actions": {
+      "configure": "Configurar",
+      "edit": "Editar",
+      "activate": "Activar",
+      "use": "Usar"
+    },
+    "items": {
+      "wordpress": {
+        "name": "WordPress",
+        "description": "Publica artículos automáticamente en WordPress"
+      },
+      "wix": {
+        "name": "Wix",
+        "description": "Sincroniza contenido con tu sitio Wix"
+      },
+      "webhook": {
+        "name": "Webhook",
+        "description": "Integra via API personalizada"
+      },
+      "gsc": {
+        "name": "Google Search Console",
+        "description": "Importa palabras clave y monitorea rankings"
+      },
+      "ga": {
+        "name": "Google Analytics",
+        "description": "Rastrea métricas de tráfico"
+      },
+      "gtm": {
+        "name": "Google Tag Manager",
+        "description": "Gestiona tags y scripts"
+      },
+      "meta": {
+        "name": "Pixel de Meta",
+        "description": "Rastrea conversiones de Facebook/Instagram"
+      },
+      "googleAds": {
+        "name": "Google Ads",
+        "description": "Rastrea conversiones de anuncios"
+      },
+      "linkedin": {
+        "name": "LinkedIn",
+        "description": "Comparte artículos en LinkedIn"
+      },
+      "instagram": {
+        "name": "Instagram",
+        "description": "Importa contenido de posts"
+      },
+      "soundcloud": {
+        "name": "Soundcloud",
+        "description": "Publica versión en audio de artículos"
+      }
+    }
+  },
+  "landing": {
+    "header": {
+      "home": "Inicio",
+      "plans": "Precios",
+      "blog": "Blog",
+      "login": "Iniciar sesión",
+      "startFree": "Empezar gratis",
+      "goToDashboard": "Ir al Dashboard",
+      "language": "Idioma"
+    },
+    "footer": {
+      "tagline": "Blogs automatizados con IA",
+      "allRightsReserved": "Todos los derechos reservados"
+    },
+    "hero": {
+      "badge": "100% Automatizado con IA",
+      "title1": "Blogs totalmente automatizados",
+      "title2": "con Inteligencia Artificial",
+      "subtitle": "Crea, publica y escala contenido optimizado para SEO — en automático.",
+      "startNow": "Crear mi blog ahora",
+      "watchDemo": "Ver Blog de Ejemplo",
+      "users": "+500 usuarios",
+      "rating": "4.9/5",
+      "trialBadge": "7 días gratis + 5 artículos de regalo"
+    },
+    "newHero": {
+      "badge": "100% Automatizado con IA",
+      "title1": "Blogs totalmente automatizados",
+      "title2": "con Inteligencia Artificial",
+      "subtitle": "Crea, publica y escala contenido optimizado para SEO — en automático.",
+      "subheadline": "De la idea al artículo publicado. Sin equipo. Sin WordPress. Sin complicaciones.",
+      "cta": "Crear mi blog ahora",
+      "ctaSecondary": "Empezar gratis",
+      "noCreditCard": "Sin tarjeta de crédito",
+      "seoScore": "Score SEO",
+      "automation": "Automatización",
+      "active": "Activo",
+      "thisMonth": "Este mes",
+      "articles": "artículos",
+      "published": "Publicado",
+      "traffic": "de tráfico",
+      "automated": "automatizado"
+    },
+    "problem": {
+      "line1": "Crear contenido es mucho trabajo.",
+      "line2": "Mantener consistencia es difícil.",
+      "line3": "El SEO cambia constantemente.",
+      "conclusion": "La mayoría de los blogs mueren antes de posicionar.",
+      "chartLabel": "Tráfico típico de un blog a lo largo del tiempo"
+    },
+    "solution": {
+      "title": "Omniseen automatiza todo el proceso de creación de tu blog.",
+      "feature1": "IA elige temas",
+      "feature2": "IA escribe artículos",
+      "feature3": "IA optimiza SEO",
+      "feature4": "IA publica automáticamente",
+      "feature5": "IA mide rendimiento",
+      "highlight": "Crea artículos desde tu celular",
+      "highlightDesc": "Escribe 5 o 6 palabras en el chat y la IA hace el resto.",
+      "step1Label": "Tú escribes",
+      "step2Label": "IA escribe",
+      "step2Text": "2000+ palabras, optimizado para SEO",
+      "step3Label": "Score SEO",
+      "step4Label": "¡Publicado!",
+      "step4Text": "En tu blog en segundos"
+    },
+    "realAutomation": {
+      "badge": "Automatización Real",
+      "title1": "Mientras otros prometen automatización,",
+      "title2": "Omniseen ejecuta por sí solo.",
+      "feature1": {
+        "title": "Calendario Automático",
+        "desc": "IA programa posts en los mejores horarios"
+      },
+      "feature2": {
+        "title": "Publicación Semanal",
+        "desc": "Nuevos artículos publicados automáticamente"
+      },
+      "feature3": {
+        "title": "Clusters SEO",
+        "desc": "Agrupación automática de temas"
+      },
+      "feature4": {
+        "title": "Correcciones de SEO",
+        "desc": "Optimizaciones automáticas de la IA"
+      },
+      "active": "Activo",
+      "running": "Ejecutándose ahora",
+      "liveStatus": "Estado de Automatización",
+      "allSystems": "Todos los sistemas operativos",
+      "progress": {
+        "seo": "Optimización SEO",
+        "content": "Generación de Contenido",
+        "publishing": "Publicación Automática"
+      }
+    },
+    "seo": {
+      "panelTitle": "Análisis SEO",
+      "optimized": "Optimizado",
+      "before": "Antes",
+      "after": "Después",
+      "item1": "Análisis de título",
+      "item2": "Meta description",
+      "item3": "Palabras clave",
+      "item4": "Densidad de keywords",
+      "item5": "Contenido profundo",
+      "item6": "Imagen optimizada",
+      "fixAll": "Corregir todo con IA",
+      "title": "SEO que realmente funciona.",
+      "subtitle": "El SEO no es magia. Es proceso, datos y consistencia.",
+      "point1": "Análisis de score en tiempo real",
+      "point2": "Optimización automática de palabras clave",
+      "point3": "Enlaces internos inteligentes",
+      "point4": "Mejoras con IA en un clic"
+    },
+    "audience": {
+      "badge": "Para Todos los Negocios",
+      "title": "¿Para quién es Omniseen?",
+      "subtitle": "Si necesitas tráfico orgánico, Omniseen trabaja por ti.",
+      "service": {
+        "title": "Empresas de Servicios",
+        "desc": "Atrae más clientes con contenido de calidad"
+      },
+      "local": {
+        "title": "Negocios Locales",
+        "desc": "Posiciona en las búsquedas de tu región"
+      },
+      "freelancer": {
+        "title": "Freelancers",
+        "desc": "Construye autoridad en tu nicho"
+      },
+      "startup": {
+        "title": "Startups",
+        "desc": "Escala contenido sin contratar"
+      },
+      "agency": {
+        "title": "Agencias",
+        "desc": "Gestiona blogs de múltiples clientes"
+      },
+      "creator": {
+        "title": "Creadores",
+        "desc": "Transforma ideas en tráfico"
+      }
+    },
+    "howItWorks": {
+      "title": "¿Cómo funciona?",
+      "subtitle": "De cero a blog automatizado en 5 pasos simples",
+      "step1": {
+        "title": "Crea tu cuenta",
+        "desc": "Registro rápido en 30 segundos"
+      },
+      "step2": {
+        "title": "Conecta tu dominio",
+        "desc": "O usa nuestro subdominio gratuito"
+      },
+      "step3": {
+        "title": "Define tu nicho",
+        "desc": "Cuéntanos sobre tu negocio"
+      },
+      "step4": {
+        "title": "Activa la automatización",
+        "desc": "Configura tus preferencias"
+      },
+      "step5": {
+        "title": "La IA hace el resto",
+        "desc": "Mira crecer tu blog"
+      }
+    },
+    "finalCta": {
+      "title": "Tu blog trabajando por ti, 24/7.",
+      "subtitle": "Empieza ahora y ve resultados en la primera semana.",
+      "cta": "Crear mi blog ahora",
+      "ctaSecondary": "Empezar gratis",
+      "note": "Sin tarjeta de crédito"
+    },
+    "announcement": {
+      "text": "🎉 ¡Obtén 25% de DESCUENTO en tu primer año!",
+      "expires": "Oferta por tiempo limitado"
+    },
+    "stats": {
+      "title": "Números que impresionan",
+      "subtitle": "Miles de creadores ya confían en OMNISEEN",
+      "articles": "Artículos Generados",
+      "blogs": "Blogs Creados",
+      "views": "Visualizaciones",
+      "hours": "Horas Ahorradas"
+    },
+    "noBlog": {
+      "badge": "Solución Completa",
+      "title": "¿No tienes un blog?",
+      "titleHighlight": "¡Te creamos uno!",
+      "description": "OMNISEEN crea un blog profesional y optimizado para SEO para tu negocio en minutos. Sin conocimientos técnicos.",
+      "cta": "Crear Mi Blog",
+      "features": {
+        "design": "Diseño profesional en minutos",
+        "noCoding": "Sin necesidad de programar",
+        "seo": "SEO optimizado desde el día 1",
+        "domain": "Soporte para dominio personalizado"
+      }
+    },
+    "automation": {
+      "badge": "100% Automatizado",
+      "title": "¿No tienes tiempo?",
+      "titleHighlight": "Lo hacemos todo por ti",
+      "description": "OMNISEEN maneja todo tu flujo de contenido automáticamente. Solo configúralo una vez y mira crecer tu blog.",
+      "cta": "Empieza tu Prueba Gratis",
+      "trialInfo": "7 días gratis • Sin tarjeta de crédito",
+      "items": {
+        "blog": "Construir tu blog profesional",
+        "topics": "Investigar temas trending en tu nicho",
+        "competitors": "Analizar contenido de competidores",
+        "write": "Escribir artículos optimizados para SEO",
+        "schedule": "Programar publicación automática",
+        "social": "Compartir en redes sociales",
+        "reports": "Generar informes semanales"
+      }
+    },
+    "features": {
+      "title": "Todo lo que necesitas para tu blog",
+      "subtitle": "Herramientas poderosas para crear contenido de calidad sin esfuerzo.",
+      "ai": {
+        "title": "Artículos con IA",
+        "description": "Genera artículos completos y optimizados para SEO en segundos usando inteligencia artificial avanzada."
+      },
+      "customization": {
+        "title": "Personalización Total",
+        "description": "Personaliza colores, fuentes, diseños y CTAs para que tu blog refleje tu marca."
+      },
+      "seo": {
+        "title": "SEO Automático",
+        "description": "Meta tags, estructura de headings y palabras clave optimizadas automáticamente."
+      }
+    },
+    "featuresGrid": {
+      "title": "Funciones Poderosas",
+      "subtitle": "Todo lo que necesitas para crear, optimizar y hacer crecer tu blog con IA.",
+      "write": {
+        "title": "Escribe Artículos Rápido",
+        "description": "Genera artículos completos y optimizados para SEO en segundos con nuestra IA avanzada."
+      },
+      "seo": {
+        "title": "SEO con IA",
+        "description": "Optimización automática con puntuación en tiempo real y sugerencias de mejora."
+      },
+      "autopilot": {
+        "title": "Blog en Piloto Automático",
+        "description": "Programa artículos y deja que OMNISEEN publique automáticamente por ti."
+      },
+      "competitors": {
+        "title": "Análisis de Competidores",
+        "description": "Monitorea competidores y descubre oportunidades de contenido que están perdiendo."
+      },
+      "keywords": {
+        "title": "Investigación de Palabras Clave",
+        "description": "Descubre palabras clave de alto impacto con análisis y sugerencias impulsadas por IA."
+      },
+      "multiSource": {
+        "title": "Contenido Multi-Fuente",
+        "description": "Transforma videos de YouTube, posts de Instagram y PDFs en artículos de blog."
+      }
+    },
+    "costComparison": {
+      "badge": "Ahorra 90% en creación de contenido",
+      "title": "¿Por Qué Pagar Más?",
+      "subtitle": "Mira cómo OMNISEEN se compara con los costos tradicionales de creación de contenido.",
+      "traditional": {
+        "title": "Método Tradicional",
+        "writer": "Escritor freelance",
+        "seo": "Especialista SEO",
+        "designer": "Diseñador",
+        "time": "Tu tiempo",
+        "total": "Costo Mensual Total"
+      },
+      "omniseen": {
+        "title": "Con OMNISEEN",
+        "badge": "RECOMENDADO",
+        "articles": "100 artículos optimizados/mes",
+        "seo": "Optimización SEO automática",
+        "images": "Imágenes generadas por IA",
+        "time": "Solo 2h/mes de tu tiempo",
+        "total": "Desde"
+      },
+      "savings": {
+        "label": "Ahorras cada mes"
+      },
+      "cta": "Empieza a Ahorrar Hoy"
+    },
+    "caseStudies": {
+      "badge": "Resultados Reales",
+      "title": "Historias de Éxito",
+      "subtitle": "Mira cómo las empresas están transformando su estrategia de contenido con OMNISEEN.",
+      "metrics": {
+        "firstPage": "en 20 días",
+        "traffic": "tráfico orgánico",
+        "hours": "horas ahorradas/mes"
+      },
+      "quotes": {
+        "sarah": "OMNISEEN nos ayudó a posicionarnos en la primera página de Google en 3 semanas. Nuestro tráfico orgánico aumentó 340%.",
+        "michael": "Pasamos de publicar 2 artículos al mes a 30. La calidad es increíble y nuestros clientes aman los resultados.",
+        "emma": "Lo que antes tomaba una semana completa ahora toma 2 horas. OMNISEEN es un cambio radical para equipos de contenido."
+      }
+    },
+    "chat": {
+      "badge": "Asistente IA",
+      "title": "¿Tienes Preguntas?",
+      "subtitle": "Chatea con nuestro asistente IA para aprender más sobre OMNISEEN y cómo puede ayudar a tu negocio.",
+      "header": "OMNISEEN IA",
+      "status": "En línea • Responde al instante",
+      "welcome": "¡Hola! 👋 Soy el asistente IA de OMNISEEN. ¿Cómo puedo ayudarte hoy? Pregunta sobre nuestras funciones, precios o cómo empezar.",
+      "suggestions": "Preguntas rápidas:",
+      "placeholder": "Escribe tu mensaje...",
+      "error": "Lo siento, no pude procesar tu solicitud. Por favor intenta de nuevo.",
+      "prompts": {
+        "pricing": "¿Cuáles son los planes de precios?",
+        "features": "¿Qué funciones están incluidas?",
+        "trial": "¿Cómo funciona la prueba gratis?",
+        "seo": "¿Cómo funciona la optimización SEO?"
+      }
+    },
+    "whatsapp": {
+      "label": "Habla con nosotros",
+      "message": "¡Hola! Quiero saber más sobre OMNISEEN"
+    },
+    "showcase": {
+      "title": "Blogs creados con OMNISEEN",
+      "subtitle": "Mira ejemplos reales de blogs generados por nuestra plataforma",
+      "viewsMonth": "vistas/mes"
+    },
+    "testimonials": {
+      "title": "Lo que dicen nuestros clientes",
+      "subtitle": "Historias reales de creadores que transformaron sus blogs"
+    },
+    "pricing": {
+      "title": "Precios",
+      "subtitle": "Automatiza tu blog. Obtén más tráfico de Google y ChatGPT.",
+      "trialInfo": "Comienza con 7 días gratis. Cancela cuando quieras.",
+      "monthly": "Mensual",
+      "yearly": "Anual",
+      "yearlySavings": "Ahorra 25%",
+      "billedYearly": "Facturado anualmente",
+      "perMonth": "mes",
+      "savePercent": "Ahorra {{percent}}%",
+      "popular": "Más Popular",
+      "startTrial": "Empezar Gratis",
+      "allFeaturesIn": "Todas las funciones de",
+      "plus": "más:",
+      "trustBadges": "Pago seguro via Stripe • Cancela cuando quieras • Soporte dedicado",
+      "features": {
+        "articles": "Artículos",
+        "blogs": "Blogs automatizados",
+        "keywords": "Palabras clave",
+        "teamMembers": "Miembros del equipo",
+        "brandedBlog": "Blog con tu marca",
+        "customDomain": "Dominio personalizado",
+        "smartSuggestions": "Sugerencias inteligentes de temas",
+        "internalLinking": "Enlaces internos/externos",
+        "keywordAnalysis": "Análisis de palabras clave",
+        "weeklyReport": "Informe semanal",
+        "aiImages": "Imágenes generadas por IA",
+        "aiImagesLimited": "Imágenes IA (limitado)",
+        "aiImagesExpanded": "Imágenes IA (expandido)",
+        "advancedSeo": "SEO avanzado",
+        "socialIntegration": "Integración redes sociales",
+        "clusters": "Clusters de contenido",
+        "clustersBasic": "Clusters básicos",
+        "clustersAdvanced": "Clusters avanzados",
+        "ebooks": "E-books automáticos",
+        "autoTranslation": "Traducción automática",
+        "salesFunnel": "Embudo inteligente",
+        "chatAI": "Artículos con Chat AI",
+        "clientArea": "Área de revisión para clientes",
+        "editorialCalendar": "Calendario editorial",
+        "apiAccess": "Acceso a API",
+        "apiComingSoon": "API (próximamente)",
+        "whiteLabel": "White label",
+        "whiteLabelComingSoon": "White label (próximamente)",
+        "emailSupport": "Soporte por email",
+        "prioritySupport": "Soporte prioritario",
+        "dedicatedManager": "Gerente dedicado",
+        "contactSales": "¿Necesita más blogs? Contacte ventas"
+      },
+      "plans": {
+        "lite": { "name": "Lite", "description": "Para nuevos bloggers que están empezando" },
+        "pro": { "name": "Pro", "description": "Para bloggers en crecimiento listos para expandir" },
+        "business": { "name": "Business", "description": "Para equipos gestionando múltiples sitios" },
+        "essential": { "name": "Essential", "description": "Perfecto para empezar" },
+        "plus": { "name": "Plus", "description": "Para creadores serios" },
+        "scale": { "name": "Scale", "description": "Para agencias y empresas" }
+      },
+      "values": {
+        "unlimited": "Ilimitado",
+        "basic": "Básico",
+        "complete": "Completo",
+        "email": "Email",
+        "priority": "Prioritario",
+        "dedicatedManager": "Gerente Dedicado"
+      }
+    },
+    "faq": {
+      "title": "Preguntas Frecuentes",
+      "subtitle": "Resuelve tus dudas sobre OMNISEEN",
+      "questions": {
+        "howWorks": {
+          "question": "¿Cómo funciona la generación de artículos con IA?",
+          "answer": "Nuestra IA analiza el tema, palabras clave y contexto de tu negocio para generar artículos completos, optimizados para SEO, con estructura profesional, imágenes y FAQs automáticas."
+        },
+        "plagiarism": {
+          "question": "¿Los artículos son únicos o pueden tener plagio?",
+          "answer": "Todos los artículos son 100% originales, generados específicamente para ti. Utilizamos modelos avanzados de IA que crean contenido único basado en el contexto y especificaciones de tu blog."
+        },
+        "customDomain": {
+          "question": "¿Puedo usar mi propio dominio?",
+          "answer": "¡Sí! En los planes Plus y Scale puedes conectar tu dominio personalizado con certificado SSL gratuito y configuración automática de DNS."
+        },
+        "trial": {
+          "question": "¿Cómo funciona la prueba gratuita?",
+          "answer": "Tienes 7 días para probar todas las funcionalidades del plan elegido sin compromiso. No se requiere tarjeta de crédito para empezar."
+        },
+        "cancel": {
+          "question": "¿Puedo cancelar en cualquier momento?",
+          "answer": "Sí, puedes cancelar tu suscripción cuando quieras, sin multas ni tarifas adicionales. Tu acceso continúa hasta el final del período pagado."
+        },
+        "limit": {
+          "question": "¿Qué pasa si alcanzo el límite de artículos?",
+          "answer": "Puedes hacer upgrade del plan en cualquier momento o esperar la renovación mensual. Los artículos en borrador no cuentan en el límite."
+        },
+        "support": {
+          "question": "¿Cómo funciona el soporte?",
+          "answer": "Ofrecemos soporte por email en todos los planes, con respuesta en hasta 24h. Los planes Plus tienen soporte prioritario y Scale incluyen gerente de cuenta dedicado."
+        },
+        "yearlyDiscount": {
+          "question": "¿Ofrecen descuento para pago anual?",
+          "answer": "¡Sí! Al elegir pago anual, obtienes 25% de descuento, ahorrando significativamente en tu suscripción."
+        },
+        "noBlog": {
+          "question": "¿Necesito un blog para usar OMNISEEN?",
+          "answer": "¡No! OMNISEEN crea un blog profesional para ti automáticamente. No necesitas conocimientos técnicos ni sitio web existente."
+        },
+        "googlePenalty": {
+          "question": "¿Google penalizará el contenido con IA?",
+          "answer": "No. Las directrices de Google se centran en la calidad del contenido, no en cómo fue creado. Nuestra IA genera contenido de alta calidad, único y valioso que posiciona bien."
+        }
+      }
+    },
+    "cta": {
+      "title": "¿Listo para crear tu blog?",
+      "subtitle": "Únete a cientos de creadores que ya están publicando contenido de calidad con IA.",
+      "button": "Crear mi blog gratis"
+    },
+    "footer": {
+      "rights": "Todos los derechos reservados."
+    },
+    "demo": {
+      "title": "Conoce OMNISEEN",
+      "slides": {
+        "dashboard": {
+          "title": "Dashboard Intuitivo",
+          "description": "Gestiona todos tus blogs y artículos en un solo lugar con métricas en tiempo real."
+        },
+        "aiGeneration": {
+          "title": "Generación con IA",
+          "description": "Crea artículos completos en segundos con nuestra inteligencia artificial avanzada."
+        },
+        "seoOptimization": {
+          "title": "Optimización SEO",
+          "description": "Análisis automático de SEO con sugerencias de mejora en tiempo real."
+        },
+        "customization": {
+          "title": "Personalización",
+          "description": "Personaliza colores, fuentes y diseño para combinar con tu marca."
+        },
+        "analytics": {
+          "title": "Analytics Completo",
+          "description": "Acompaña visualizaciones, tiempo de lectura y conversiones en tiempo real."
+        },
+        "publishing": {
+          "title": "Publicación Fácil",
+          "description": "Publica tus artículos con un clic en tu blog personalizado."
+        }
+      },
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "close": "Cerrar"
+    }
+  },
+  "blog": {
+    "notFound": "Blog no encontrado",
+    "articleNotFound": "Artículo no encontrado",
+    "notFoundDescription": "El blog que buscas no existe o no está publicado.",
+    "articleNotFoundDescription": "El artículo que buscas no existe o no está publicado.",
+    "noArticles": "Ningún artículo publicado aún",
+    "noArticlesDescription": "Vuelve pronto para ver nuevos contenidos.",
+    "recentArticles": "Artículos Recientes",
+    "readingTime": "min de lectura",
+    "views": "visualizaciones",
+    "shares": "compartidos",
+    "writtenBy": "Escrito por",
+    "faq": "Preguntas Frecuentes",
+    "relatedArticles": "Artículos Relacionados",
+    "backToBlog": "Volver al Blog",
+    "startFreeTrial": "Iniciar prueba gratis",
+    "login": "Iniciar sesión",
+    "allRightsReserved": "Todos los derechos reservados.",
+    "tableOfContents": "Índice",
+    "shareOn": "Compartir en",
+    "copyLink": "Copiar enlace",
+    "linkCopied": "¡Enlace copiado!",
+    "focusMode": "Modo Lectura",
+    "exitFocusMode": "Salir del Modo Lectura",
+    "selectLanguage": "Seleccionar idioma",
+    "originalLanguage": "Idioma original",
+    "translatedBy": "Traducido por IA"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "tryAgain": "Intentar de nuevo",
+    "yes": "Sí",
+    "no": "No",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "more": "Ver más",
+    "less": "Ver menos"
+  },
+  "translations": {
+    "title": "Traducciones",
+    "translateSelected": "Traducir seleccionados",
+    "autoTranslateOnPublish": "Auto-traducir al publicar",
+    "notTranslated": "No traducido",
+    "translating": "Traduciendo...",
+    "translated": "Traducido",
+    "translationError": "Error en traducción",
+    "retry": "Reintentar",
+    "translationSuccess": "Artículo traducido con éxito",
+    "translationFailed": "Error al traducir artículo"
+  },
+  "supportChat": {
+    "welcomeMessage": "¡Hola! 👋 Soy la OMNISEEN AI. ¿Cómo puedo ayudarte hoy?",
+    "typing": "Escribiendo...",
+    "quickQuestionsLabel": "Sugerencias:",
+    "inputPlaceholder": "Escribe tu pregunta...",
+    "errorSending": "No se pudo enviar el mensaje.",
+    "questions": {
+      "howToCreateArticle": "¿Cómo crear un artículo?",
+      "howToUseAutomation": "¿Cómo usar la automatización?",
+      "whereToSeeMetrics": "¿Dónde veo mis métricas?",
+      "howToEditArticle": "¿Cómo editar un artículo?",
+      "howToPublish": "¿Cómo publicar?",
+      "howToSchedule": "¿Cómo programar publicación?",
+      "howToSearchKeywords": "¿Cómo buscar palabras clave?",
+      "whatAreClusters": "¿Qué son los clusters?",
+      "howToImportKeywords": "¿Cómo importar de GSC?",
+      "howToReadMetrics": "¿Cómo leer las métricas?",
+      "howToExportData": "¿Cómo exportar datos?",
+      "whatIsGSC": "¿Qué es Search Console?",
+      "howToConnectDomain": "¿Cómo conectar mi dominio?",
+      "howToManageTeam": "¿Cómo gestionar equipo?",
+      "howToChangeTemplate": "¿Cómo cambiar el template?",
+      "whatAreThePlans": "¿Cuáles son los planes?",
+      "howToGetHelp": "¿Cómo obtener soporte?"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Accede a tu cuenta",
+      "description": "Inicia sesión o crea una cuenta para comenzar",
+      "tabLogin": "Iniciar sesión",
+      "tabSignup": "Crear cuenta",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "forgotPassword": "Olvidé mi contraseña",
+      "submit": "Iniciar sesión",
+      "welcomeBack": "¡Bienvenido de nuevo!",
+      "loginSuccess": "Inicio de sesión exitoso."
+    },
+    "signup": {
+      "fullName": "Nombre completo",
+      "submit": "Crear cuenta",
+      "accountCreated": "¡Cuenta creada!",
+      "welcomeMessage": "Bienvenido a OMNISEEN. ¡Vamos a configurar tu blog!"
+    },
+    "reset": {
+      "title": "Recuperar contraseña",
+      "newPasswordTitle": "Nueva contraseña",
+      "description": "Ingresa tu correo para recibir el enlace de recuperación",
+      "newPasswordDescription": "Ingresa tu nueva contraseña",
+      "sendLink": "Enviar enlace de recuperación",
+      "backToLogin": "Volver al inicio de sesión",
+      "emailSent": "¡Correo enviado!",
+      "checkInbox": "Revisa tu bandeja de entrada y haz clic en el enlace para restablecer tu contraseña.",
+      "newPassword": "Nueva contraseña",
+      "confirmPassword": "Confirmar contraseña",
+      "resetPassword": "Restablecer contraseña",
+      "passwordReset": "¡Contraseña restablecida!",
+      "passwordUpdated": "Tu contraseña ha sido actualizada exitosamente."
+    },
+    "errors": {
+      "invalidEmail": "Correo electrónico inválido",
+      "passwordMin": "La contraseña debe tener al menos 6 caracteres",
+      "nameMin": "El nombre debe tener al menos 2 caracteres",
+      "invalidLogin": "Correo o contraseña incorrectos",
+      "emailRegistered": "Este correo ya está registrado",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "resetFailed": "No se pudo restablecer la contraseña. Intenta solicitar un nuevo enlace.",
+      "unexpectedError": "Ocurrió un error inesperado",
+      "validationError": "Error de validación"
+    },
+    "branding": {
+      "headline": "Crea tu blog profesional en minutos",
+      "subheadline": "Genera artículos optimizados para SEO con inteligencia artificial. Personaliza todo a tu manera y publica con un clic.",
+      "feature1": "Artículos generados por IA en segundos",
+      "feature2": "Personalización visual total",
+      "feature3": "SEO optimizado automáticamente",
+      "recoveryHeadline": "Recupera tu acceso",
+      "recoverySubheadline": "¡No te preocupes! Le pasa a todos. Te ayudaremos a recuperar el acceso a tu cuenta."
+    },
+    "social": {
+      "or": "o continúa con",
+      "continueWithGoogle": "Continuar con Google",
+      "connectGoogle": "Conectar cuenta Google",
+      "accountLinked": "¡Cuenta vinculada exitosamente!",
+      "linkExistingAccount": "Esta cuenta ya existe. Iniciando sesión...",
+      "errorGoogle": "Error al conectar con Google. Inténtalo de nuevo."
+    },
+    "terms": {
+      "agreement": "Al continuar, aceptas nuestros",
+      "termsOfUse": "Términos de Uso",
+      "and": "y",
+      "privacyPolicy": "Política de Privacidad"
+    }
+  }
+}

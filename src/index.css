@@ -1,0 +1,318 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design System - Blog SaaS with AI */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* OMNISEEN Brand Colors - FedEx Purple #4D148C + Orange #FF6600 */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 6%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
+    
+    /* Primary - FedEx Purple #4D148C (HSL 277 76% 31%) */
+    --primary: 277 76% 31%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary - Light Gray #F4F4F6 */
+    --secondary: 240 9% 96%;
+    --secondary-foreground: 0 0% 6%;
+    
+    /* Muted - Gray tones */
+    --muted: 240 9% 96%;
+    --muted-foreground: 220 9% 46%;
+    
+    /* Accent - FedEx Orange #FF6600 (HSL 24 100% 50%) */
+    --accent: 24 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders - Medium Gray #D1D5DB */
+    --border: 218 11% 85%;
+    --input: 218 11% 85%;
+    --ring: 270 51% 36%;
+    
+    --radius: 0.75rem;
+    
+    /* Success/Warning */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    /* Sidebar - Dark #1F1F1F with Purple/Orange accents */
+    --sidebar-background: 0 0% 12%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 24 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 277 76% 31%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 277 76% 31%;
+  }
+
+  .dark {
+    /* OMNISEEN Dark Mode - FedEx Purple/Orange */
+    --background: 0 0% 6%;
+    --foreground: 0 0% 98%;
+    
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Primary - FedEx Purple (brighter for dark mode) */
+    --primary: 277 76% 40%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 65%;
+    
+    /* Accent - FedEx Orange */
+    --accent: 24 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 277 76% 40%;
+    
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    /* Sidebar - Dark with Purple/Orange accents */
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 24 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 277 76% 35%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-ring: 277 76% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .gradient-primary {
+    @apply bg-gradient-to-r from-primary to-accent;
+  }
+  
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+  
+  .glass {
+    @apply bg-background/80 backdrop-blur-lg border border-border/50;
+  }
+  
+  .glass-dark {
+    @apply bg-background/40 backdrop-blur-xl border border-border/30;
+  }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  /* Stagger animation delays */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+  .stagger-6 { animation-delay: 0.6s; }
+
+  /* Hover animations */
+  .hover-lift {
+    @apply transition-all duration-300 ease-out;
+  }
+  .hover-lift:hover {
+    @apply -translate-y-2 shadow-xl;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.3);
+  }
+
+  .hover-scale {
+    @apply transition-transform duration-300;
+  }
+  .hover-scale:hover {
+    @apply scale-105;
+  }
+
+  /* Glass 3D effect */
+  .glass-3d {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-xl;
+    transform-style: preserve-3d;
+    perspective: 1000px;
+  }
+  .glass-3d:hover {
+    transform: translateY(-4px) rotateX(2deg);
+  }
+
+  /* Gradient animations */
+  .gradient-animated {
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease infinite;
+  }
+  
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Parallax layers */
+  .parallax-slow {
+    will-change: transform;
+    transition: transform 0.1s linear;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-float,
+    .animate-pulse-slow,
+    .hover-lift,
+    .hover-glow,
+    .hover-scale,
+    .glass-3d,
+    .gradient-animated {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+/* Internal Links Styling */
+.internal-link {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--primary) / 0.3);
+  text-underline-offset: 3px;
+  transition: all 0.2s ease;
+}
+
+.internal-link:hover {
+  text-decoration-color: hsl(var(--primary));
+}
+
+.internal-link.external-link .external-icon {
+  display: inline-block;
+  font-size: 0.75em;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+/* Focused Reading Mode */
+body.focused-reading-active {
+  overflow-x: hidden;
+}
+
+body.focused-reading-active header,
+body.focused-reading-active footer,
+body.focused-reading-active .floating-share-bar {
+  display: none !important;
+}
+
+body.focused-reading-active main {
+  background-color: hsl(40 30% 97%);
+}
+
+.dark body.focused-reading-active main {
+  background-color: hsl(240 10% 6%);
+}
+
+body.focused-reading-active .prose {
+  font-size: 1.25rem;
+  line-height: 2;
+}
+
+body.focused-reading-active .prose p {
+  margin-block: 1.5rem;
+}
+
+/* Table of Contents smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile Performance: Disable heavy effects */
+@media (max-width: 768px) {
+  .glass,
+  .glass-dark {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: hsl(var(--background) / 0.98) !important;
+  }
+
+  .animate-float,
+  .gradient-animated {
+    animation: none !important;
+  }
+
+  .hover-lift,
+  .hover-scale,
+  .hover-glow,
+  .glass-3d {
+    transform: none !important;
+    transition: opacity 0.15s ease !important;
+  }
+}

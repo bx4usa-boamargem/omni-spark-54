@@ -1,0 +1,295 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface ImageRequest {
+  prompt: string;
+  context: 'hero' | 'problem' | 'pain' | 'solution' | 'result';
+  articleTheme: string;
+  targetAudience?: string;
+  user_id?: string;
+  blog_id?: string;
+}
+
+// Generate a normalized hash for cache lookup
+function generateHash(text: string): string {
+  const normalized = text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '');
+  
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { prompt, context, articleTheme, targetAudience, user_id, blog_id }: ImageRequest = await req.json();
+
+    if (!prompt) {
+      return new Response(
+        JSON.stringify({ error: 'Prompt is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch AI model preference from content_preferences
+    let imageModel = 'google/gemini-2.5-flash-image-preview';
+    if (blog_id) {
+      const { data: prefs } = await supabase
+        .from('content_preferences')
+        .select('ai_model_image')
+        .eq('blog_id', blog_id)
+        .maybeSingle();
+      
+      if (prefs?.ai_model_image) {
+        imageModel = prefs.ai_model_image;
+        console.log(`Using configured image model: ${imageModel}`);
+      }
+    }
+
+    // Build enhanced prompt based on ClickOne editorial guidelines
+    const contextDescriptions: Record<string, string> = {
+      hero: 'Uma imagem principal impactante que captura a essência do artigo',
+      problem: 'Uma cena que mostra claramente o problema enfrentado pelo público-alvo',
+      pain: 'Uma representação visual da dor ou frustração causada pelo problema',
+      solution: 'Uma imagem que demonstra a solução de forma profissional e moderna',
+      result: 'Uma cena positiva mostrando o resultado após implementar a solução'
+    };
+
+    const enhancedPrompt = `
+Crie uma imagem fotorrealista e profissional para um artigo de blog.
+
+Tema do artigo: ${articleTheme}
+${targetAudience ? `Público-alvo: ${targetAudience}` : ''}
+Contexto visual: ${contextDescriptions[context] || context}
+
+Descrição específica: ${prompt}
+
+DIRETRIZES OBRIGATÓRIAS:
+- Pessoas reais em contextos profissionais (não ilustrações ou caricaturas)
+- Ambiente de trabalho moderno e contemporâneo
+- Iluminação natural e profissional
+- Expressões autênticas e situações realistas
+- Cores harmoniosas que transmitam profissionalismo
+- Composição equilibrada adequada para web
+- Alta qualidade, nítida e bem definida
+- Aspecto 16:9 para web
+
+NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustrações genéricas.
+`.trim();
+
+    // Generate cache key and check cache
+    const cacheKey = `${prompt}|${context}|${articleTheme}`;
+    const contentHash = generateHash(cacheKey);
+
+    console.log(`Checking cache for image: ${context}, hash: ${contentHash}`);
+    const { data: cacheHit } = await supabase
+      .from("ai_content_cache")
+      .select("*")
+      .eq("cache_type", "image")
+      .eq("content_hash", contentHash)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (cacheHit) {
+      console.log(`CACHE HIT for image: ${context}`);
+      
+      // Increment hit counter
+      await supabase
+        .from("ai_content_cache")
+        .update({ hits: (cacheHit.hits || 0) + 1 })
+        .eq("id", cacheHit.id);
+
+      // Log cache hit
+      if (user_id) {
+        await supabase.from("consumption_logs").insert({
+          user_id,
+          blog_id: blog_id || null,
+          action_type: "image_generation_cached",
+          action_description: `Cached Image: ${context}`,
+          model_used: "cache",
+          input_tokens: 0,
+          output_tokens: 0,
+          images_generated: 0,
+          estimated_cost_usd: 0,
+          metadata: { context, articleTheme, cache_hit: true },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          imageBase64: (cacheHit.response_data as {imageBase64?: string})?.imageBase64,
+          context,
+          from_cache: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Ensure we use the correct model with -preview suffix for image generation
+    const actualModel = 'google/gemini-2.5-flash-image-preview';
+    console.log(`Generating image for context: ${context}, model: ${actualModel}`);
+    console.log(`Enhanced prompt: ${enhancedPrompt.substring(0, 200)}...`);
+
+    // Retry logic for image generation (sometimes model returns text without image)
+    let imageData: string | null = null;
+    let lastError: string | null = null;
+    const maxRetries = 3;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: actualModel,
+            messages: [
+              {
+                role: 'user',
+                content: attempt === 1 
+                  ? enhancedPrompt 
+                  : `IMPORTANTE: Você DEVE gerar uma imagem. Não responda com texto, apenas gere a imagem.\n\n${enhancedPrompt}`
+              }
+            ],
+            modalities: ['image', 'text']
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Image generation error (attempt ${attempt}):`, response.status, errorText);
+          
+          if (response.status === 429) {
+            return new Response(
+              JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+              { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          if (response.status === 402) {
+            return new Response(
+              JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }),
+              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          lastError = `API error: ${response.status}`;
+          continue;
+        }
+
+        const data = await response.json();
+        imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+
+        if (imageData) {
+          console.log(`Image generated successfully on attempt ${attempt}`);
+          break;
+        } else {
+          lastError = `No image in response (attempt ${attempt}): ${JSON.stringify(data).substring(0, 200)}`;
+          console.warn(lastError);
+          
+          // Wait a bit before retrying
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      } catch (fetchError) {
+        lastError = `Fetch error: ${fetchError instanceof Error ? fetchError.message : 'Unknown'}`;
+        console.error(`Attempt ${attempt} failed:`, lastError);
+      }
+    }
+
+    if (!imageData) {
+      console.error('All attempts failed. Last error:', lastError);
+      throw new Error('No image generated after multiple attempts');
+    }
+
+    const estimatedCost = 0.02;
+
+    // Log consumption if user_id provided
+    if (user_id) {
+      try {
+        await supabase.from("consumption_logs").insert({
+          user_id,
+          blog_id: blog_id || null,
+          action_type: "image_generation",
+          action_description: `Image: ${context} for ${articleTheme.substring(0, 50)}`,
+          model_used: imageModel,
+          input_tokens: 0,
+          output_tokens: 0,
+          images_generated: 1,
+          estimated_cost_usd: estimatedCost,
+          metadata: { context, articleTheme },
+        });
+        console.log("Consumption logged for image generation");
+      } catch (logError) {
+        console.warn("Failed to log consumption:", logError);
+      }
+    }
+
+    // Save to cache for future use
+    try {
+      const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+      await supabase.from("ai_content_cache").upsert({
+        cache_type: "image",
+        content_hash: contentHash,
+        prompt_text: cacheKey,
+        response_data: { imageBase64: imageData },
+        model_used: imageModel,
+        tokens_saved: 0,
+        cost_saved_usd: estimatedCost,
+        blog_id: blog_id || null,
+        user_id: user_id || null,
+        expires_at: expiresAt.toISOString(),
+        hits: 0,
+      }, { onConflict: 'cache_type,content_hash' });
+      console.log("Image saved to cache");
+    } catch (cacheError) {
+      console.warn("Failed to save to cache:", cacheError);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        imageBase64: imageData,
+        context
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: unknown) {
+    console.error('Error in generate-image:', error);
+    const message = error instanceof Error ? error.message : 'Failed to generate image';
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

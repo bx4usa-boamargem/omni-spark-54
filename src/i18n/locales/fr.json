@@ -1,0 +1,377 @@
+{
+  "sidebar": {
+    "home": "Accueil",
+    "content": "Contenus",
+    "ebooks": "Ebooks",
+    "new": "Nouveau",
+    "strategy": "Stratégie",
+    "seoAnalysis": "Analyse SEO",
+    "automations": "Automatisations",
+    "referrals": "Parrainages",
+    "landingPage": "Landing Page",
+    "help": "Aide",
+    "blogEditor": "Éditeur de Blog",
+    "viewBlog": "Voir le Blog",
+    "account": "Compte",
+    "settings": "Paramètres",
+    "adminPanel": "Panneau Admin",
+    "quickAccess": "Accès Rapide",
+    "signOut": "Déconnexion",
+    "createContent": "Créer du contenu"
+  },
+  "landing": {
+    "header": {
+      "home": "Accueil",
+      "plans": "Tarifs",
+      "blog": "Blog",
+      "login": "Connexion",
+      "startFree": "Commencer gratuitement",
+      "goToDashboard": "Aller au Tableau de bord",
+      "language": "Langue"
+    },
+    "footer": {
+      "tagline": "Blogs automatisés par IA",
+      "allRightsReserved": "Tous droits réservés"
+    },
+    "hero": {
+      "badge": "Créez des articles en secondes avec l'IA",
+      "title1": "Votre blog professionnel",
+      "title2": "prêt en minutes",
+      "subtitle": "Créez des articles optimisés pour le SEO avec l'intelligence artificielle. Personnalisez tout à votre façon et publiez en un clic.",
+      "startNow": "Commencer maintenant",
+      "watchDemo": "Voir la démonstration",
+      "users": "+500 utilisateurs",
+      "rating": "4.9/5"
+    },
+    "stats": {
+      "title": "Des chiffres impressionnants",
+      "subtitle": "Des milliers de créateurs font déjà confiance à OMNISEEN",
+      "articles": "Articles Générés",
+      "blogs": "Blogs Créés",
+      "views": "Vues",
+      "hours": "Heures Économisées"
+    },
+    "features": {
+      "title": "Tout ce dont vous avez besoin pour votre blog",
+      "subtitle": "Des outils puissants pour créer du contenu de qualité sans effort.",
+      "ai": {
+        "title": "Articles avec IA",
+        "description": "Générez des articles complets et optimisés pour le SEO en secondes grâce à l'intelligence artificielle avancée."
+      },
+      "customization": {
+        "title": "Personnalisation Totale",
+        "description": "Personnalisez les couleurs, polices, mises en page et CTAs pour que votre blog reflète votre marque."
+      },
+      "seo": {
+        "title": "SEO Automatique",
+        "description": "Balises meta, structure des titres et mots-clés optimisés automatiquement."
+      }
+    },
+    "showcase": {
+      "title": "Blogs créés avec OMNISEEN",
+      "subtitle": "Découvrez des exemples réels de blogs générés par notre plateforme",
+      "viewsMonth": "vues/mois"
+    },
+    "testimonials": {
+      "title": "Ce que disent nos clients",
+      "subtitle": "Histoires réelles de créateurs qui ont transformé leurs blogs"
+    },
+    "pricing": {
+      "title": "Tarifs",
+      "subtitle": "Automatisez votre blog. Obtenez plus de trafic de Google et ChatGPT.",
+      "trialInfo": "Commencez avec 7 jours gratuits. Annulez à tout moment.",
+      "monthly": "Mensuel",
+      "yearly": "Annuel",
+      "yearlySavings": "Économisez 25%",
+      "billedYearly": "Facturé annuellement",
+      "perMonth": "mois",
+      "savePercent": "Économisez {{percent}}%",
+      "popular": "Le Plus Populaire",
+      "startTrial": "Commencer Gratuitement",
+      "allFeaturesIn": "Toutes les fonctionnalités de",
+      "plus": "plus:",
+      "trustBadges": "Paiement sécurisé via Stripe • Annulez à tout moment • Support dédié",
+      "features": {
+        "articles": "Articles",
+        "blogs": "Blogs automatisés",
+        "keywords": "Mots-clés",
+        "teamMembers": "Membres de l'équipe",
+        "brandedBlog": "Blog à votre marque",
+        "customDomain": "Domaine personnalisé",
+        "smartSuggestions": "Suggestions intelligentes de sujets",
+        "internalLinking": "Liens internes/externes",
+        "keywordAnalysis": "Analyse de mots-clés",
+        "weeklyReport": "Rapport hebdomadaire",
+        "aiImages": "Images générées par IA",
+        "aiImagesLimited": "Images IA (limité)",
+        "aiImagesExpanded": "Images IA (étendu)",
+        "advancedSeo": "SEO avancé",
+        "socialIntegration": "Intégration réseaux sociaux",
+        "clusters": "Clusters de contenu",
+        "clustersBasic": "Clusters basiques",
+        "clustersAdvanced": "Clusters avancés",
+        "ebooks": "E-books automatiques",
+        "autoTranslation": "Traduction automatique",
+        "salesFunnel": "Entonnoir intelligent",
+        "chatAI": "Articles avec Chat IA",
+        "clientArea": "Espace de révision client",
+        "editorialCalendar": "Calendrier éditorial",
+        "apiAccess": "Accès API",
+        "apiComingSoon": "API (bientôt)",
+        "whiteLabel": "White label",
+        "whiteLabelComingSoon": "White label (bientôt)",
+        "emailSupport": "Support par email",
+        "prioritySupport": "Support prioritaire",
+        "dedicatedManager": "Manager dédié",
+        "contactSales": "Besoin de plus de blogs? Contactez-nous"
+      },
+      "plans": {
+        "lite": { "name": "Lite", "description": "Pour les nouveaux blogueurs qui débutent" },
+        "pro": { "name": "Pro", "description": "Pour les blogueurs en croissance prêts à s'étendre" },
+        "business": { "name": "Business", "description": "Pour les équipes gérant plusieurs sites" },
+        "essential": { "name": "Essential", "description": "Parfait pour débuter" },
+        "plus": { "name": "Plus", "description": "Pour créateurs sérieux" },
+        "scale": { "name": "Scale", "description": "Pour agences et entreprises" }
+      },
+      "values": {
+        "unlimited": "Illimité",
+        "basic": "Basique",
+        "complete": "Complet",
+        "email": "Email",
+        "priority": "Prioritaire",
+        "dedicatedManager": "Manager Dédié"
+      }
+    },
+    "faq": {
+      "title": "Questions Fréquentes",
+      "subtitle": "Réponses à vos questions sur OMNISEEN",
+      "questions": {
+        "howWorks": {
+          "question": "Comment fonctionne la génération d'articles avec l'IA ?",
+          "answer": "Notre IA analyse le sujet, les mots-clés et le contexte de votre entreprise pour générer des articles complets, optimisés pour le SEO, avec une structure professionnelle, des images et des FAQs automatiques."
+        },
+        "plagiarism": {
+          "question": "Les articles sont-ils uniques ou peuvent-ils être plagiés ?",
+          "answer": "Tous les articles sont 100% originaux, générés spécifiquement pour vous. Nous utilisons des modèles IA avancés qui créent du contenu unique basé sur le contexte et les spécifications de votre blog."
+        },
+        "customDomain": {
+          "question": "Puis-je utiliser mon propre domaine ?",
+          "answer": "Oui ! Avec les plans Plus et Scale, vous pouvez connecter votre domaine personnalisé avec certificat SSL gratuit et configuration DNS automatique."
+        },
+        "trial": {
+          "question": "Comment fonctionne l'essai gratuit ?",
+          "answer": "Vous avez 14 jours pour tester toutes les fonctionnalités du plan choisi sans engagement. Nous ne demandons pas de carte de crédit pour commencer."
+        },
+        "cancel": {
+          "question": "Puis-je annuler à tout moment ?",
+          "answer": "Oui, vous pouvez annuler votre abonnement quand vous le souhaitez, sans pénalités ni frais supplémentaires. Votre accès continue jusqu'à la fin de la période payée."
+        },
+        "limit": {
+          "question": "Que se passe-t-il si j'atteins la limite d'articles ?",
+          "answer": "Vous pouvez passer à un plan supérieur à tout moment ou attendre le renouvellement mensuel. Les articles en brouillon ne comptent pas dans la limite."
+        },
+        "support": {
+          "question": "Comment fonctionne le support ?",
+          "answer": "Nous offrons un support par email pour tous les plans, avec réponse sous 24h. Les plans Plus bénéficient d'un support prioritaire et Scale inclut un gestionnaire de compte dédié."
+        },
+        "yearlyDiscount": {
+          "question": "Proposez-vous une réduction pour le paiement annuel ?",
+          "answer": "Oui ! En choisissant le paiement annuel, vous obtenez 2 mois gratuits, économisant jusqu'à 17% sur le montant total de l'abonnement."
+        }
+      }
+    },
+    "cta": {
+      "title": "Prêt à créer votre blog ?",
+      "subtitle": "Rejoignez des centaines de créateurs qui publient déjà du contenu de qualité avec l'IA.",
+      "button": "Créer mon blog gratuit"
+    },
+    "footer": {
+      "rights": "Tous droits réservés."
+    },
+    "demo": {
+      "title": "Découvrez OMNISEEN",
+      "slides": {
+        "dashboard": {
+          "title": "Tableau de Bord Intuitif",
+          "description": "Gérez tous vos blogs et articles en un seul endroit avec des métriques en temps réel."
+        },
+        "aiGeneration": {
+          "title": "Génération avec IA",
+          "description": "Créez des articles complets en secondes avec notre intelligence artificielle avancée."
+        },
+        "seoOptimization": {
+          "title": "Optimisation SEO",
+          "description": "Analyse SEO automatique avec suggestions d'amélioration en temps réel."
+        },
+        "customization": {
+          "title": "Personnalisation",
+          "description": "Personnalisez couleurs, polices et mise en page pour correspondre à votre marque."
+        },
+        "analytics": {
+          "title": "Analytics Complet",
+          "description": "Suivez les vues, le temps de lecture et les conversions en temps réel."
+        },
+        "publishing": {
+          "title": "Publication Facile",
+          "description": "Publiez vos articles en un clic sur votre blog personnalisé."
+        }
+      },
+      "previous": "Précédent",
+      "next": "Suivant",
+      "close": "Fermer"
+    }
+  },
+  "blog": {
+    "notFound": "Blog non trouvé",
+    "articleNotFound": "Article non trouvé",
+    "notFoundDescription": "Le blog que vous recherchez n'existe pas ou n'est pas publié.",
+    "articleNotFoundDescription": "L'article que vous recherchez n'existe pas ou n'est pas publié.",
+    "noArticles": "Aucun article publié pour le moment",
+    "noArticlesDescription": "Revenez bientôt pour découvrir de nouveaux contenus.",
+    "recentArticles": "Articles Récents",
+    "readingTime": "min de lecture",
+    "views": "vues",
+    "shares": "partages",
+    "writtenBy": "Écrit par",
+    "faq": "Questions Fréquentes",
+    "relatedArticles": "Articles Connexes",
+    "backToBlog": "Retour au Blog",
+    "startFreeTrial": "Commencer l'essai gratuit",
+    "login": "Connexion",
+    "allRightsReserved": "Tous droits réservés.",
+    "tableOfContents": "Sommaire",
+    "shareOn": "Partager sur",
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié !",
+    "focusMode": "Mode Lecture",
+    "exitFocusMode": "Quitter le Mode Lecture",
+    "selectLanguage": "Sélectionner la langue",
+    "originalLanguage": "Langue originale",
+    "translatedBy": "Traduit par IA"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "tryAgain": "Réessayer",
+    "yes": "Oui",
+    "no": "Non",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "sort": "Trier",
+    "more": "Voir plus",
+    "less": "Voir moins"
+  },
+  "translations": {
+    "title": "Traductions",
+    "translateSelected": "Traduire la sélection",
+    "autoTranslateOnPublish": "Auto-traduire à la publication",
+    "notTranslated": "Non traduit",
+    "translating": "Traduction en cours...",
+    "translated": "Traduit",
+    "translationError": "Erreur de traduction",
+    "retry": "Réessayer",
+    "translationSuccess": "Article traduit avec succès",
+    "translationFailed": "Échec de la traduction de l'article"
+  },
+  "supportChat": {
+    "welcomeMessage": "Bonjour ! 👋 Je suis OMNISEEN AI. Comment puis-je vous aider ?",
+    "typing": "Écriture...",
+    "quickQuestionsLabel": "Suggestions :",
+    "inputPlaceholder": "Tapez votre question...",
+    "errorSending": "Impossible d'envoyer le message.",
+    "questions": {
+      "howToCreateArticle": "Comment créer un article ?",
+      "howToUseAutomation": "Comment utiliser l'automatisation ?",
+      "whereToSeeMetrics": "Où voir mes métriques ?",
+      "howToEditArticle": "Comment modifier un article ?",
+      "howToPublish": "Comment publier ?",
+      "howToSchedule": "Comment planifier ?",
+      "howToSearchKeywords": "Comment chercher des mots-clés ?",
+      "whatAreClusters": "Que sont les clusters ?",
+      "howToImportKeywords": "Comment importer de GSC ?",
+      "howToReadMetrics": "Comment lire les métriques ?",
+      "howToExportData": "Comment exporter les données ?",
+      "whatIsGSC": "Qu'est-ce que Search Console ?",
+      "howToConnectDomain": "Comment connecter mon domaine ?",
+      "howToManageTeam": "Comment gérer l'équipe ?",
+      "howToChangeTemplate": "Comment changer le template ?",
+      "whatAreThePlans": "Quels sont les plans ?",
+      "howToGetHelp": "Comment obtenir de l'aide ?"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Accédez à votre compte",
+      "description": "Connectez-vous ou créez un compte pour commencer",
+      "tabLogin": "Connexion",
+      "tabSignup": "Créer un compte",
+      "email": "Email",
+      "password": "Mot de passe",
+      "forgotPassword": "Mot de passe oublié",
+      "submit": "Se connecter",
+      "welcomeBack": "Bon retour !",
+      "loginSuccess": "Connexion réussie."
+    },
+    "signup": {
+      "fullName": "Nom complet",
+      "submit": "Créer un compte",
+      "accountCreated": "Compte créé !",
+      "welcomeMessage": "Bienvenue sur OMNISEEN. Configurons votre blog !"
+    },
+    "reset": {
+      "title": "Récupérer le mot de passe",
+      "newPasswordTitle": "Nouveau mot de passe",
+      "description": "Entrez votre email pour recevoir le lien de récupération",
+      "newPasswordDescription": "Entrez votre nouveau mot de passe",
+      "sendLink": "Envoyer le lien de récupération",
+      "backToLogin": "Retour à la connexion",
+      "emailSent": "Email envoyé !",
+      "checkInbox": "Vérifiez votre boîte de réception et cliquez sur le lien pour réinitialiser votre mot de passe.",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "resetPassword": "Réinitialiser le mot de passe",
+      "passwordReset": "Mot de passe réinitialisé !",
+      "passwordUpdated": "Votre mot de passe a été mis à jour avec succès."
+    },
+    "errors": {
+      "invalidEmail": "Email invalide",
+      "passwordMin": "Le mot de passe doit contenir au moins 6 caractères",
+      "nameMin": "Le nom doit contenir au moins 2 caractères",
+      "invalidLogin": "Email ou mot de passe incorrect",
+      "emailRegistered": "Cet email est déjà enregistré",
+      "passwordMismatch": "Les mots de passe ne correspondent pas",
+      "resetFailed": "Impossible de réinitialiser le mot de passe. Essayez de demander un nouveau lien.",
+      "unexpectedError": "Une erreur inattendue s'est produite",
+      "validationError": "Erreur de validation"
+    },
+    "branding": {
+      "headline": "Créez votre blog professionnel en minutes",
+      "subheadline": "Générez des articles optimisés pour le SEO avec l'intelligence artificielle. Personnalisez tout à votre façon et publiez en un clic.",
+      "feature1": "Articles générés par IA en secondes",
+      "feature2": "Personnalisation visuelle totale",
+      "feature3": "SEO optimisé automatiquement",
+      "recoveryHeadline": "Récupérez votre accès",
+      "recoverySubheadline": "Ne vous inquiétez pas ! Ça arrive à tout le monde. Nous vous aiderons à récupérer l'accès à votre compte."
+    },
+    "social": {
+      "or": "ou continuez avec",
+      "continueWithGoogle": "Continuer avec Google",
+      "connectGoogle": "Connecter un compte Google",
+      "accountLinked": "Compte lié avec succès !",
+      "linkExistingAccount": "Ce compte existe déjà. Connexion en cours...",
+      "errorGoogle": "Erreur lors de la connexion avec Google. Réessayez."
+    },
+    "terms": {
+      "agreement": "En continuant, vous acceptez nos",
+      "termsOfUse": "Conditions d'Utilisation",
+      "and": "et",
+      "privacyPolicy": "Politique de Confidentialité"
+    }
+  }
+}

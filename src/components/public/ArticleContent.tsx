@@ -1,0 +1,220 @@
+interface ContentImage {
+  context: string;
+  url: string;
+  after_section: number;
+}
+
+interface ArticleContentProps {
+  content: string;
+  contentImages?: ContentImage[];
+}
+
+const contextLabels: Record<string, string> = {
+  hero: 'Imagem de capa',
+  problem: 'Ilustração do problema',
+  solution: 'Ilustração da solução',
+  result: 'Ilustração do resultado'
+};
+
+// Generate slug from text for TOC linking
+const slugify = (text: string): string => {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+};
+
+// Process markdown links [text](url)
+const processLinks = (text: string): string => {
+  return text.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    (_, linkText, url) => {
+      const isExternal = url.startsWith('http');
+      if (isExternal) {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="internal-link external-link">${linkText} <span class="external-icon">↗</span></a>`;
+      }
+      return `<a href="${url}" class="internal-link">${linkText}</a>`;
+    }
+  );
+};
+
+export const ArticleContent = ({ content, contentImages = [] }: ArticleContentProps) => {
+  const formatContent = (text: string) => {
+    const lines = text.split("\n");
+    const elements: JSX.Element[] = [];
+    let listItems: string[] = [];
+    let listType: "ul" | "ol" | null = null;
+    let h2Count = 0;
+
+    const flushList = () => {
+      if (listItems.length > 0 && listType) {
+        const ListTag = listType;
+        elements.push(
+          <ListTag key={elements.length} className={listType === "ul" ? "list-disc" : "list-decimal"}>
+            {listItems.map((item, i) => (
+              <li key={i} dangerouslySetInnerHTML={{ __html: processLinks(item) }} />
+            ))}
+          </ListTag>
+        );
+        listItems = [];
+        listType = null;
+      }
+    };
+
+    const insertImageIfNeeded = (afterSection: number) => {
+      const image = contentImages.find(img => img.after_section === afterSection);
+      if (image) {
+        elements.push(
+          <figure key={`img-${elements.length}`} className="my-10">
+            <div className="rounded-xl overflow-hidden shadow-xl">
+              <img 
+                src={image.url} 
+                alt={contextLabels[image.context] || `Ilustração do artigo`}
+                className="w-full aspect-video object-cover object-center"
+                style={{ maxHeight: '400px' }}
+                loading="lazy"
+              />
+            </div>
+            <figcaption className="text-center text-sm text-muted-foreground mt-3 italic">
+              {contextLabels[image.context] || 'Ilustração'}
+            </figcaption>
+          </figure>
+        );
+      }
+    };
+
+    lines.forEach((line, index) => {
+      const trimmedLine = line.trim();
+
+      if (!trimmedLine) {
+        flushList();
+        return;
+      }
+
+      // Special blocks - Insight (💡 Verdade Dura)
+      if (trimmedLine.startsWith("💡 ")) {
+        flushList();
+        elements.push(
+          <div key={index} className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 p-4 rounded-r-lg my-4">
+            <span className="font-bold text-purple-700 dark:text-purple-400">💡 Verdade Dura</span>
+            <p className="text-purple-900 dark:text-purple-200 mt-1" dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.slice(3)) }} />
+          </div>
+        );
+        return;
+      }
+
+      // Special blocks - Alert (⚠️ Atenção)
+      if (trimmedLine.startsWith("⚠️ ")) {
+        flushList();
+        elements.push(
+          <div key={index} className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg my-4">
+            <span className="font-bold text-red-700 dark:text-red-400">⚠️ Atenção</span>
+            <p className="text-red-900 dark:text-red-200 mt-1" dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.slice(3)) }} />
+          </div>
+        );
+        return;
+      }
+
+      // Special blocks - Tip (📌 Dica)
+      if (trimmedLine.startsWith("📌 ")) {
+        flushList();
+        elements.push(
+          <div key={index} className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r-lg my-4">
+            <span className="font-bold text-blue-700 dark:text-blue-400">📌 Dica</span>
+            <p className="text-blue-900 dark:text-blue-200 mt-1" dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.slice(3)) }} />
+          </div>
+        );
+        return;
+      }
+
+      // Headers with ID for TOC linking
+      if (trimmedLine.startsWith("## ")) {
+        flushList();
+        h2Count++;
+        const headingText = trimmedLine.replace("## ", "");
+        const headingId = slugify(headingText);
+        elements.push(
+          <h2 
+            key={index} 
+            id={headingId} 
+            className="font-heading text-2xl md:text-3xl font-bold text-foreground mt-12 mb-6 pb-3 border-b-2 border-primary/20 scroll-mt-24 bg-gradient-to-r from-primary/5 to-transparent -mx-4 px-4 py-2 rounded-lg"
+          >
+            {headingText}
+          </h2>
+        );
+        // Insert image after this H2 section
+        insertImageIfNeeded(h2Count);
+        return;
+      }
+
+      if (trimmedLine.startsWith("### ")) {
+        flushList();
+        elements.push(
+          <h3 
+            key={index} 
+            className="font-heading text-xl md:text-2xl font-semibold text-foreground mt-8 mb-4 pl-4 border-l-4 border-primary scroll-mt-24"
+          >
+            {trimmedLine.replace("### ", "")}
+          </h3>
+        );
+        return;
+      }
+
+      // Blockquotes
+      if (trimmedLine.startsWith("> ")) {
+        flushList();
+        elements.push(
+          <blockquote key={index} className="border-l-4 border-primary pl-4 py-2 my-4 bg-primary/5 rounded-r-lg italic text-muted-foreground">
+            <span dangerouslySetInnerHTML={{ __html: processLinks(trimmedLine.replace("> ", "")) }} />
+          </blockquote>
+        );
+        return;
+      }
+
+      // Unordered list
+      if (trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
+        if (listType !== "ul") {
+          flushList();
+          listType = "ul";
+        }
+        listItems.push(trimmedLine.replace(/^[-*]\s/, ""));
+        return;
+      }
+
+      // Ordered list
+      const orderedMatch = trimmedLine.match(/^\d+\.\s/);
+      if (orderedMatch) {
+        if (listType !== "ol") {
+          flushList();
+          listType = "ol";
+        }
+        listItems.push(trimmedLine.replace(/^\d+\.\s/, ""));
+        return;
+      }
+
+      // Bold, italic, and links
+      let processedLine = trimmedLine
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        .replace(/_(.+?)_/g, "<em>$1</em>");
+      
+      processedLine = processLinks(processedLine);
+
+      flushList();
+      elements.push(
+        <p key={index} dangerouslySetInnerHTML={{ __html: processedLine }} />
+      );
+    });
+
+    flushList();
+    return elements;
+  };
+
+  return (
+    <article className="prose prose-lg max-w-none prose-headings:font-heading prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3 prose-p:leading-relaxed prose-ul:my-4 prose-ol:my-4 prose-li:my-1 prose-blockquote:not-italic">
+      {formatContent(content)}
+    </article>
+  );
+};

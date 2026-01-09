@@ -1,0 +1,235 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface ImproveRequest {
+  type: 'title' | 'meta' | 'content' | 'density';
+  currentValue: string;
+  keywords: string[];
+  context?: string; // article content for context
+  articleTitle?: string;
+  user_id?: string;
+  blog_id?: string;
+  wordCount?: number; // current word count
+  targetWordCount?: number; // target word count to reach
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { type, currentValue, keywords, context, articleTitle, user_id, blog_id, wordCount, targetWordCount }: ImproveRequest = await req.json();
+
+    if (!type || !keywords || keywords.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: type or keywords' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch AI model preference from content_preferences
+    let textModel = 'google/gemini-2.5-flash';
+    if (blog_id) {
+      const { data: prefs } = await supabase
+        .from('content_preferences')
+        .select('ai_model_text')
+        .eq('blog_id', blog_id)
+        .maybeSingle();
+      
+      if (prefs?.ai_model_text) {
+        textModel = prefs.ai_model_text;
+        console.log(`Using configured text model: ${textModel}`);
+      }
+    }
+
+    const keywordList = keywords.join(', ');
+    const mainKeyword = keywords[0];
+
+    let systemPrompt = `Você é um especialista em SEO. Sua tarefa é otimizar o conteúdo para melhor ranqueamento nos motores de busca.
+Responda APENAS com o conteúdo otimizado, sem explicações ou comentários adicionais.
+Use português brasileiro.`;
+
+    let userPrompt = '';
+
+    switch (type) {
+      case 'title':
+        userPrompt = `Otimize este título para SEO.
+
+Título atual: "${currentValue}"
+Palavra-chave principal: "${mainKeyword}"
+Palavras-chave secundárias: ${keywordList}
+
+Requisitos:
+- Inclua a palavra-chave principal "${mainKeyword}" preferencialmente no início
+- Mantenha entre 50-60 caracteres
+- Seja atraente e clicável
+- Mantenha o tema original do título
+
+Responda APENAS com o novo título, sem aspas ou explicações.`;
+        break;
+
+      case 'meta':
+        userPrompt = `Crie uma meta description otimizada para SEO.
+
+Meta description atual: "${currentValue || 'Vazia'}"
+Título do artigo: "${articleTitle || 'Não informado'}"
+Palavra-chave principal: "${mainKeyword}"
+Palavras-chave: ${keywordList}
+
+Requisitos:
+- Inclua a palavra-chave principal "${mainKeyword}" naturalmente
+- Mantenha entre 140-160 caracteres
+- Seja persuasivo e inclua uma chamada para ação
+- Descreva o valor do conteúdo para o leitor
+
+Responda APENAS com a nova meta description, sem aspas ou explicações.`;
+        break;
+
+      case 'content':
+        // Calculate dynamic expansion target
+        const currentWords = wordCount || Math.round((currentValue?.length || 0) / 6);
+        const targetWords = targetWordCount || 1500;
+        const wordsToAdd = Math.max(targetWords - currentWords, 300);
+        
+        userPrompt = `Expanda este conteúdo de ${currentWords} para ${targetWords} palavras.
+
+Conteúdo atual:
+${currentValue?.slice(0, 8000) || 'Vazio'}
+
+Palavras-chave OBRIGATÓRIAS: ${keywordList}
+
+Requisitos CRÍTICOS:
+- Adicione aproximadamente ${wordsToAdd} palavras novas
+- OBRIGATÓRIO: Inclua cada palavra-chave "${keywords.join('", "')}" pelo menos 4-6 vezes no total
+- Distribua as palavras-chave uniformemente no início, meio e fim do texto
+- Adicione exemplos práticos, casos de uso, estatísticas e dados relevantes
+- Use subtítulos (##) para organizar o conteúdo novo
+- Mantenha o tom e estilo originais
+- NÃO remova conteúdo existente, apenas adicione e melhore
+- Use bullet points e listas quando apropriado
+
+O conteúdo final DEVE ter pelo menos ${targetWords} palavras.
+
+Responda APENAS com o conteúdo expandido completo (original + novo).`;
+        break;
+
+      case 'density':
+        // For density, we also ensure we don't shrink the content
+        const densityCurrentWords = wordCount || Math.round((currentValue?.length || 0) / 6);
+        
+        userPrompt = `Otimize a densidade de palavras-chave neste texto, mantendo pelo menos ${densityCurrentWords} palavras.
+
+Texto atual (${densityCurrentWords} palavras):
+${currentValue?.slice(0, 8000) || 'Vazio'}
+
+Palavras-chave que devem aparecer mais: ${keywordList}
+
+Requisitos OBRIGATÓRIOS:
+- O texto final DEVE ter pelo menos ${densityCurrentWords} palavras (NÃO REDUZA o tamanho)
+- Distribua as palavras-chave naturalmente (densidade ideal: 1-2%)
+- Inclua CADA palavra-chave "${keywords.join('", "')}" pelo menos 4-6 vezes distribuídas no texto
+- Coloque as palavras-chave nos primeiros e últimos parágrafos
+- Use variações e sinônimos quando apropriado para não ficar repetitivo
+- Mantenha a legibilidade e fluidez do texto
+- NÃO force as palavras-chave de forma artificial
+- Mantenha TODA a estrutura de parágrafos e subtítulos
+- Se necessário, ADICIONE conteúdo para acomodar mais palavras-chave
+
+Responda APENAS com o texto otimizado completo.`;
+        break;
+
+      default:
+        throw new Error(`Unknown improvement type: ${type}`);
+    }
+
+    console.log(`Improving SEO item: ${type} with keywords: ${keywordList}, model: ${textModel}`);
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: textModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: type === 'content' || type === 'density' ? 8000 : 500,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI API Error:', errorText);
+      throw new Error(`AI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const improvedValue = data.choices?.[0]?.message?.content?.trim();
+
+    if (!improvedValue) {
+      throw new Error('No response from AI');
+    }
+
+    console.log(`SEO improvement completed for ${type}`);
+
+    // Log consumption if user_id provided
+    if (user_id) {
+      try {
+        const inputTokens = Math.ceil((currentValue?.length || 0) / 4);
+        const outputTokens = Math.ceil((improvedValue?.length || 0) / 4);
+
+        await supabase.from("consumption_logs").insert({
+          user_id,
+          blog_id: blog_id || null,
+          action_type: "seo_improvement",
+          action_description: `SEO ${type}: ${articleTitle?.substring(0, 50) || 'improvement'}`,
+          model_used: textModel,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          images_generated: 0,
+          estimated_cost_usd: (inputTokens * 0.00000015) + (outputTokens * 0.0000006),
+          metadata: { type, keywords },
+        });
+        console.log("Consumption logged for SEO improvement");
+      } catch (logError) {
+        console.warn("Failed to log consumption:", logError);
+      }
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        type,
+        originalValue: currentValue,
+        improvedValue,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error improving SEO item:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
