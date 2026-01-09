@@ -6,15 +6,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBlog } from "@/hooks/useBlog";
 import { toast } from "sonner";
-import { Loader2, Building2, BookOpen, User, Globe, Target, Sparkles, Info } from "lucide-react";
+import { 
+  Loader2, 
+  Building2, 
+  BookOpen, 
+  User, 
+  Globe, 
+  Target, 
+  Sparkles, 
+  Info, 
+  Settings2, 
+  ChevronDown,
+  ChevronUp
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { UniversalStrategyTab } from "@/components/strategy/UniversalStrategyTab";
 import { BusinessTab } from "@/components/strategy/BusinessTab";
 import { LibraryTab } from "@/components/strategy/LibraryTab";
 import { AudienceTab } from "@/components/strategy/AudienceTab";
 import { CompetitorsTab } from "@/components/strategy/CompetitorsTab";
 import { KeywordsTab } from "@/components/strategy/KeywordsTab";
+import { SimpleKeywordsSection } from "@/components/strategy/SimpleKeywordsSection";
 
 interface BusinessProfile {
   id?: string;
@@ -69,24 +84,12 @@ interface KeywordAnalysis {
   analyzed_at: string;
 }
 
-// Banner informativo para abas opcionais
-function OptionalTabBanner() {
-  return (
-    <Alert className="mb-6 bg-muted/50 border-dashed">
-      <Info className="h-4 w-4" />
-      <AlertDescription>
-        <strong>Opcional:</strong> Esta configuração é usada apenas para refinamento avançado. 
-        A Estratégia Universal já é suficiente para gerar artigos.
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 export default function Strategy() {
   const { user } = useAuth();
   const { blog, loading: blogLoading } = useBlog();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Business Profile State
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>({
@@ -254,119 +257,141 @@ export default function Strategy() {
           </p>
         </div>
 
-        <Tabs defaultValue="universal" className="space-y-6">
-          <TabsList className="flex flex-wrap gap-1 h-auto p-1">
-            {/* Aba Principal */}
-            <TabsTrigger value="universal" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Sparkles className="h-4 w-4" />
-              <span className="hidden sm:inline">Estratégia</span>
-              <Badge variant="secondary" className="ml-1 bg-green-500/20 text-green-600 text-xs px-1.5 py-0">
-                Principal
-              </Badge>
-            </TabsTrigger>
-            
-            {/* Separador */}
-            <div className="hidden lg:flex items-center px-2 text-muted-foreground/50">|</div>
-            
-            {/* Abas Avançadas (Opcionais) */}
-            <TabsTrigger value="business" className="gap-2 opacity-80">
-              <Building2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Meu Negócio</span>
-              <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0 hidden lg:inline-flex">Opcional</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="library" className="gap-2 opacity-80">
-              <BookOpen className="h-4 w-4" />
-              <span className="hidden sm:inline">Biblioteca</span>
-              <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0 hidden lg:inline-flex">Opcional</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="audience" className="gap-2 opacity-80">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Público-alvo</span>
-              <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0 hidden lg:inline-flex">Opcional</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="competitors" className="gap-2 opacity-80">
-              <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">Concorrentes</span>
-              <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0 hidden lg:inline-flex">Opcional</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="keywords" className="gap-2 opacity-80">
-              <Target className="h-4 w-4" />
-              <span className="hidden sm:inline">Palavras-chave</span>
-              {keywordAnalyses.length > 0 ? (
-                <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0">
-                  {keywordAnalyses.length}
+        {/* Main Strategy Content */}
+        <div className="space-y-6">
+          {/* Universal Strategy Tab - Always visible */}
+          {blogId && <UniversalStrategyTab blogId={blogId} />}
+
+          {/* Simple Keywords Section - Always visible */}
+          {blogId && (
+            <div className="mt-6">
+              <SimpleKeywordsSection blogId={blogId} />
+            </div>
+          )}
+
+          {/* Advanced SEO Section - Collapsible */}
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced} className="mt-8">
+            <CollapsibleTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="w-full justify-between gap-2 h-auto py-4 border-dashed"
+              >
+                <div className="flex items-center gap-2">
+                  <Settings2 className="h-5 w-5 text-muted-foreground" />
+                  <div className="text-left">
+                    <span className="font-medium">Configurações Avançadas de SEO</span>
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Google Search Console, análise de palavras-chave, concorrentes e biblioteca
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="ml-2">
+                  Opcional
                 </Badge>
-              ) : (
-                <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0 hidden lg:inline-flex">Opcional</Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+                {showAdvanced ? (
+                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
 
-          {/* Estratégia Universal Tab */}
-          <TabsContent value="universal">
-            {blogId && <UniversalStrategyTab blogId={blogId} />}
-          </TabsContent>
+            <CollapsibleContent className="mt-6">
+              <Alert className="mb-6 bg-muted/50 border-dashed">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Avançado:</strong> Estas configurações são opcionais e servem para refinamento de SEO. 
+                  A Estratégia Principal já é suficiente para gerar artigos.
+                </AlertDescription>
+              </Alert>
 
-          {/* Meu Negócio Tab */}
-          <TabsContent value="business">
-            <OptionalTabBanner />
-            {blogId && (
-              <BusinessTab
-                blogId={blogId}
-                businessProfile={businessProfile}
-                setBusinessProfile={setBusinessProfile}
-              />
-            )}
-          </TabsContent>
+              <Tabs defaultValue="keywords" className="space-y-6">
+                <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+                  <TabsTrigger value="keywords" className="gap-2">
+                    <Target className="h-4 w-4" />
+                    <span className="hidden sm:inline">Análise de Palavras-chave</span>
+                    {keywordAnalyses.length > 0 && (
+                      <Badge variant="outline" className="ml-1 text-xs px-1.5 py-0">
+                        {keywordAnalyses.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="competitors" className="gap-2">
+                    <Globe className="h-4 w-4" />
+                    <span className="hidden sm:inline">Concorrentes</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="audience" className="gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="hidden sm:inline">Personas Avançadas</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="library" className="gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">Biblioteca</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="business" className="gap-2">
+                    <Building2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Meu Negócio</span>
+                  </TabsTrigger>
+                </TabsList>
 
-          {/* Minha Biblioteca Tab */}
-          <TabsContent value="library">
-            <OptionalTabBanner />
-            {blogId && (
-              <LibraryTab
-                blogId={blogId}
-                libraryItems={libraryItems}
-                setLibraryItems={setLibraryItems}
-                isLibraryEnabled={businessProfile.is_library_enabled}
-                setIsLibraryEnabled={(enabled) =>
-                  setBusinessProfile((prev) => ({ ...prev, is_library_enabled: enabled }))
-                }
-                onUpdateBusinessProfile={handleUpdateBusinessProfile}
-              />
-            )}
-          </TabsContent>
+                {/* Keywords Analysis Tab (Advanced) */}
+                <TabsContent value="keywords">
+                  {blogId && (
+                    <KeywordsTab
+                      blogId={blogId}
+                      keywordAnalyses={keywordAnalyses}
+                      setKeywordAnalyses={setKeywordAnalyses}
+                    />
+                  )}
+                </TabsContent>
 
-          {/* Público-alvo Tab */}
-          <TabsContent value="audience">
-            <OptionalTabBanner />
-            {blogId && (
-              <AudienceTab
-                blogId={blogId}
-                personas={personas}
-                setPersonas={setPersonas}
-                niche={businessProfile.niche}
-              />
-            )}
-          </TabsContent>
+                {/* Concorrentes Tab */}
+                <TabsContent value="competitors">
+                  {blogId && <CompetitorsTab blogId={blogId} />}
+                </TabsContent>
 
-          {/* Concorrentes Tab */}
-          <TabsContent value="competitors">
-            <OptionalTabBanner />
-            {blogId && <CompetitorsTab blogId={blogId} />}
-          </TabsContent>
+                {/* Público-alvo Tab */}
+                <TabsContent value="audience">
+                  {blogId && (
+                    <AudienceTab
+                      blogId={blogId}
+                      personas={personas}
+                      setPersonas={setPersonas}
+                      niche={businessProfile.niche}
+                    />
+                  )}
+                </TabsContent>
 
-          {/* Palavras-chave Tab */}
-          <TabsContent value="keywords">
-            <OptionalTabBanner />
-            {blogId && (
-              <KeywordsTab
-                blogId={blogId}
-                keywordAnalyses={keywordAnalyses}
-                setKeywordAnalyses={setKeywordAnalyses}
-              />
-            )}
-          </TabsContent>
-        </Tabs>
+                {/* Minha Biblioteca Tab */}
+                <TabsContent value="library">
+                  {blogId && (
+                    <LibraryTab
+                      blogId={blogId}
+                      libraryItems={libraryItems}
+                      setLibraryItems={setLibraryItems}
+                      isLibraryEnabled={businessProfile.is_library_enabled}
+                      setIsLibraryEnabled={(enabled) =>
+                        setBusinessProfile((prev) => ({ ...prev, is_library_enabled: enabled }))
+                      }
+                      onUpdateBusinessProfile={handleUpdateBusinessProfile}
+                    />
+                  )}
+                </TabsContent>
+
+                {/* Meu Negócio Tab */}
+                <TabsContent value="business">
+                  {blogId && (
+                    <BusinessTab
+                      blogId={blogId}
+                      businessProfile={businessProfile}
+                      setBusinessProfile={setBusinessProfile}
+                    />
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
       </div>
     </DashboardLayout>
   );
