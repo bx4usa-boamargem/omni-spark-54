@@ -151,10 +151,13 @@ export default function NewArticleChat() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  Artigos rápidos — digite ou use o microfone
-                  <Mic className="h-3 w-3" />
-                </p>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                Artigos rápidos — digite ou use o microfone
+                <Mic className="h-3 w-3" />
+              </p>
+              <p className="text-xs text-muted-foreground/80 mt-1">
+                Este modo é ideal para criar artigos rápidos e humanizados. Para artigos longos (1500+ palavras), use PDF, URL ou YouTube.
+              </p>
                 {/* Auto-save indicator */}
                 {(lastSaved || draftSaving) && (
                   <span className="text-xs text-muted-foreground flex items-center gap-1 ml-2">

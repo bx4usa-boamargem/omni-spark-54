@@ -12,8 +12,7 @@ import {
   FileType,
   MessageCircle,
   Zap,
-  BookOpen,
-  Info
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -150,10 +149,13 @@ export function CreateContentGrid({ onSelect }: CreateContentGridProps) {
     <div className="space-y-8">
       {/* Tip Banner */}
       <Alert className="border-primary/20 bg-primary/5">
-        <Info className="h-4 w-4 text-primary" />
+        <Sparkles className="h-4 w-4 text-primary" />
         <AlertDescription className="text-sm">
-          <strong>Dica:</strong> Para artigos rápidos, use o <strong>Chat com IA</strong>. 
-          Para artigos longos e aprofundados, importe de <strong>PDF, YouTube ou URL</strong>.
+          <strong>Fluxo principal:</strong> Criar Conteúdo → <strong>Chat com IA</strong> → Gerar Artigo.
+          <br />
+          <span className="text-muted-foreground">
+            Para artigos longos (1500+ palavras), use PDF, YouTube ou URL.
+          </span>
         </AlertDescription>
       </Alert>
 
