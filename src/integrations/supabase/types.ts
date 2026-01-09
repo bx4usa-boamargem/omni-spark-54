@@ -3679,6 +3679,10 @@ export type Database = {
         Returns: undefined
       }
       increment_view_count: { Args: { article_id: string }; Returns: undefined }
+      is_team_member_of_blog: {
+        Args: { p_blog_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       account_type:
