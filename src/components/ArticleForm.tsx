@@ -13,8 +13,48 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { X, Sparkles, Loader2, ImageIcon, Images, FileText, LayoutList, Bot, Zap, TrendingUp } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { X, Sparkles, Loader2, ImageIcon, Images, FileText, LayoutList, Bot, Zap, TrendingUp, Newspaper } from "lucide-react";
 import { FunnelModeSelector, type FunnelMode, type ArticleGoal } from "@/components/article/FunnelModeSelector";
+import { cn } from "@/lib/utils";
+
+// NEW: Editorial Model Types
+export type EditorialModel = 'traditional' | 'strategic' | 'visual_guided';
+
+// NEW: Editorial Model Configurations
+const EDITORIAL_MODELS: Record<EditorialModel, {
+  name: string;
+  subtitle: string;
+  icon: string;
+  description: string;
+  audience: string;
+  badge: string;
+}> = {
+  traditional: {
+    name: 'Artigo Clássico',
+    subtitle: 'SEO & Autoridade',
+    icon: '📄',
+    description: 'Estrutura limpa e objetiva. Ideal para ranqueamento no Google e construção de autoridade.',
+    audience: 'Empresários, gestores, leitores técnicos',
+    badge: 'Recomendado para SEO'
+  },
+  strategic: {
+    name: 'Artigo de Impacto',
+    subtitle: 'Conversão & Persuasão',
+    icon: '🎯',
+    description: 'Blocos visuais intensos e linguagem persuasiva. Ideal para landing pages e vendas.',
+    audience: 'Leads em decisão, visitantes de campanhas',
+    badge: 'Alta conversão'
+  },
+  visual_guided: {
+    name: 'Artigo Visual',
+    subtitle: 'Leitura Fluida',
+    icon: '📱',
+    description: 'Alternância clara entre imagem e texto. Perfeito para mobile e redes sociais.',
+    audience: 'Leitor mobile, marketing, educacional',
+    badge: 'Mobile-first'
+  }
+};
 
 interface ArticleFormProps {
   onGenerate: (data: {
@@ -33,13 +73,15 @@ interface ArticleFormProps {
     optimizeForAI: boolean;
     funnelMode: FunnelMode;
     articleGoal: ArticleGoal | null;
+    editorialModel: EditorialModel;
   }) => void;
   isGenerating: boolean;
   initialTheme?: string;
   initialKeywords?: string[];
 }
 
-const wordCountSuggestions = [1000, 1500, 2000, 2500];
+// Updated word count suggestions (1200-1600 range)
+const wordCountSuggestions = [1200, 1400, 1600, 2000];
 
 export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKeywords }: ArticleFormProps) {
   const [theme, setTheme] = useState(initialTheme || "");
@@ -50,10 +92,11 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
   const [generateCoverImage, setGenerateCoverImage] = useState(true);
   const [generateContentImages, setGenerateContentImages] = useState(true);
   const [contentImageCount, setContentImageCount] = useState(3);
-  const [wordCount, setWordCount] = useState(1000);
+  // Updated default word count to 1400
+  const [wordCount, setWordCount] = useState(1400);
   
   // Article structure options
-  const [sectionCount, setSectionCount] = useState(7);
+  const [sectionCount, setSectionCount] = useState(6);
   const [includeFaq, setIncludeFaq] = useState(true);
   const [includeConclusion, setIncludeConclusion] = useState(true);
   const [includeVisualBlocks, setIncludeVisualBlocks] = useState(true);
@@ -62,6 +105,9 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
   // Funnel mode and article goal (Universal Prompt Type)
   const [funnelMode, setFunnelMode] = useState<FunnelMode>('middle');
   const [articleGoal, setArticleGoal] = useState<ArticleGoal | null>(null);
+  
+  // NEW: Editorial Model
+  const [editorialModel, setEditorialModel] = useState<EditorialModel>('traditional');
 
   // Update theme when initialTheme changes (e.g., from YouTube import)
   useEffect(() => {
@@ -99,13 +145,13 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
   const getReadingTime = (words: number) => Math.ceil(words / 200);
 
   const handleWordCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 1000;
+    const value = parseInt(e.target.value) || 1200;
     setWordCount(value);
   };
 
   const handleWordCountBlur = () => {
-    if (wordCount < 1000) {
-      setWordCount(1000);
+    if (wordCount < 1200) {
+      setWordCount(1200);
     }
   };
 
@@ -127,7 +173,8 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
       includeVisualBlocks,
       optimizeForAI,
       funnelMode,
-      articleGoal
+      articleGoal,
+      editorialModel
     });
   };
 
@@ -230,6 +277,56 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
         </div>
       </div>
 
+      {/* NEW: Editorial Model Section */}
+      <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-amber-500/5 to-amber-500/10 border border-amber-500/20">
+        <div className="flex items-center gap-2 mb-2">
+          <Newspaper className="h-5 w-5 text-amber-600" />
+          <span className="font-medium text-sm">Modelo Editorial</span>
+          <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+            Novo
+          </Badge>
+        </div>
+        
+        <RadioGroup 
+          value={editorialModel} 
+          onValueChange={(v) => setEditorialModel(v as EditorialModel)}
+          className="space-y-3"
+        >
+          {(Object.entries(EDITORIAL_MODELS) as [EditorialModel, typeof EDITORIAL_MODELS[EditorialModel]][]).map(([key, model]) => (
+            <div 
+              key={key}
+              className={cn(
+                "flex items-start space-x-3 p-4 rounded-lg border transition-all cursor-pointer",
+                editorialModel === key 
+                  ? "border-amber-500 bg-amber-50 dark:bg-amber-900/10" 
+                  : "border-border hover:border-amber-300 bg-background"
+              )}
+              onClick={() => !isGenerating && setEditorialModel(key)}
+            >
+              <RadioGroupItem value={key} id={`editorial-${key}`} className="mt-1" disabled={isGenerating} />
+              <div className="flex-1">
+                <Label htmlFor={`editorial-${key}`} className="text-sm font-semibold cursor-pointer flex items-center gap-2">
+                  <span>{model.icon}</span>
+                  {model.name}
+                  <Badge variant="outline" className="text-xs font-normal ml-auto">
+                    {model.badge}
+                  </Badge>
+                </Label>
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium mt-0.5">
+                  {model.subtitle}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {model.description}
+                </p>
+                <p className="text-xs text-muted-foreground/70 mt-0.5">
+                  Público: {model.audience}
+                </p>
+              </div>
+            </div>
+          ))}
+        </RadioGroup>
+      </div>
+
       {/* Funnel Mode & Article Goal Section */}
       <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20">
         <div className="flex items-center gap-2 mb-2">
@@ -282,19 +379,20 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
           <Input
             type="number"
             id="word-count"
-            min={1000}
+            min={1200}
+            max={1600}
             step={100}
             value={wordCount}
             onChange={handleWordCountChange}
             onBlur={handleWordCountBlur}
             disabled={isGenerating}
-            placeholder="1000"
+            placeholder="1400"
           />
           
           <div className="text-xs text-muted-foreground space-y-1">
             <p>⏱️ Tempo de leitura estimado: <strong>{getReadingTime(wordCount)} minutos</strong></p>
-            <p>📊 Artigos com 1.500+ palavras tendem a ranquear melhor no Google</p>
-            <p>⚠️ Mínimo: 1.000 palavras</p>
+            <p>📊 Tamanho ideal: 1.200 a 1.600 palavras (padrão profissional)</p>
+            <p>⚠️ Mínimo: 1.200 palavras | Recomendado: 1.400 palavras</p>
           </div>
         </div>
       </div>
@@ -318,14 +416,14 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
             value={[sectionCount]}
             onValueChange={(v) => setSectionCount(v[0])}
             min={5}
-            max={12}
+            max={7}
             step={1}
             disabled={isGenerating}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>5 (conciso)</span>
-            <span>12 (completo)</span>
+            <span>7 (completo)</span>
           </div>
         </div>
 
@@ -351,10 +449,10 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="include-conclusion" className="text-sm font-medium cursor-pointer">
-                Incluir Conclusão
+                Incluir CTA Final
               </Label>
               <p className="text-xs text-muted-foreground">
-                Adiciona seção de conclusão ao final
+                Adiciona seção de chamada para ação ao final
               </p>
             </div>
             <Switch
@@ -371,7 +469,7 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
                 Incluir Blocos Visuais
               </Label>
               <p className="text-xs text-muted-foreground">
-                Adiciona blocos de dica 💡, alerta ⚠️ e insight 📌
+                Adiciona blocos 💡 ⚠️ 📌 ✅ ❝ (varia por modelo)
               </p>
             </div>
             <Switch
@@ -461,10 +559,10 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
               </div>
               <div>
                 <Label htmlFor="generate-content" className="text-sm font-medium cursor-pointer">
-                  Imagens para o Conteúdo
+                  Imagens Contextualizadas
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Gera imagens ilustrativas ao longo do artigo
+                  Gera imagens baseadas no conteúdo de cada seção
                 </p>
               </div>
             </div>
@@ -491,21 +589,17 @@ export function ArticleForm({ onGenerate, isGenerating, initialTheme, initialKey
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1</SelectItem>
                     <SelectItem value="2">2</SelectItem>
                     <SelectItem value="3">3</SelectItem>
                     <SelectItem value="4">4</SelectItem>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="6">6</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-xs text-muted-foreground">(máx 6)</span>
+                <span className="text-xs text-muted-foreground">(1 a cada 2 seções)</span>
               </div>
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>• <strong>1 imagem:</strong> Apenas destaque principal</p>
-                <p>• <strong>3 imagens:</strong> Problema, solução e resultado (recomendado)</p>
-                <p>• <strong>5 imagens:</strong> Cobertura completa de todas as seções</p>
-                <p>• <strong>6 imagens:</strong> Cobertura premium de todas as seções</p>
+                <p>• <strong>2 imagens:</strong> Artigos curtos (5 seções)</p>
+                <p>• <strong>3 imagens:</strong> Recomendado (6-7 seções)</p>
+                <p>• <strong>4 imagens:</strong> Artigos visuais (máximo)</p>
               </div>
             </div>
           )}

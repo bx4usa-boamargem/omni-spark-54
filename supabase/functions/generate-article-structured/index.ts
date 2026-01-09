@@ -49,7 +49,61 @@ interface ArticleRequest {
   include_visual_blocks?: boolean;
   optimize_for_ai?: boolean;
   source?: 'chat' | 'instagram' | 'youtube' | 'pdf' | 'url' | 'form';
+  editorial_model?: 'traditional' | 'strategic' | 'visual_guided';
 }
+
+// Editorial Model Instructions with strict visual block limits
+const EDITORIAL_MODEL_INSTRUCTIONS = {
+  traditional: {
+    name: 'Artigo Clássico',
+    instructions: `## MODELO: ARTIGO CLÁSSICO (SEO & Autoridade)
+📐 ESTRUTURA: 5-7 seções H2, estrutura limpa e clássica
+📝 BLOCOS VISUAIS: Usar APENAS 2-3 blocos (💡, ⚠️ ou 📌) - NÃO ULTRAPASSAR
+🎯 CTA: APENAS no final do artigo
+📷 IMAGENS: 1 capa + 2 imagens de apoio (1 a cada 3 seções)
+TOM: Consultivo, informativo, profissional`,
+    visualBlockLimit: { min: 2, max: 3, types: ['💡', '⚠️', '📌'] }
+  },
+  strategic: {
+    name: 'Artigo de Impacto',
+    instructions: `## MODELO: ARTIGO DE IMPACTO (Conversão & Persuasão)
+📐 ESTRUTURA: 5-7 seções H2, estrutura dinâmica
+📝 BLOCOS VISUAIS: Usar 5-7 blocos INTENSIVAMENTE (💡, ⚠️, 📌, ✅, ❝) - Pull quotes (❝) a cada 2 seções
+🎯 CTA: CTAs distribuídos (a cada 2-3 seções) + CTA forte no final
+📷 IMAGENS: 1 capa + 3 imagens de apoio (1 a cada 2 seções)
+TOM: Persuasivo, direto, orientado a conversão`,
+    visualBlockLimit: { min: 5, max: 7, types: ['💡', '⚠️', '📌', '✅', '❝'] }
+  },
+  visual_guided: {
+    name: 'Artigo Visual',
+    instructions: `## MODELO: ARTIGO VISUAL (Leitura Fluida & Mobile-first)
+📐 ESTRUTURA: 5-6 seções H2 curtas, alternância clara: Imagem → Título → Texto curto
+📝 BLOCOS VISUAIS: Usar 3-4 blocos (💡, 📌, ✅) - Menos texto por seção, mais respiro visual
+🎯 CTA: CTA no final + 1 CTA sutil no meio
+📷 IMAGENS: 1 capa + 4 imagens de apoio (1 por seção) - CADA IMAGEM LOGO APÓS O TÍTULO H2
+TOM: Amigável, convidativo, escaneável`,
+    visualBlockLimit: { min: 3, max: 4, types: ['💡', '📌', '✅'] }
+  }
+};
+
+// Hierarchy validation rules
+const HIERARCHY_RULES = `
+## ⛔ REGRAS ABSOLUTAS DE HIERARQUIA (VIOLAÇÃO = ARTIGO INVÁLIDO)
+
+❌ PROIBIDO:
+- Mais de 1 H1 por artigo
+- H2 na introdução (primeiras 3-4 linhas)
+- H3 sem H2 pai imediatamente antes
+- H2 consecutivos sem conteúdo entre eles (mínimo 2 parágrafos)
+- Mais de 3 H3 dentro de um único H2
+- H2 com menos de 50 palavras de conteúdo
+
+✅ ESTRUTURA CORRETA:
+1. H1 (título) → 1 único
+2. Introdução → 3-4 linhas, SEM headings
+3. H2 → 2-3 parágrafos + blocos visuais opcionais
+4. H3 (opcional) → detalhamento, máx. 2 por H2
+5. Último H2 → CTA natural (NUNCA "Conclusão")`;
 
 // Validation rules per content source with max retries for expansion
 const sourceValidationRules: Record<string, { minPercent: number; minWords: number; maxWords?: number; autoRetry: boolean; maxRetries: number }> = {
@@ -529,7 +583,8 @@ serve(async (req) => {
       optimize_for_ai = false,
       source = 'form',
       funnel_mode = 'middle',
-      article_goal = null
+      article_goal = null,
+      editorial_model = 'traditional'
     }: ArticleRequest & { funnel_mode?: FunnelMode; article_goal?: ArticleGoal | null } = await req.json();
 
     if (!theme) {
