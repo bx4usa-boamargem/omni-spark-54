@@ -110,8 +110,22 @@ const ARTICLE_GOALS = {
   }
 };
 
-// CAMADA 6: Estrutura Obrigatória do Artigo (6 blocos)
+// CAMADA 6: Estrutura Obrigatória do Artigo (CONTRATO EDITORIAL ABSOLUTO)
 const ARTICLE_STRUCTURE = [
+  { 
+    block: 0, 
+    name: "Estrutura Inicial Obrigatória", 
+    description: `⛔ FORMATO ABSOLUTO DO INÍCIO:
+
+Linha 1: # Título do Artigo (H1 único)
+Linha 2: [LINHA EM BRANCO OBRIGATÓRIA]
+Linha 3: Primeiro parágrafo aqui...
+
+⚠️ É PROIBIDO:
+- Colar texto junto ao H1
+- Ter mais de 1 H1
+- Iniciar com H2 antes do parágrafo introdutório` 
+  },
   { block: 1, name: "Problema real do leitor", description: "Comece com uma situação real que o leitor vive" },
   { block: 2, name: "Explicação clara do cenário", description: "Explique o contexto e as causas do problema" },
   { block: 3, name: "Impactos de não agir", description: "Mostre as consequências de não resolver o problema" },
@@ -120,7 +134,7 @@ const ARTICLE_STRUCTURE = [
   { 
     block: 6, 
     name: "Próximo passo", 
-    description: `⚠️ OBRIGATÓRIO: A última seção H2 DEVE ser EXATAMENTE:
+    description: `⛔ OBRIGATÓRIO: A última seção H2 DEVE ser EXATAMENTE:
 
 ## Próximo passo
 
@@ -138,11 +152,12 @@ Comece agora organizando seu atendimento. Automatize respostas, não perca conta
 **Quem responde primeiro, vende.**
 
 ⛔ O título DEVE ser EXATAMENTE "## Próximo passo" — sem variações, sem exceções.
+⛔ NÃO use: "Conclusão", "Direto ao ponto", "Saiba mais", ou QUALQUER variação.
 ⛔ Artigo sem esta seção final é INVÁLIDO e será rejeitado.` 
   }
 ];
 
-// CAMADA 7: Regras de Qualidade Anti-IA
+// CAMADA 7: Regras de Qualidade Anti-IA (CONTRATO EDITORIAL ABSOLUTO)
 const QUALITY_RULES = {
   always: [
     "Focar no leitor ('você')",
@@ -150,6 +165,8 @@ const QUALITY_RULES = {
     "Variar ritmo",
     "Usar voz ativa",
     "Conectar causa e efeito",
+    "H1 seguido OBRIGATORIAMENTE por uma linha em branco e depois o primeiro parágrafo",
+    "Parágrafos de no máximo 3 linhas (sem paredões de texto)",
     "A última seção H2 DEVE ser exatamente '## Próximo passo' — sem variações, sem exceções"
   ],
   never: [
@@ -158,7 +175,12 @@ const QUALITY_RULES = {
     "Repetição de ideias",
     "Clickbait sem entrega",
     "Conclusões artificiais",
-    "Seção final diferente de '## Próximo passo'"
+    "Seção final diferente de '## Próximo passo'",
+    "Blocos visuais (💡, ⚠️, 📌) sem autorização do modelo editorial",
+    "Emojis fora dos tipos explicitamente permitidos",
+    "Parágrafos com mais de 3 linhas (paredões de texto)",
+    "H2 na introdução (primeiras linhas após o H1)",
+    "Variações do título final: 'Conclusão', 'Direto ao ponto', 'Saiba mais', etc."
   ]
 };
 

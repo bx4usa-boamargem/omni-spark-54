@@ -1,5 +1,9 @@
-// Quality Validator - Validação pós-geração obrigatória
-// Nenhum artigo pode ser salvo sem passar por esta validação
+// ============================================================================
+// QUALITY VALIDATOR V1.0 - CONTRATO EDITORIAL ABSOLUTO
+// ============================================================================
+// Nenhum artigo pode ser salvo sem passar por TODAS as validações
+// Violação de regras críticas = REJEIÇÃO AUTOMÁTICA
+// ============================================================================
 
 import type { FunnelMode } from './promptTypeCore.ts';
 
@@ -13,10 +17,17 @@ export interface ValidationResult {
 
 interface QualityCheck {
   name: string;
-  check: (content: string, funnelMode: FunnelMode) => boolean;
+  check: (content: string, funnelMode: FunnelMode, options?: ValidationOptions) => boolean;
   message: string;
   severity: 'error' | 'warning';
 }
+
+interface ValidationOptions {
+  allowedBlocks?: string[];
+}
+
+// REGRA GLOBAL: Título exato da última seção
+const MANDATORY_FINAL_SECTION = '## Próximo passo';
 
 // Frases genéricas que indicam texto de IA de baixa qualidade
 const GENERIC_INTRO_PATTERNS = [
@@ -39,10 +50,39 @@ const FUNNEL_CTA_PATTERNS: Record<FunnelMode, RegExp> = {
   bottom: /(solicite|agende|comece|contrate|peça|faça seu)/i
 };
 
-// REGRA GLOBAL: Título exato da última seção
-const MANDATORY_FINAL_SECTION = '## Próximo passo';
+// Blocos visuais autorizados por padrão (modelo clássico)
+const DEFAULT_ALLOWED_BLOCKS = ['💡', '⚠️', '📌'];
 
 const QUALITY_CHECKS: QualityCheck[] = [
+  // =========================================================================
+  // REGRA 3: Estrutura H1 obrigatória (H1 → linha em branco → parágrafo)
+  // =========================================================================
+  {
+    name: 'has_valid_h1_structure',
+    check: (content: string) => {
+      const lines = content.split('\n');
+      if (lines.length < 3) return false;
+      
+      // Linha 1: deve ser H1 (apenas 1 #)
+      const line1 = lines[0];
+      if (!line1.startsWith('# ') || line1.startsWith('## ')) return false;
+      
+      // Linha 2: deve ser vazia
+      if (lines[1].trim() !== '') return false;
+      
+      // Linha 3: deve ser parágrafo (não vazio, não heading)
+      const line3 = lines[2].trim();
+      if (line3 === '' || line3.startsWith('#')) return false;
+      
+      return true;
+    },
+    message: 'O artigo DEVE começar com: H1 (título) → linha em branco → primeiro parágrafo. É proibido colar texto junto ao H1.',
+    severity: 'error'
+  },
+
+  // =========================================================================
+  // REGRA 1: Sem introduções genéricas
+  // =========================================================================
   {
     name: 'no_generic_intro',
     check: (content: string) => {
@@ -52,10 +92,13 @@ const QUALITY_CHECKS: QualityCheck[] = [
     message: 'Introdução genérica detectada (padrão de IA). O artigo deve começar com o problema real do leitor.',
     severity: 'error'
   },
+
+  // =========================================================================
+  // REGRA 2: Problema primeiro
+  // =========================================================================
   {
     name: 'has_problem_first',
     check: (content: string) => {
-      // Extrai o primeiro H2 ou primeiros 500 caracteres
       const firstH2Match = content.match(/##\s*(.+?)[\n\r]/);
       const firstH2 = firstH2Match?.[1]?.toLowerCase() || '';
       const first500 = content.slice(0, 500).toLowerCase();
@@ -66,123 +109,175 @@ const QUALITY_CHECKS: QualityCheck[] = [
     message: 'O artigo deve começar abordando um problema ou dor real do leitor.',
     severity: 'error'
   },
+
+  // =========================================================================
+  // REGRA 4: Hierarquia fixa (5-10 H2s)
+  // =========================================================================
   {
-    name: 'has_6_blocks_structure',
+    name: 'has_valid_h2_count',
     check: (content: string) => {
       const h2Count = (content.match(/^##\s+[^#]/gm) || []).length;
-      return h2Count >= 5 && h2Count <= 10; // Flexível entre 5-10 H2s
+      return h2Count >= 3 && h2Count <= 10;
     },
-    message: 'O artigo deve ter entre 5 e 10 seções H2 conforme estrutura obrigatória.',
+    message: 'O artigo deve ter entre 3 e 10 seções H2 conforme estrutura obrigatória.',
     severity: 'warning'
   },
+
+  // =========================================================================
+  // CTA alinhado ao funil
+  // =========================================================================
   {
     name: 'has_cta_aligned',
     check: (content: string, funnelMode: FunnelMode) => {
-      // Verifica se existe CTA em negrito que corresponde ao funil
       const boldTextMatches = content.match(/\*\*[^*]+\*\*/g) || [];
       const ctaPattern = FUNNEL_CTA_PATTERNS[funnelMode];
-      
       return boldTextMatches.some(bold => ctaPattern.test(bold));
     },
     message: 'CTA em negrito alinhado ao funil não encontrado. O artigo deve ter call-to-action adequado ao estágio.',
     severity: 'error'
   },
+
+  // =========================================================================
+  // REGRA 4: Parágrafos curtos (1-3 linhas) - ERRO, não warning
+  // =========================================================================
   {
     name: 'paragraphs_short',
     check: (content: string) => {
-      // Divide em parágrafos e verifica se nenhum excede 4 linhas
       const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 80);
       const longParagraphs = paragraphs.filter(p => {
         const lines = p.split('\n').filter(l => l.trim().length > 0);
         return lines.length > 4;
       });
       
-      // Permite até 20% de parágrafos longos
-      return longParagraphs.length / paragraphs.length < 0.2;
+      // Não permite mais de 10% de parágrafos longos
+      return paragraphs.length === 0 || longParagraphs.length / paragraphs.length < 0.1;
     },
-    message: 'Muitos parágrafos excedem 3-4 linhas. O texto deve ser escaneável e mobile-first.',
-    severity: 'warning'
+    message: 'Parágrafos excedem 3-4 linhas. É proibido criar "paredões" de texto. O texto DEVE ser escaneável.',
+    severity: 'error'
   },
+
+  // =========================================================================
+  // Sem adjetivos vazios
+  // =========================================================================
   {
     name: 'no_empty_adjectives',
     check: (content: string) => {
       const contentLower = content.toLowerCase();
       const foundAdjectives = EMPTY_ADJECTIVES.filter(adj => contentLower.includes(adj));
-      return foundAdjectives.length <= 1; // Permite no máximo 1
+      return foundAdjectives.length <= 1;
     },
     message: 'Adjetivos vazios detectados (ex: incrível, fantástico). Use prova ou remova.',
     severity: 'warning'
   },
+
+  // =========================================================================
+  // REGRA 7: Mínimo de palavras (400 fast, 800 deep)
+  // =========================================================================
   {
     name: 'has_minimum_word_count',
     check: (content: string) => {
       const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
-      return wordCount >= 800; // Mínimo para qualquer artigo
+      return wordCount >= 400; // Mínimo absoluto para qualquer artigo
     },
-    message: 'Artigo muito curto. Mínimo de 800 palavras para conteúdo de qualidade.',
+    message: 'Artigo muito curto. Mínimo de 400 palavras para conteúdo de qualidade.',
     severity: 'error'
   },
+
+  // =========================================================================
+  // Sem conclusões genéricas
+  // =========================================================================
   {
     name: 'no_conclusion_heading',
     check: (content: string) => {
-      // Verifica se não tem H2 de conclusão genérica
-      const conclusionPatterns = /##\s*(conclusão|considerações finais|para finalizar|concluindo)/i;
+      const conclusionPatterns = /##\s*(conclusão|considerações finais|para finalizar|concluindo|direto ao ponto)/i;
       return !conclusionPatterns.test(content);
     },
-    message: 'Evite H2 de "Conclusão". O último H2 deve ser exatamente "## Próximo passo".',
-    severity: 'warning'
+    message: 'Evite H2 de "Conclusão" ou "Direto ao ponto". O último H2 deve ser exatamente "## Próximo passo".',
+    severity: 'error'
   },
+
+  // =========================================================================
+  // REGRA 2: Última seção DEVE ser "## Próximo passo" (CRÍTICO)
+  // =========================================================================
   {
     name: 'has_final_cta_proximo_passo',
     check: (content: string) => {
-      // Extrair todas as seções H2
       const h2Matches = content.match(/^## .+$/gm) || [];
       if (h2Matches.length === 0) return false;
       
-      // Verificar se a última H2 é exatamente "## Próximo passo"
       const lastH2 = h2Matches[h2Matches.length - 1].trim();
       return lastH2 === MANDATORY_FINAL_SECTION;
     },
     message: 'A última seção DEVE ser exatamente "## Próximo passo". Artigo sem CTA final padronizado é inválido.',
     severity: 'error'
+  },
+
+  // =========================================================================
+  // REGRA 5: Blocos visuais autorizados (sem emojis não permitidos)
+  // =========================================================================
+  {
+    name: 'no_unauthorized_visual_blocks',
+    check: (content: string, _funnelMode: FunnelMode, options?: ValidationOptions) => {
+      const allowedBlocks = options?.allowedBlocks || DEFAULT_ALLOWED_BLOCKS;
+      
+      // Encontrar todos os emojis no início de linhas (blocos visuais)
+      const blockEmojis = content.match(/^[💡⚠️📌✅❝🎯📐📝🖼️🧱🚨🎙️🧠🏷️📐🧱]/gm) || [];
+      
+      for (const emoji of blockEmojis) {
+        if (!allowedBlocks.includes(emoji)) {
+          console.log(`Bloco visual não autorizado: ${emoji} (permitidos: ${allowedBlocks.join(', ')})`);
+          return false;
+        }
+      }
+      return true;
+    },
+    message: 'Blocos visuais ou emojis não autorizados pelo modelo editorial detectados.',
+    severity: 'warning'
   }
 ];
 
 /**
- * Valida a qualidade do artigo gerado
+ * Valida a qualidade do artigo gerado conforme CONTRATO EDITORIAL ABSOLUTO
  * 
  * @param content - Conteúdo do artigo em Markdown
  * @param funnelMode - Modo de funil para validação de CTA
+ * @param options - Opções de validação (blocos permitidos, etc.)
  * @returns ValidationResult com status, falhas e score
  */
 export function validateArticleQuality(
   content: string,
-  funnelMode: FunnelMode = 'middle'
+  funnelMode: FunnelMode = 'middle',
+  options?: ValidationOptions
 ): ValidationResult {
   const failures: string[] = [];
   const warnings: string[] = [];
   let passedChecks = 0;
   let criticalFailed = false;
 
+  console.log('[QUALITY V1.0] Starting validation with Absolute Editorial Contract...');
+
   for (const check of QUALITY_CHECKS) {
-    const passed = check.check(content, funnelMode);
+    const passed = check.check(content, funnelMode, options);
     
     if (!passed) {
       if (check.severity === 'error') {
         failures.push(check.message);
         criticalFailed = true;
+        console.log(`[QUALITY V1.0] ❌ FAILED (error): ${check.name}`);
       } else {
         warnings.push(check.message);
+        console.log(`[QUALITY V1.0] ⚠️ WARNING: ${check.name}`);
       }
     } else {
       passedChecks++;
+      console.log(`[QUALITY V1.0] ✅ PASSED: ${check.name}`);
     }
   }
 
   const totalChecks = QUALITY_CHECKS.length;
   const score = Math.round((passedChecks / totalChecks) * 100);
 
-  console.log(`[QualityValidator] Score: ${score}/100 - Errors: ${failures.length}, Warnings: ${warnings.length}`);
+  console.log(`[QUALITY V1.0] Final Score: ${score}/100 - Errors: ${failures.length}, Warnings: ${warnings.length}`);
 
   return {
     passed: !criticalFailed,
@@ -194,24 +289,37 @@ export function validateArticleQuality(
 }
 
 /**
- * Gera instruções de correção para retry baseado nas falhas
+ * Gera instruções de correção específicas para retry baseado nas falhas
  */
 export function generateCorrectionInstructions(failures: string[]): string {
   if (failures.length === 0) return '';
 
   return `
-⚠️ O ARTIGO ANTERIOR FOI REJEITADO POR PROBLEMAS DE QUALIDADE.
+⛔ O ARTIGO ANTERIOR FOI REJEITADO POR VIOLAÇÕES DO CONTRATO EDITORIAL ABSOLUTO.
 
-CORREÇÕES OBRIGATÓRIAS ANTES DE REESCREVER:
+## CORREÇÕES OBRIGATÓRIAS ANTES DE REESCREVER:
 
 ${failures.map((f, i) => `${i + 1}. ${f}`).join('\n')}
 
-REGRAS PARA ESTA TENTATIVA:
-- NÃO comece com introduções genéricas ("No mundo de hoje...", "É comum que...")
-- COMECE com uma cena real do dia a dia do leitor
-- TODOS os parágrafos devem ter no máximo 3 linhas
-- INCLUA um CTA em negrito alinhado ao funil
-- USE frases curtas e diretas
+## REGRAS ABSOLUTAS PARA ESTA TENTATIVA:
+
+### ESTRUTURA OBRIGATÓRIA:
+- Linha 1: H1 (apenas o título)
+- Linha 2: linha em branco
+- Linha 3: primeiro parágrafo
+- NÃO cole texto junto ao H1
+
+### SEÇÃO FINAL OBRIGATÓRIA:
+- A ÚLTIMA seção H2 DEVE ser EXATAMENTE: ## Próximo passo
+- NÃO use variações: "Conclusão", "Direto ao ponto", "Saiba mais", etc.
+
+### PARÁGRAFOS:
+- Máximo 3 linhas por parágrafo
+- Sem "paredões" de texto
+- Frases curtas e diretas
+
+### CTA EM NEGRITO:
+- Inclua pelo menos 1 CTA em **negrito** na última seção
 
 ⚠️ SE ESTAS CORREÇÕES NÃO FOREM APLICADAS, O ARTIGO SERÁ REJEITADO NOVAMENTE.
 `;

@@ -1135,9 +1135,45 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
     
     console.log(`Images block validated successfully: cover + ${imagesBlock.content_images.length} content images`);
     
-    // REGRA GLOBAL: Última seção DEVE ser "## Próximo passo"
+    // =========================================================================
+    // CONTRATO EDITORIAL ABSOLUTO - VALIDAÇÕES OBRIGATÓRIAS
+    // =========================================================================
+    
     const MANDATORY_FINAL_SECTION = '## Próximo passo';
     const contentText = articleData.content as string;
+    const contentLines = contentText.split('\n');
+    
+    // REGRA 3: Validar estrutura H1 obrigatória (H1 → linha em branco → parágrafo)
+    if (contentLines.length >= 3) {
+      const line1 = contentLines[0];
+      const line2 = contentLines[1];
+      const line3 = contentLines[2];
+      
+      // Verificar H1 na primeira linha
+      if (!line1.startsWith('# ') || line1.startsWith('## ')) {
+        console.error('AI_OUTPUT_INVALID: Article must start with H1');
+        throw new Error('AI_OUTPUT_INVALID: O artigo DEVE começar com H1 (# Título). Formato atual inválido.');
+      }
+      
+      // Verificar linha em branco após H1
+      if (line2.trim() !== '') {
+        console.error('AI_OUTPUT_INVALID: H1 must be followed by blank line');
+        throw new Error('AI_OUTPUT_INVALID: O H1 DEVE ser seguido por uma linha em branco. É proibido colar texto junto ao H1.');
+      }
+      
+      // Verificar parágrafo na linha 3 (não vazio, não heading)
+      if (line3.trim() === '' || line3.startsWith('#')) {
+        console.error('AI_OUTPUT_INVALID: Line 3 must be first paragraph');
+        throw new Error('AI_OUTPUT_INVALID: A terceira linha DEVE ser o primeiro parágrafo (não vazio, não heading).');
+      }
+      
+      console.log('✅ H1 structure validated: H1 → blank → paragraph');
+    } else {
+      console.error('AI_OUTPUT_INVALID: Article too short (less than 3 lines)');
+      throw new Error('AI_OUTPUT_INVALID: Artigo muito curto. Estrutura mínima: H1 + linha em branco + parágrafo.');
+    }
+    
+    // REGRA 2: Última seção DEVE ser "## Próximo passo"
     const h2Matches = contentText.match(/^## .+$/gm) || [];
     
     if (h2Matches.length > 0) {
@@ -1182,9 +1218,9 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
       }
     }
     
-    // Check for forbidden words
-    if (/conclusão|considerações finais/i.test(contentText)) {
-      console.warn('EDITORIAL MODEL WARNING: Article contains "Conclusão" or "Considerações Finais" - should use "Direto ao ponto"');
+    // Check for forbidden section titles (should NEVER appear)
+    if (/conclusão|considerações finais|direto ao ponto|saiba mais|o que fazer agora/i.test(contentText)) {
+      console.warn('EDITORIAL MODEL WARNING: Article contains forbidden section title. Last H2 must be exactly "## Próximo passo"');
     }
     
     console.log(`EDITORIAL MODEL VALIDATION: Model=${editorial_model}, H2s=${h2Count}, Blocks=${blockCount}`);
