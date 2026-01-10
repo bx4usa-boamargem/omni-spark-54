@@ -12,7 +12,8 @@ import {
   Loader2, 
   Mic,
   MicOff,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,7 @@ interface ArticleChatInterfaceProps {
   className?: string;
   initialDraft?: ChatDraft | null;
   onDraftChange?: (draft: ChatDraft) => void;
+  onReset?: () => Promise<void>;
 }
 
 const INITIAL_MESSAGE: Message = {
@@ -48,7 +50,8 @@ export function ArticleChatInterface({
   onArticleGenerated, 
   className,
   initialDraft,
-  onDraftChange 
+  onDraftChange,
+  onReset
 }: ArticleChatInterfaceProps) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -220,6 +223,22 @@ export function ArticleChatInterface({
     }
   };
 
+  const resetConversation = async () => {
+    // 1. Call callback to clear from database and parent states
+    if (onReset) {
+      await onReset();
+    }
+    
+    // 2. Reset all internal state
+    setMessages([INITIAL_MESSAGE]);
+    setInput("");
+    setIsReadyToGenerate(false);
+    setIsInitialized(true);
+    
+    // 3. Focus input for new interaction
+    inputRef.current?.focus();
+  };
+
   const quickSuggestions = [
     { emoji: "💼", text: "Marketing para PMEs" },
     { emoji: "🛒", text: "E-commerce e vendas" },
@@ -242,12 +261,27 @@ export function ArticleChatInterface({
           </div>
         </div>
         
-        {isListening && (
-          <div className="flex items-center gap-2 text-primary text-sm animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            Ouvindo...
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isListening && (
+            <div className="flex items-center gap-2 text-primary text-sm animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              Ouvindo...
+            </div>
+          )}
+          
+          {messages.length > 1 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetConversation}
+              disabled={isLoading || isGenerating}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Novo Artigo
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}

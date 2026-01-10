@@ -64,6 +64,17 @@ export default function NewArticleChat() {
     setPreviewOpen(true);
   };
 
+  const handleReset = async () => {
+    // 1. Clear draft from database
+    await clearDraft();
+    
+    // 2. Clear generated article state
+    setGeneratedArticle(null);
+    
+    // 3. Close preview if open
+    setPreviewOpen(false);
+  };
+
   const handleSaveArticle = async (status: 'draft' | 'published') => {
     if (!generatedArticle) return;
 
@@ -282,6 +293,7 @@ export default function NewArticleChat() {
               onArticleGenerated={handleArticleGenerated}
               initialDraft={draft}
               onDraftChange={updateDraft}
+              onReset={handleReset}
               className="h-full min-h-[500px]"
             />
           </div>
