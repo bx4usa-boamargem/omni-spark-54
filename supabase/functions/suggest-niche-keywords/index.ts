@@ -35,33 +35,28 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Fetch business profile
-    const { data: businessProfile, error: profileError } = await supabase
+    const { data: businessProfile } = await supabase
       .from('business_profile')
       .select('*')
       .eq('blog_id', blogId)
-      .single();
+      .maybeSingle();
 
-    if (profileError || !businessProfile) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Business profile not found. Please complete your strategy configuration first.',
-          needsSetup: true 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Fetch client_strategy as fallback
+    const { data: clientStrategy } = await supabase
+      .from('client_strategy')
+      .select('*')
+      .eq('blog_id', blogId)
+      .maybeSingle();
 
-    const { niche, target_audience, pain_points, desires, brand_keywords, long_description } = businessProfile;
+    // Build context from available data sources
+    const niche = businessProfile?.niche || clientStrategy?.tipo_negocio || 'serviços';
+    const target_audience = businessProfile?.target_audience || clientStrategy?.tipo_publico || 'empresários';
+    const pain_points = businessProfile?.pain_points || (clientStrategy?.dor_principal ? [clientStrategy.dor_principal] : []);
+    const desires = businessProfile?.desires || (clientStrategy?.desejo_principal ? [clientStrategy.desejo_principal] : []);
+    const brand_keywords = businessProfile?.brand_keywords || [];
+    const long_description = businessProfile?.long_description || clientStrategy?.o_que_oferece || '';
 
-    if (!niche) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Please configure your business niche in Strategy settings first.',
-          needsSetup: true 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log(`[suggest-niche-keywords] Using context - niche: ${niche}, audience: ${target_audience}`);
 
     const prompt = `Você é um especialista em SEO para blogs. Com base nas informações do negócio abaixo, gere 10 palavras-chave estratégicas relevantes.
 
