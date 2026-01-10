@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 interface ContentImage {
@@ -51,94 +51,62 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // ========== AUTENTICAÇÃO VIA X-CRON-SECRET (OBRIGATÓRIO) ==========
-  const cronSecret = req.headers.get('x-cron-secret');
-  const expectedSecret = Deno.env.get('CRON_SECRET');
-  
-  if (!cronSecret || !expectedSecret || cronSecret !== expectedSecret) {
-    console.log('[AUTH] Unauthorized request - invalid or missing X-CRON-SECRET');
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // ========== LOGS: INÍCIO DA EXECUÇÃO ==========
-  const startTime = Date.now();
-  const executionId = crypto.randomUUID().slice(0, 8);
-  console.log(`[${executionId}][START] Process-queue execution at ${new Date().toISOString()}`);
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // ========== CLEANUP: ITENS TRAVADOS > 30 MINUTOS ==========
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const { data: stuckItems, error: stuckError } = await supabase
+    console.log('Processing article queue...');
+
+    // Get pending queue items scheduled for now or earlier
+    const { data: queueItems, error: queueError } = await supabase
       .from('article_queue')
-      .update({
-        status: 'failed',
-        error_message: 'Timeout: geração excedeu 30 minutos',
-        updated_at: new Date().toISOString()
-      })
-      .eq('status', 'generating')
-      .lt('updated_at', thirtyMinutesAgo)
-      .select('id');
+      .select(`
+        *,
+        blogs (
+          id,
+          user_id,
+          name,
+          slug
+        )
+      `)
+      .eq('status', 'pending')
+      .lte('scheduled_for', new Date().toISOString())
+      .order('scheduled_for', { ascending: true })
+      .limit(5);
 
-    if (stuckItems?.length) {
-      console.log(`[${executionId}][CLEANUP] Marked ${stuckItems.length} stuck items as failed: ${stuckItems.map(i => i.id).join(', ')}`);
+    if (queueError) {
+      throw new Error(`Failed to fetch queue: ${queueError.message}`);
     }
 
-    // ========== CLAIM ATÔMICO VIA RPC (FOR UPDATE SKIP LOCKED) ==========
-    const { data: claimedItems, error: claimError } = await supabase
-      .rpc('claim_queue_items', { p_limit: 5 });
-
-    if (claimError) {
-      throw new Error(`Failed to claim items: ${claimError.message}`);
-    }
-
-    if (!claimedItems || claimedItems.length === 0) {
-      const duration = Date.now() - startTime;
-      console.log(`[${executionId}][END] No pending items. Duration: ${duration}ms`);
+    if (!queueItems || queueItems.length === 0) {
+      console.log('No pending items in queue');
       return new Response(
-        JSON.stringify({ 
-          execution_id: executionId,
-          processed: 0, 
-          failed: 0,
-          stuck_cleaned: stuckItems?.length || 0,
-          duration_ms: duration,
-          message: 'No pending items' 
-        }),
+        JSON.stringify({ processed: 0, message: 'No pending items' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`[${executionId}][CLAIMED] ${claimedItems.length} items: ${claimedItems.map((i: {id: string}) => i.id).join(', ')}`);
-
-    // Buscar dados do blog para os itens claimados
-    const blogIds = [...new Set(claimedItems.map((i: {blog_id: string}) => i.blog_id))];
-    const { data: blogs } = await supabase
-      .from('blogs')
-      .select('id, user_id, name, slug')
-      .in('id', blogIds);
-
-    const blogsMap = new Map(blogs?.map(b => [b.id, b]) || []);
-
-    // Enriquecer itens com dados do blog
-    const queueItems = claimedItems.map((item: any) => ({
-      ...item,
-      blogs: blogsMap.get(item.blog_id)
-    }));
+    console.log(`Found ${queueItems.length} items to process`);
 
     let processed = 0;
     let failed = 0;
-    const processedIds: string[] = [];
-    const failedIds: string[] = [];
 
     for (const item of queueItems) {
       try {
-        console.log(`[${executionId}] Processing queue item: ${item.id} - ${item.suggested_theme}`);
+        // Update status to generating (prevents duplicate processing)
+        const { error: updateError } = await supabase
+          .from('article_queue')
+          .update({ status: 'generating', updated_at: new Date().toISOString() })
+          .eq('id', item.id)
+          .eq('status', 'pending'); // Only update if still pending
+
+        if (updateError) {
+          console.log(`Item ${item.id} already being processed, skipping`);
+          continue;
+        }
+
+        console.log(`Processing queue item: ${item.id} - ${item.suggested_theme}`);
 
         // Get automation settings for this blog
         const { data: automation } = await supabase
@@ -160,7 +128,7 @@ serve(async (req) => {
 
         if (template) {
           editorialTemplate = template as EditorialTemplate;
-          console.log(`[${executionId}] Using editorial template: ${template.name}`);
+          console.log(`Using editorial template: ${template.name}`);
         }
 
         // Fetch business profile for fallback/merge
@@ -185,7 +153,7 @@ serve(async (req) => {
             target_niche: businessProfile.niche,
             tone_rules: businessProfile.tone_of_voice
           };
-          console.log(`[${executionId}] Using business profile as template fallback: ${businessProfile.company_name}`);
+          console.log(`Using business profile as template fallback: ${businessProfile.company_name}`);
         }
 
         // ========== PREPARE THEME WITH CHUNK CONTENT IF AVAILABLE ==========
@@ -199,7 +167,7 @@ serve(async (req) => {
             : item.chunk_content;
           
           generationTheme = `Baseado na seguinte seção do documento "${item.suggested_theme}":\n\n${chunkText}`;
-          console.log(`[${executionId}] Using PDF chunk content for generation (${item.chunk_content.length} chars)`);
+          console.log(`Using PDF chunk content for generation (${item.chunk_content.length} chars)`);
         }
 
         // ========== USE STRUCTURED ARTICLE GENERATION WITH UNIVERSAL PROMPT ==========
@@ -218,8 +186,8 @@ serve(async (req) => {
             source: item.generation_source || 'form',
             blog_id: item.blog_id,
             // NOVOS CAMPOS - UNIVERSAL PROMPT TYPE OBRIGATÓRIO
-            funnel_mode: item.funnel_mode || item.funnel_stage || 'top',
-            article_goal: item.article_goal || (item.funnel_stage === 'bottom' ? 'converter' : item.funnel_stage === 'middle' ? 'autoridade' : 'educar')
+            funnel_mode: item.funnel_stage || 'top',
+            article_goal: item.funnel_stage === 'bottom' ? 'converter' : item.funnel_stage === 'middle' ? 'autoridade' : 'educar'
           }),
         });
 
@@ -228,7 +196,7 @@ serve(async (req) => {
         if (!generateResponse.ok) {
           const errorCode = generateData.error || 'GENERATION_FAILED';
           const errorMsg = generateData.message || `Article generation failed: ${generateResponse.status}`;
-          console.error(`[${executionId}] Article generation error: ${errorCode} - ${errorMsg}`);
+          console.error(`Article generation error: ${errorCode} - ${errorMsg}`);
           throw new Error(`${errorCode}: ${errorMsg}`);
         }
 
@@ -237,7 +205,7 @@ serve(async (req) => {
         }
 
         const articleData = generateData.article;
-        console.log(`[${executionId}] Article received: "${articleData.title}" (${articleData.content?.length || 0} chars)`);
+        console.log(`Article received: "${articleData.title}" (${articleData.content?.length || 0} chars)`);
 
         // Generate slug
         const slug = articleData.title
@@ -268,7 +236,7 @@ serve(async (req) => {
             const niche = editorialTemplate?.target_niche || 'service business';
             const coverPrompt = `Realistic photo style: ${niche} business owner at work, genuine expression, real workplace environment. NOT corporate stock photo. Natural lighting, authentic scene. Article topic: ${articleData.title}`;
             
-            console.log(`[${executionId}] Generating featured image for article...`);
+            console.log('Generating featured image for article...');
             const imageResponse = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
               method: 'POST',
               headers: {
@@ -301,8 +269,8 @@ serve(async (req) => {
                     });
 
                   if (uploadError) {
-                    console.error(`[${executionId}] Failed to upload image to storage:`, uploadError);
-                    console.log(`[${executionId}] Using placeholder image as fallback`);
+                    console.error('Failed to upload image to storage:', uploadError);
+                    console.log('Using placeholder image as fallback');
                   } else {
                     const { data: publicUrlData } = supabase.storage
                       .from('article-images')
@@ -310,26 +278,26 @@ serve(async (req) => {
                     
                     featuredImageUrl = publicUrlData.publicUrl;
                     imagesGeneratedCount++;
-                    console.log(`[${executionId}] Featured image uploaded successfully: ${featuredImageUrl}`);
+                    console.log('Featured image uploaded successfully:', featuredImageUrl);
                   }
                 } catch (uploadError) {
-                  console.error(`[${executionId}] Error processing image upload:`, uploadError);
-                  console.log(`[${executionId}] Using placeholder image as fallback`);
+                  console.error('Error processing image upload:', uploadError);
+                  console.log('Using placeholder image as fallback');
                 }
               } else {
-                console.log(`[${executionId}] No image in response, using placeholder`);
+                console.log('No image in response, using placeholder');
               }
             } else {
               const errText = await imageResponse.text();
-              console.error(`[${executionId}] Image generation failed:`, imageResponse.status, errText);
-              console.log(`[${executionId}] Using placeholder image as fallback`);
+              console.error('Image generation failed:', imageResponse.status, errText);
+              console.log('Using placeholder image as fallback');
             }
           } catch (imageError) {
-            console.error(`[${executionId}] Error generating featured image:`, imageError);
-            console.log(`[${executionId}] Using placeholder image as fallback`);
+            console.error('Error generating featured image:', imageError);
+            console.log('Using placeholder image as fallback');
           }
         } else {
-          console.log(`[${executionId}] Image generation disabled, using placeholder`);
+          console.log('Image generation disabled, using placeholder');
         }
 
         // ========== GENERATE CONTENT IMAGES ==========
@@ -339,7 +307,7 @@ serve(async (req) => {
         // Calculate expected internal images based on word count
         const wordCount = articleData.content?.split(/\s+/).length || 1000;
         const expectedInternalImages = calculateInternalImageCount(wordCount);
-        console.log(`[${executionId}] Article has ${wordCount} words, expecting ${expectedInternalImages} internal images`);
+        console.log(`Article has ${wordCount} words, expecting ${expectedInternalImages} internal images`);
 
         // If we don't have enough image prompts from AI, generate them based on H2 sections
         if (shouldGenerateImage && imagePrompts.length < expectedInternalImages) {
@@ -359,11 +327,11 @@ serve(async (req) => {
         if (shouldGenerateImage && imagePrompts.length > 0) {
           // Limit to expected number of internal images
           const imagesToGenerate = imagePrompts.slice(0, expectedInternalImages);
-          console.log(`[${executionId}] Generating ${imagesToGenerate.length} content images...`);
+          console.log(`Generating ${imagesToGenerate.length} content images...`);
           
           for (const imgPrompt of imagesToGenerate) {
             try {
-              console.log(`[${executionId}] Generating image for context: ${imgPrompt.context}`);
+              console.log(`Generating image for context: ${imgPrompt.context}`);
               
               const contentImageResponse = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
                 method: 'POST',
@@ -408,21 +376,21 @@ serve(async (req) => {
                     });
                     
                     imagesGeneratedCount++;
-                    console.log(`[${executionId}] Content image ${imgPrompt.context} uploaded: ${contentPublicUrl.publicUrl}`);
+                    console.log(`Content image ${imgPrompt.context} uploaded: ${contentPublicUrl.publicUrl}`);
                   } else {
-                    console.error(`[${executionId}] Failed to upload ${imgPrompt.context} image:`, contentUploadError);
+                    console.error(`Failed to upload ${imgPrompt.context} image:`, contentUploadError);
                   }
                 }
               } else {
-                console.error(`[${executionId}] Failed to generate ${imgPrompt.context} image: HTTP ${contentImageResponse.status}`);
+                console.error(`Failed to generate ${imgPrompt.context} image: HTTP ${contentImageResponse.status}`);
               }
             } catch (contentImgError) {
-              console.error(`[${executionId}] Failed to generate ${imgPrompt.context} image:`, contentImgError);
+              console.error(`Failed to generate ${imgPrompt.context} image:`, contentImgError);
               // Continue with other images, don't fail the whole article
             }
           }
           
-          console.log(`[${executionId}] Generated ${contentImages.length} of ${expectedInternalImages} expected content images`);
+          console.log(`Generated ${contentImages.length} of ${expectedInternalImages} expected content images`);
         }
 
         // Check for auto_publish setting
@@ -459,8 +427,7 @@ serve(async (req) => {
           .update({
             status: shouldPublish ? 'published' : 'generated',
             article_id: article.id,
-            error_message: null,
-            updated_at: new Date().toISOString()
+            error_message: null
           })
           .eq('id', item.id);
 
@@ -509,12 +476,11 @@ serve(async (req) => {
             });
         }
 
-        console.log(`[${executionId}] Successfully processed: ${item.id} -> Article: ${article.id} (${imagesGeneratedCount} images generated)`);
+        console.log(`Successfully processed: ${item.id} -> Article: ${article.id} (${imagesGeneratedCount} images generated)`);
         processed++;
-        processedIds.push(item.id);
 
       } catch (itemError: unknown) {
-        console.error(`[${executionId}] Failed to process item ${item.id}:`, itemError);
+        console.error(`Failed to process item ${item.id}:`, itemError);
         const errorMessage = itemError instanceof Error ? itemError.message : 'Unknown error';
         
         // Create failure notification
@@ -535,48 +501,30 @@ serve(async (req) => {
           .from('article_queue')
           .update({
             status: 'failed',
-            error_message: errorMessage,
-            updated_at: new Date().toISOString()
+            error_message: errorMessage
           })
           .eq('id', item.id);
 
         failed++;
-        failedIds.push(item.id);
       }
     }
 
-    // ========== LOGS: FIM DA EXECUÇÃO ==========
-    const duration = Date.now() - startTime;
-    console.log(`[${executionId}][END] Summary:
-  - Duration: ${duration}ms
-  - Processed: ${processed} [${processedIds.join(', ')}]
-  - Failed: ${failed} [${failedIds.join(', ')}]
-  - Stuck cleaned: ${stuckItems?.length || 0}`);
+    console.log(`Queue processing complete. Processed: ${processed}, Failed: ${failed}`);
 
     return new Response(
       JSON.stringify({
-        execution_id: executionId,
         processed,
         failed,
-        processed_ids: processedIds,
-        failed_ids: failedIds,
-        stuck_cleaned: stuckItems?.length || 0,
-        duration_ms: duration,
         message: `Processed ${processed} articles, ${failed} failed`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: unknown) {
-    const duration = Date.now() - startTime;
-    console.error(`[${executionId}][ERROR] Process queue failed:`, error);
+    console.error('Error in process-queue:', error);
     const message = error instanceof Error ? error.message : 'Failed to process queue';
     return new Response(
-      JSON.stringify({ 
-        execution_id: executionId,
-        error: message,
-        duration_ms: duration
-      }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
