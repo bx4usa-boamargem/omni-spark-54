@@ -33,7 +33,20 @@ serve(async (req) => {
   }
 
   try {
-    const { blogId, userId } = await req.json();
+    // Safely parse JSON body - handle empty or missing body
+    let blogId: string | undefined;
+    let userId: string | undefined;
+    
+    try {
+      const body = await req.text();
+      if (body && body.trim()) {
+        const parsed = JSON.parse(body);
+        blogId = parsed.blogId;
+        userId = parsed.userId;
+      }
+    } catch (parseError) {
+      console.log('No JSON body provided or parsing failed:', parseError);
+    }
     
     // Use fixed redirect URI from environment variable
     const PUBLIC_APP_URL = Deno.env.get('PUBLIC_APP_URL') || 'https://omniseenteste.lovable.app';
