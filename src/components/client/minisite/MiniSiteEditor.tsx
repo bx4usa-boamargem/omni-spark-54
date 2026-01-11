@@ -1,6 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Building2, Paintbrush, Layout, Sparkles, MessageCircle, FileText } from "lucide-react";
-import { BrandKitSection } from "./sections/BrandKitSection";
+import { PremiumBrandKitSection } from "./sections/PremiumBrandKitSection";
 import { BrandIdentitySection } from "./sections/BrandIdentitySection";
 import { DesignSection } from "./sections/DesignSection";
 import { HeaderSection } from "./sections/HeaderSection";
@@ -132,14 +132,20 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         <SaveIndicator status={saveStatus} />
       </div>
 
-      {/* Brand Kit Highlight */}
-      <BrandKitSection
+      {/* Premium Brand Kit */}
+      <PremiumBrandKitSection
         logoUrl={logoUrl}
         logoNegativeUrl={logoNegativeUrl}
         faviconUrl={faviconUrl}
         primaryColor={primaryColor}
         secondaryColor={secondaryColor}
         companyName={companyName}
+        userId={userId}
+        onLogoUrlChange={onLogoUrlChange}
+        onLogoNegativeUrlChange={onLogoNegativeUrlChange}
+        onFaviconUrlChange={onFaviconUrlChange}
+        onPrimaryColorChange={onPrimaryColorChange}
+        onSecondaryColorChange={onSecondaryColorChange}
       />
 
       {/* Accordion Sections */}

@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, Palette, Sparkles } from "lucide-react";
+import { Check, Copy, Palette, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export interface ColorPalette {
   "50": string;
@@ -159,13 +160,11 @@ const COLOR_LEVELS = ["50", "100", "200", "300", "400", "500", "600", "700", "80
 
 // Function to generate color palette from base color
 function generatePaletteFromBase(baseColor: string): ColorPalette {
-  // Parse hex to RGB
   const hex = baseColor.replace("#", "");
   const r = parseInt(hex.substring(0, 2), 16);
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
 
-  // Generate variations
   const generateShade = (factor: number): string => {
     const nr = Math.round(r + (255 - r) * factor);
     const ng = Math.round(g + (255 - g) * factor);
@@ -195,6 +194,45 @@ function generatePaletteFromBase(baseColor: string): ColorPalette {
 }
 
 const DEFAULT_PALETTE = STANDARD_PALETTES[0].colors;
+
+// Premium Swatch Component - No text overlay
+function PremiumSwatch({ 
+  color, 
+  level,
+  showCopyOnHover = false 
+}: { 
+  color: string; 
+  level: string;
+  showCopyOnHover?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copyColor = () => {
+    navigator.clipboard.writeText(color);
+    setCopied(true);
+    toast.success(`${color} copiado!`);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      <button
+        onClick={copyColor}
+        className="w-full h-12 rounded-lg transition-all hover:scale-105 hover:shadow-md 
+                   focus:outline-none focus:ring-2 focus:ring-primary/20 relative group"
+        style={{ backgroundColor: color }}
+        aria-label={`Copiar cor ${level}`}
+      >
+        {copied && (
+          <Check className="absolute inset-0 m-auto h-4 w-4 text-white drop-shadow-md" />
+        )}
+        {showCopyOnHover && !copied && (
+          <Copy className="absolute inset-0 m-auto h-3.5 w-3.5 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+        )}
+      </button>
+    </div>
+  );
+}
 
 export function ColorPaletteModal({
   open,
@@ -230,25 +268,30 @@ export function ColorPaletteModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-lg">
             <Palette className="h-5 w-5 text-primary" />
             Paleta de Cores
           </DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="standard" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="standard">Paletas Padrão</TabsTrigger>
-            <TabsTrigger value="custom">Personalizada</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="standard" className="text-sm">
+              Paletas Padrão
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="text-sm">
+              Personalizada
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="standard" className="space-y-4 mt-4">
+          {/* STANDARD PALETTES - Wide cards with name BELOW */}
+          <TabsContent value="standard" className="space-y-6">
             <p className="text-sm text-muted-foreground">
               Selecione uma paleta pré-definida para seu blog
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {STANDARD_PALETTES.map((palette) => {
                 const isSelected = JSON.stringify(selectedPalette) === JSON.stringify(palette.colors);
                 return (
@@ -256,18 +299,19 @@ export function ColorPaletteModal({
                     key={palette.name}
                     onClick={() => handleSelectStandardPalette(palette.colors)}
                     className={cn(
-                      "relative p-3 rounded-lg border-2 transition-all hover:scale-105",
+                      "relative p-4 rounded-xl border-2 transition-all text-left",
                       isSelected
-                        ? "border-primary ring-2 ring-primary/20"
-                        : "border-border hover:border-primary/50"
+                        ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                        : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
                     )}
                   >
                     {isSelected && (
-                      <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-0.5">
-                        <Check className="h-3 w-3" />
+                      <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-1">
+                        <Check className="h-3.5 w-3.5" />
                       </div>
                     )}
-                    <div className="flex h-8 rounded-md overflow-hidden mb-2">
+                    {/* Color Strip - NO text inside */}
+                    <div className="flex h-10 rounded-lg overflow-hidden mb-3">
                       {COLOR_LEVELS.map((level) => (
                         <div
                           key={level}
@@ -276,61 +320,82 @@ export function ColorPaletteModal({
                         />
                       ))}
                     </div>
-                    <span className="text-sm font-medium">{palette.name}</span>
+                    {/* Name BELOW */}
+                    <span className="text-sm font-medium text-gray-900">
+                      {palette.name}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </TabsContent>
 
-          <TabsContent value="custom" className="space-y-6 mt-4">
+          {/* CUSTOM PALETTE */}
+          <TabsContent value="custom" className="space-y-8">
             {/* Generate from base color */}
-            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+            <div className="p-5 bg-gray-50 rounded-xl space-y-4">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Gerar a partir da cor base</span>
+                <span className="text-sm font-medium text-gray-900">
+                  Gerar a partir da cor base
+                </span>
               </div>
               <div className="flex gap-3">
-                <div className="flex-1 flex gap-2">
-                  <Input
-                    type="color"
-                    value={baseColor}
-                    onChange={(e) => setBaseColor(e.target.value)}
-                    className="w-12 h-10 p-1 cursor-pointer"
-                  />
+                <div className="flex gap-2 flex-1">
+                  <div
+                    className="w-14 h-11 rounded-lg border border-gray-200 overflow-hidden"
+                    style={{ backgroundColor: baseColor }}
+                  >
+                    <Input
+                      type="color"
+                      value={baseColor}
+                      onChange={(e) => setBaseColor(e.target.value)}
+                      className="w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
                   <Input
                     type="text"
                     value={baseColor}
                     onChange={(e) => setBaseColor(e.target.value)}
                     placeholder="#7A5AF8"
-                    className="flex-1 uppercase"
+                    className="flex-1 uppercase font-mono"
                   />
                 </div>
                 <Button onClick={handleGenerateFromBase} variant="secondary">
+                  <Sparkles className="h-4 w-4 mr-2" />
                   Gerar Paleta
                 </Button>
               </div>
             </div>
 
-            {/* Manual color editing */}
+            {/* Manual color editing - Large swatches with HEX below */}
             <div className="space-y-4">
-              <Label className="text-sm font-medium">Editar cores manualmente</Label>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Label className="text-sm font-medium text-gray-900">
+                Editar cores manualmente
+              </Label>
+              <div className="grid grid-cols-5 gap-4">
                 {COLOR_LEVELS.map((level) => (
-                  <div key={level} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">{level}</Label>
-                    <div className="flex gap-1">
+                  <div key={level} className="space-y-2">
+                    {/* Large Swatch - No text */}
+                    <div
+                      className="w-full h-16 rounded-xl border border-gray-200 overflow-hidden relative group cursor-pointer"
+                      style={{ backgroundColor: selectedPalette[level] }}
+                    >
                       <Input
                         type="color"
                         value={selectedPalette[level]}
                         onChange={(e) => handleColorChange(level, e.target.value)}
-                        className="w-10 h-9 p-1 cursor-pointer shrink-0"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       />
+                    </div>
+                    {/* Info BELOW */}
+                    <div className="text-center">
+                      <p className="text-xs font-medium text-gray-400">{level}</p>
                       <Input
                         type="text"
                         value={selectedPalette[level]}
                         onChange={(e) => handleColorChange(level, e.target.value)}
-                        className="flex-1 text-xs uppercase font-mono"
+                        className="mt-1 text-xs uppercase font-mono text-center h-8 px-2"
                       />
                     </div>
                   </div>
@@ -338,36 +403,43 @@ export function ColorPaletteModal({
               </div>
             </div>
 
-            {/* Preview */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Pré-visualização</Label>
-              <div className="flex h-12 rounded-lg overflow-hidden shadow-sm">
-                {COLOR_LEVELS.map((level) => (
-                  <div
-                    key={level}
-                    className="flex-1 flex items-center justify-center"
-                    style={{ backgroundColor: selectedPalette[level] }}
-                  >
-                    <span
-                      className="text-[10px] font-mono"
-                      style={{
-                        color: parseInt(level) < 500 ? "#000" : "#fff",
-                      }}
-                    >
-                      {level}
-                    </span>
-                  </div>
-                ))}
+            {/* Preview - NO text overlay, labels BELOW */}
+            <div className="space-y-4">
+              <Label className="text-sm font-medium text-gray-900">
+                Pré-visualização
+              </Label>
+              <div className="space-y-2">
+                {/* Color Strip */}
+                <div className="flex gap-2">
+                  {COLOR_LEVELS.map((level) => (
+                    <PremiumSwatch
+                      key={level}
+                      color={selectedPalette[level]}
+                      level={level}
+                      showCopyOnHover
+                    />
+                  ))}
+                </div>
+                {/* Labels BELOW */}
+                <div className="flex gap-2">
+                  {COLOR_LEVELS.map((level) => (
+                    <div key={level} className="flex-1 text-center">
+                      <span className="text-xs text-gray-400 font-medium">
+                        {level}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </TabsContent>
         </Tabs>
 
-        <div className="flex justify-end gap-3 pt-4 border-t">
+        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} className="gradient-primary">
+          <Button onClick={handleSave}>
             Salvar Paleta
           </Button>
         </div>
