@@ -691,6 +691,15 @@ export default function ClientArticleEditor() {
         article={articleForPreview}
         streamingText=""
         isStreaming={false}
+        featuredImage={featuredImage}
+        contentImages={contentImages as import('@/utils/generateContentImages').ContentImage[]}
+        isGeneratingImages={isGeneratingImages}
+        imageProgress={imageProgress ? {
+          current: imageProgress.current,
+          total: imageProgress.total,
+          context: imageProgress.currentContext,
+          status: 'generating'
+        } : null}
       />
     </div>
   );
