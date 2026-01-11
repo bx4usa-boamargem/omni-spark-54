@@ -1,15 +1,10 @@
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeCard } from "../ui/ThemeCard";
 import { Paintbrush } from "lucide-react";
 
 interface DesignSectionProps {
   layoutTemplate: string;
-  primaryColor: string;
-  secondaryColor: string;
   onLayoutChange: (value: string) => void;
-  onPrimaryColorChange: (value: string) => void;
-  onSecondaryColorChange: (value: string) => void;
 }
 
 const LAYOUT_OPTIONS = [
@@ -32,11 +27,7 @@ const LAYOUT_OPTIONS = [
 
 export function DesignSection({
   layoutTemplate,
-  primaryColor,
-  secondaryColor,
   onLayoutChange,
-  onPrimaryColorChange,
-  onSecondaryColorChange,
 }: DesignSectionProps) {
   return (
     <div className="space-y-6">
@@ -58,56 +49,6 @@ export function DesignSection({
             />
           ))}
         </div>
-      </div>
-
-      {/* Colors */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-gray-700">Cor Primária</Label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={primaryColor}
-              onChange={(e) => onPrimaryColorChange(e.target.value)}
-              className="w-12 h-12 rounded-lg border border-gray-200 cursor-pointer"
-            />
-            <Input
-              value={primaryColor}
-              onChange={(e) => onPrimaryColorChange(e.target.value)}
-              className="font-mono bg-white border-gray-200 text-gray-900"
-              placeholder="#6366f1"
-            />
-          </div>
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-gray-700">Cor Secundária</Label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={secondaryColor}
-              onChange={(e) => onSecondaryColorChange(e.target.value)}
-              className="w-12 h-12 rounded-lg border border-gray-200 cursor-pointer"
-            />
-            <Input
-              value={secondaryColor}
-              onChange={(e) => onSecondaryColorChange(e.target.value)}
-              className="font-mono bg-white border-gray-200 text-gray-900"
-              placeholder="#8b5cf6"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Color Preview */}
-      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
-        <p className="text-sm text-gray-500 mb-3">Preview do gradiente</p>
-        <div 
-          className="h-16 rounded-lg"
-          style={{
-            background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
-          }}
-        />
       </div>
     </div>
   );
