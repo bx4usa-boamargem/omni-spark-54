@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBlog } from '@/hooks/useBlog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { streamArticle, type ArticleData, type GenerationStage } from '@/utils/streamArticle';
@@ -18,10 +20,28 @@ import {
   Loader2, 
   FileText,
   Plus,
-  CheckCircle2
+  Edit3,
+  Eye,
+  Columns,
+  Sparkles,
+  Image as ImageIcon,
+  RefreshCw
 } from 'lucide-react';
 
 type EditorPhase = 'form' | 'generating' | 'editing';
+type ViewMode = 'editor' | 'preview' | 'split';
+
+interface ContentImage {
+  context: string;
+  url: string;
+  after_section: number;
+}
+
+interface ImageGenerationProgress {
+  current: number;
+  total: number;
+  currentContext: string;
+}
 
 export default function ClientArticleEditor() {
   const navigate = useNavigate();
@@ -30,12 +50,24 @@ export default function ClientArticleEditor() {
   // Editor phase state
   const [phase, setPhase] = useState<EditorPhase>('form');
   
+  // View mode state (persisted in localStorage)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('article-editor-view-mode');
+    return (saved as ViewMode) || 'split';
+  });
+  
   // Article state (in memory until explicit save)
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [faq, setFaq] = useState<Array<{ question: string; answer: string }>>([]);
+  
+  // Image state
+  const [featuredImage, setFeaturedImage] = useState<string | null>(null);
+  const [contentImages, setContentImages] = useState<ContentImage[]>([]);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [imageProgress, setImageProgress] = useState<ImageGenerationProgress | null>(null);
   
   // Generation state
   const [streamingText, setStreamingText] = useState('');
@@ -46,13 +78,20 @@ export default function ClientArticleEditor() {
   // Save state
   const [isSaving, setIsSaving] = useState(false);
   
-  // Current article object for preview (constructed from state)
+  // Persist view mode
+  useEffect(() => {
+    localStorage.setItem('article-editor-view-mode', viewMode);
+  }, [viewMode]);
+  
+  // Current article object for preview
   const articleForPreview: ArticleData | null = title ? {
     title,
     content,
     excerpt,
     meta_description: metaDescription,
-    faq
+    faq,
+    featured_image_url: featuredImage,
+    content_images: contentImages,
   } : null;
 
   const handleGenerate = async (formData: SimpleFormData) => {
@@ -70,6 +109,8 @@ export default function ClientArticleEditor() {
     setExcerpt('');
     setMetaDescription('');
     setFaq([]);
+    setFeaturedImage(null);
+    setContentImages([]);
     setGenerationStage('analyzing');
     setGenerationProgress(0);
 
@@ -78,13 +119,13 @@ export default function ClientArticleEditor() {
       blogId: blog.id,
       generationMode: formData.generationMode,
       tone: 'friendly',
-      autoPublish: false, // Never auto-publish - we control this
+      autoPublish: false,
       onStage: (stage) => setGenerationStage(stage),
       onProgress: (percent) => setGenerationProgress(percent),
       onDelta: (text) => {
         setStreamingText((prev) => prev + text);
       },
-      onDone: (result) => {
+      onDone: async (result) => {
         setIsGenerating(false);
         setGenerationStage(null);
         
@@ -97,7 +138,9 @@ export default function ClientArticleEditor() {
           setFaq(result.faq || []);
           setPhase('editing');
           
-          toast.success('Artigo gerado! Revise e edite antes de publicar.');
+          // Start image generation automatically
+          toast.success('Artigo gerado! Gerando imagens...');
+          await generateImages(result);
         }
       },
       onError: (error) => {
@@ -109,6 +152,122 @@ export default function ClientArticleEditor() {
     });
   };
 
+  const generateImages = async (articleData: ArticleData) => {
+    if (!blog?.id) return;
+    
+    setIsGeneratingImages(true);
+    const totalImages = 4; // 1 cover + 3 internal
+    
+    try {
+      // Generate featured image
+      setImageProgress({ current: 1, total: totalImages, currentContext: 'Imagem de capa' });
+      
+      const { data: coverResult, error: coverError } = await supabase.functions.invoke('generate-image', {
+        body: {
+          prompt: `Professional hero image for article: "${articleData.title}". Clean, modern, business-focused. High quality.`,
+          context: 'hero',
+          articleTheme: articleData.title,
+        }
+      });
+      
+      if (!coverError && coverResult?.imageUrl) {
+        setFeaturedImage(coverResult.imageUrl);
+      } else if (!coverError && coverResult?.imageBase64) {
+        setFeaturedImage(`data:image/png;base64,${coverResult.imageBase64}`);
+      }
+      
+      // Generate content images from prompts
+      const imagePrompts = articleData.image_prompts || [];
+      const newContentImages: ContentImage[] = [];
+      
+      for (let i = 0; i < Math.min(imagePrompts.length, 3); i++) {
+        const prompt = imagePrompts[i];
+        setImageProgress({ 
+          current: i + 2, 
+          total: totalImages, 
+          currentContext: prompt.context || `Imagem ${i + 1}` 
+        });
+        
+        const { data: imgResult, error: imgError } = await supabase.functions.invoke('generate-image', {
+          body: {
+            prompt: prompt.prompt,
+            context: prompt.context,
+            articleTheme: articleData.title,
+          }
+        });
+        
+        if (!imgError && (imgResult?.imageUrl || imgResult?.imageBase64)) {
+          newContentImages.push({
+            context: prompt.context,
+            url: imgResult.imageUrl || `data:image/png;base64,${imgResult.imageBase64}`,
+            after_section: prompt.after_section
+          });
+        }
+      }
+      
+      setContentImages(newContentImages);
+      toast.success(`${newContentImages.length + (featuredImage ? 1 : 0)} imagens geradas!`);
+      
+    } catch (error) {
+      console.error('Error generating images:', error);
+      toast.error('Erro ao gerar algumas imagens');
+    } finally {
+      setIsGeneratingImages(false);
+      setImageProgress(null);
+    }
+  };
+
+  const regenerateImage = async (type: 'cover' | 'internal', index?: number) => {
+    if (!title) return;
+    
+    setIsGeneratingImages(true);
+    try {
+      if (type === 'cover') {
+        setImageProgress({ current: 1, total: 1, currentContext: 'Regenerando capa' });
+        
+        const { data, error } = await supabase.functions.invoke('generate-image', {
+          body: {
+            prompt: `Professional hero image for article: "${title}". Clean, modern, business-focused. High quality.`,
+            context: 'hero',
+            articleTheme: title,
+          }
+        });
+        
+        if (!error && (data?.imageUrl || data?.imageBase64)) {
+          setFeaturedImage(data.imageUrl || `data:image/png;base64,${data.imageBase64}`);
+          toast.success('Imagem de capa regenerada!');
+        }
+      } else if (typeof index === 'number' && contentImages[index]) {
+        const img = contentImages[index];
+        setImageProgress({ current: 1, total: 1, currentContext: `Regenerando: ${img.context}` });
+        
+        const { data, error } = await supabase.functions.invoke('generate-image', {
+          body: {
+            prompt: `Image for article section: ${img.context}. Article: "${title}". Professional, relevant.`,
+            context: img.context,
+            articleTheme: title,
+          }
+        });
+        
+        if (!error && (data?.imageUrl || data?.imageBase64)) {
+          const newImages = [...contentImages];
+          newImages[index] = {
+            ...img,
+            url: data.imageUrl || `data:image/png;base64,${data.imageBase64}`
+          };
+          setContentImages(newImages);
+          toast.success('Imagem regenerada!');
+        }
+      }
+    } catch (error) {
+      console.error('Error regenerating image:', error);
+      toast.error('Erro ao regenerar imagem');
+    } finally {
+      setIsGeneratingImages(false);
+      setImageProgress(null);
+    }
+  };
+
   const handleSave = async (publish: boolean) => {
     if (!blog?.id || !title.trim() || !content.trim()) {
       toast.error('Preencha o título e conteúdo');
@@ -118,7 +277,6 @@ export default function ClientArticleEditor() {
     setIsSaving(true);
 
     try {
-      // Generate slug
       const slug = title
         .toLowerCase()
         .normalize('NFD')
@@ -126,19 +284,28 @@ export default function ClientArticleEditor() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
 
+      // Cast content_images to Json type for Supabase compatibility
+      const contentImagesJson = contentImages.length > 0 
+        ? contentImages.map(img => ({ context: img.context, url: img.url, after_section: img.after_section }))
+        : null;
+
+      const articleData = {
+        blog_id: blog.id,
+        title: title.trim(),
+        slug: `${slug}-${Date.now()}`,
+        content: content.trim(),
+        excerpt: excerpt.trim(),
+        meta_description: metaDescription.trim(),
+        faq: faq.length > 0 ? faq : null,
+        featured_image_url: featuredImage,
+        content_images: contentImagesJson as unknown as null,
+        status: publish ? 'published' : 'draft',
+        published_at: publish ? new Date().toISOString() : null,
+      };
+
       const { error } = await supabase
         .from('articles')
-        .insert({
-          blog_id: blog.id,
-          title: title.trim(),
-          slug: `${slug}-${Date.now()}`,
-          content: content.trim(),
-          excerpt: excerpt.trim(),
-          meta_description: metaDescription.trim(),
-          faq: faq.length > 0 ? faq : null,
-          status: publish ? 'published' : 'draft',
-          published_at: publish ? new Date().toISOString() : null,
-        });
+        .insert([articleData]);
 
       if (error) throw error;
 
@@ -164,7 +331,14 @@ export default function ClientArticleEditor() {
     setExcerpt('');
     setMetaDescription('');
     setFaq([]);
+    setFeaturedImage(null);
+    setContentImages([]);
     setStreamingText('');
+  };
+
+  const handleImproveWithAI = () => {
+    // TODO: Open AI improvement dialog
+    toast.info('Em breve: Melhorar artigo com IA');
   };
 
   if (blogLoading) {
@@ -175,10 +349,127 @@ export default function ClientArticleEditor() {
     );
   }
 
+  // Render editor content
+  const renderEditor = () => (
+    <div className="space-y-4 h-full flex flex-col">
+      {/* Title Input */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground">Título</label>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Título do artigo"
+          className="text-lg font-semibold"
+        />
+      </div>
+      
+      {/* Excerpt Input */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground">Resumo</label>
+        <Input
+          value={excerpt}
+          onChange={(e) => setExcerpt(e.target.value)}
+          placeholder="Breve resumo do artigo"
+        />
+      </div>
+      
+      {/* Image Progress */}
+      {isGeneratingImages && imageProgress && (
+        <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
+          <div className="flex items-center gap-3 mb-2">
+            <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
+            <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+              Gerando imagens ({imageProgress.current}/{imageProgress.total})
+            </span>
+          </div>
+          <Progress value={(imageProgress.current / imageProgress.total) * 100} className="h-2" />
+          <p className="text-xs text-muted-foreground mt-1">{imageProgress.currentContext}</p>
+        </div>
+      )}
+      
+      {/* Featured Image Preview */}
+      {featuredImage && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-foreground">Imagem de Capa</label>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => regenerateImage('cover')}
+              disabled={isGeneratingImages}
+              className="h-7 text-xs gap-1"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Regenerar
+            </Button>
+          </div>
+          <div className="relative rounded-lg overflow-hidden border border-border">
+            <img 
+              src={featuredImage} 
+              alt="Featured" 
+              className="w-full h-32 object-cover"
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Content Images */}
+      {contentImages.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Imagens do Conteúdo</label>
+          <div className="grid grid-cols-3 gap-2">
+            {contentImages.map((img, idx) => (
+              <div key={idx} className="relative group rounded-lg overflow-hidden border border-border">
+                <img src={img.url} alt={img.context} className="w-full h-20 object-cover" />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => regenerateImage('internal', idx)}
+                    disabled={isGeneratingImages}
+                    className="h-7 text-xs text-white hover:bg-white/20"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+                  <p className="text-[10px] text-white truncate">{img.context}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Content Editor */}
+      <div className="flex-1 min-h-0 space-y-2">
+        <label className="text-sm font-medium text-foreground">Conteúdo</label>
+        <div className="h-full min-h-[400px]">
+          <RichTextEditor
+            value={content}
+            onChange={setContent}
+            placeholder="Edite o conteúdo do artigo..."
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render preview content
+  const renderPreview = () => (
+    <div className="h-full overflow-auto">
+      <ArticlePreview
+        article={articleForPreview}
+        streamingText=""
+        isStreaming={false}
+      />
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 mb-6">
+      <header className="flex items-center justify-between pb-4 border-b border-border mb-6">
         <div className="flex items-center gap-3">
           <Button 
             variant="ghost" 
@@ -203,8 +494,38 @@ export default function ClientArticleEditor() {
         
         {phase === 'editing' && (
           <div className="flex items-center gap-2">
+            {/* View Mode Tabs */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="hidden md:block">
+              <TabsList className="h-9">
+                <TabsTrigger value="editor" className="gap-1.5 px-3 h-7">
+                  <Edit3 className="h-3.5 w-3.5" />
+                  Editor
+                </TabsTrigger>
+                <TabsTrigger value="preview" className="gap-1.5 px-3 h-7">
+                  <Eye className="h-3.5 w-3.5" />
+                  Preview
+                </TabsTrigger>
+                <TabsTrigger value="split" className="gap-1.5 px-3 h-7">
+                  <Columns className="h-3.5 w-3.5" />
+                  Lado a Lado
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            
+            {/* AI Improve Button */}
             <Button
               variant="outline"
+              size="sm"
+              onClick={handleImproveWithAI}
+              className="gap-2 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10"
+            >
+              <Sparkles className="h-4 w-4" />
+              Melhorar com IA
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => handleSave(false)}
               disabled={isSaving}
             >
@@ -217,6 +538,7 @@ export default function ClientArticleEditor() {
             </Button>
             
             <Button
+              size="sm"
               onClick={() => handleSave(true)}
               disabled={isSaving}
             >
@@ -231,18 +553,28 @@ export default function ClientArticleEditor() {
         )}
       </header>
 
-      {/* Main Content - Split View */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
-        {/* Left Column - Form/Editor */}
-        <div className="flex flex-col min-h-0 overflow-auto">
-          {phase === 'form' && (
+      {/* Main Content */}
+      <div className="flex-1 min-h-0">
+        {phase === 'form' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
             <SimpleArticleForm 
               onGenerate={handleGenerate} 
               isGenerating={isGenerating}
             />
-          )}
-          
-          {phase === 'generating' && (
+            <Card className="h-full flex items-center justify-center bg-muted/30 border-dashed">
+              <CardContent className="text-center py-12">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-muted-foreground">Preview do Artigo</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  O artigo aparecerá aqui enquanto é gerado
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        
+        {phase === 'generating' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
             <Card className="h-full flex flex-col">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -258,76 +590,42 @@ export default function ClientArticleEditor() {
                 />
               </CardContent>
             </Card>
-          )}
-          
-          {phase === 'editing' && (
-            <div className="space-y-4 h-full flex flex-col">
-              {/* Title Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Título</label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Título do artigo"
-                  className="text-lg font-semibold"
-                />
-              </div>
-              
-              {/* Excerpt Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Resumo</label>
-                <Input
-                  value={excerpt}
-                  onChange={(e) => setExcerpt(e.target.value)}
-                  placeholder="Breve resumo do artigo"
-                />
-              </div>
-              
-              {/* Content Editor */}
-              <div className="flex-1 min-h-0 space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Conteúdo</label>
-                <div className="h-full min-h-[400px]">
-                  <RichTextEditor
-                    value={content}
-                    onChange={setContent}
-                    placeholder="Edite o conteúdo do artigo..."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column - Preview */}
-        <div className="min-h-0 overflow-auto">
-          {phase === 'form' && (
-            <Card className="h-full flex items-center justify-center bg-gray-100/50 dark:bg-white/5 border-dashed border-slate-200 dark:border-white/10">
-              <CardContent className="text-center py-12">
-                <FileText className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-                <h3 className="font-semibold text-gray-500 dark:text-gray-400">Preview do Artigo</h3>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                  O artigo aparecerá aqui enquanto é gerado
-                </p>
-              </CardContent>
-            </Card>
-          )}
-          
-          {phase === 'generating' && (
             <ArticlePreview
               article={null}
               streamingText={streamingText}
               isStreaming={isGenerating}
             />
-          )}
-          
-          {phase === 'editing' && articleForPreview && (
-            <ArticlePreview
-              article={articleForPreview}
-              streamingText=""
-              isStreaming={false}
-            />
-          )}
-        </div>
+          </div>
+        )}
+        
+        {phase === 'editing' && (
+          <>
+            {/* Mobile: Always show editor */}
+            <div className="md:hidden h-full overflow-auto">
+              {renderEditor()}
+            </div>
+            
+            {/* Desktop: Based on view mode */}
+            <div className="hidden md:block h-full">
+              {viewMode === 'editor' && (
+                <div className="h-full overflow-auto">
+                  {renderEditor()}
+                </div>
+              )}
+              
+              {viewMode === 'preview' && renderPreview()}
+              
+              {viewMode === 'split' && (
+                <div className="grid grid-cols-2 gap-6 h-full">
+                  <div className="overflow-auto">
+                    {renderEditor()}
+                  </div>
+                  {renderPreview()}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

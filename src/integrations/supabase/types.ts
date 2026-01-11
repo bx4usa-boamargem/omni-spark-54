@@ -2161,6 +2161,41 @@ export type Database = {
           },
         ]
       }
+      generation_rate_limits: {
+        Row: {
+          blog_id: string
+          created_at: string | null
+          id: string
+          requests_count: number | null
+          user_id: string
+          window_start: string | null
+        }
+        Insert: {
+          blog_id: string
+          created_at?: string | null
+          id?: string
+          requests_count?: number | null
+          user_id: string
+          window_start?: string | null
+        }
+        Update: {
+          blog_id?: string
+          created_at?: string | null
+          id?: string
+          requests_count?: number | null
+          user_id?: string
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_rate_limits_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gsc_alert_history: {
         Row: {
           alert_id: string | null
@@ -3778,6 +3813,10 @@ export type Database = {
       calculate_payment_due_date: {
         Args: { start_date: string }
         Returns: string
+      }
+      check_article_rate_limit: {
+        Args: { p_blog_id: string; p_user_id: string }
+        Returns: boolean
       }
       claim_queue_items: {
         Args: { p_limit?: number }

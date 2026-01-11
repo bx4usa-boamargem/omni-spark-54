@@ -303,15 +303,14 @@ export default function ClientSEO() {
                   />
                 </div>
                 
-                {/* AI Optimization Button */}
+                {/* AI Optimization Button - Always visible for components that need improvement */}
                 {(detail.score / detail.max) < 0.8 && metric.key !== 'image' && (
                   <Button
                     size="sm"
                     variant="outline"
                     className="w-full mt-4 gap-2 border-purple-500/30 text-purple-600 dark:text-purple-400 
                                hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:border-purple-500/50
-                               opacity-0 group-hover:opacity-100 transition-all duration-300
-                               hover:shadow-lg hover:shadow-purple-500/20"
+                               transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/20"
                     onClick={() => handleOpenOptimization(metric.key)}
                   >
                     <Sparkles className="h-4 w-4" />

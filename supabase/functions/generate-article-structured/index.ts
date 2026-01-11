@@ -737,8 +737,9 @@ serve(async (req) => {
       funnel_mode = 'middle',
       article_goal = null,
       editorial_model = 'traditional',
-      generation_mode: requestedGenerationMode
-    }: ArticleRequest & { funnel_mode?: FunnelMode; article_goal?: ArticleGoal | null } = await req.json();
+      generation_mode: requestedGenerationMode,
+      auto_publish = true
+    }: ArticleRequest & { funnel_mode?: FunnelMode; article_goal?: ArticleGoal | null; auto_publish?: boolean } = await req.json();
 
     // RESOLVER GENERATION_MODE: Nunca undefined - fast ou deep
     const generation_mode = resolveGenerationMode(requestedGenerationMode, source);
@@ -749,6 +750,52 @@ serve(async (req) => {
         JSON.stringify({ error: 'Theme is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // ========== RATE LIMIT CHECK (PROTEÇÃO CONTRA DUPLICAÇÃO EM MASSA) ==========
+    if (blog_id && user_id) {
+      console.log(`[RATE_LIMIT] Checking rate limit for blog=${blog_id}, user=${user_id}`);
+      
+      const { data: allowed, error: limitError } = await supabase
+        .rpc('check_article_rate_limit', { 
+          p_blog_id: blog_id, 
+          p_user_id: user_id 
+        });
+      
+      if (limitError) {
+        console.error(`[RATE_LIMIT] Error checking rate limit:`, limitError);
+        // Continue even if rate limit check fails (fail-open for now)
+      } else if (!allowed) {
+        console.log(`[RATE_LIMIT] BLOCKED: blog=${blog_id}, user=${user_id} - exceeded 5 articles/minute`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Limite de geração excedido. Você pode gerar no máximo 5 artigos por minuto. Aguarde alguns segundos.'
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.log(`[RATE_LIMIT] OK: blog=${blog_id}, user=${user_id}`);
+      }
+    }
+
+    // ========== DEDUPLICATION CHECK (PREVENIR ARTIGOS DUPLICADOS) ==========
+    if (blog_id) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
+      // Check for recent articles with similar themes
+      const { data: recentSimilar } = await supabase
+        .from('articles')
+        .select('id, title')
+        .eq('blog_id', blog_id)
+        .gte('created_at', twentyFourHoursAgo)
+        .ilike('title', `%${theme.slice(0, 50)}%`)
+        .limit(1);
+
+      if (recentSimilar && recentSimilar.length > 0) {
+        console.log(`[DEDUP] Potential duplicate detected - recent article: "${recentSimilar[0].title}" (id: ${recentSimilar[0].id})`);
+        // Log warning but don't block - title similarity isn't definitive
+      }
     }
 
     // Fetch AI model and content preferences

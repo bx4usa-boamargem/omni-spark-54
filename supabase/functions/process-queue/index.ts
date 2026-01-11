@@ -457,29 +457,61 @@ serve(async (req) => {
         // Check for auto_publish setting
         const shouldPublish = automation?.auto_publish !== false;
 
-        // Insert the article
-        const { data: article, error: insertError } = await supabase
-          .from('articles')
-          .insert({
-            blog_id: item.blog_id,
-            title: articleData.title,
-            slug: `${slug}-${Date.now()}`,
-            content: articleData.content,
-            excerpt: articleData.excerpt || articleData.meta_description || '',
-            meta_description: articleData.meta_description || articleData.excerpt || '',
-            faq: articleData.faq || [],
-            keywords: item.keywords || [],
-            featured_image_url: featuredImageUrl,
-            content_images: contentImages.length > 0 ? contentImages : null,
-            status: shouldPublish ? 'published' : 'draft',
-            published_at: shouldPublish ? new Date().toISOString() : null,
-            reading_time: articleData.reading_time || Math.ceil(articleData.content?.split(' ').length / 200) || 5
-          })
-          .select()
-          .single();
+        // ========== PROTEÇÃO CONTRA PERSISTÊNCIA DUPLA ==========
+        // Se generate-article-structured já persistiu o artigo, NÃO inserir novamente
+        let article: { id: string; title: string } | null = null;
+        
+        if (generateData.article?.id) {
+          // Artigo já foi persistido pela edge function generate-article-structured
+          console.log(`[${executionId}] Article already persisted by generate-article-structured: ${generateData.article.id}`);
+          article = { id: generateData.article.id, title: articleData.title };
+          
+          // Apenas atualizar campos adicionais (imagens, etc.) se necessário
+          if (featuredImageUrl || contentImages.length > 0) {
+            await supabase
+              .from('articles')
+              .update({
+                featured_image_url: featuredImageUrl,
+                content_images: contentImages.length > 0 ? contentImages : null,
+                status: shouldPublish ? 'published' : 'draft',
+                published_at: shouldPublish ? new Date().toISOString() : null,
+              })
+              .eq('id', generateData.article.id);
+            console.log(`[${executionId}] Updated article ${generateData.article.id} with images`);
+          }
+        } else {
+          // Fallback: inserir se generate-article-structured não persistiu (não deveria acontecer)
+          console.log(`[${executionId}] WARN: Article not persisted by generate-article-structured, inserting...`);
+          
+          const { data: insertedArticle, error: insertError } = await supabase
+            .from('articles')
+            .insert({
+              blog_id: item.blog_id,
+              title: articleData.title,
+              slug: `${slug}-${Date.now()}`,
+              content: articleData.content,
+              excerpt: articleData.excerpt || articleData.meta_description || '',
+              meta_description: articleData.meta_description || articleData.excerpt || '',
+              faq: articleData.faq || [],
+              keywords: item.keywords || [],
+              featured_image_url: featuredImageUrl,
+              content_images: contentImages.length > 0 ? contentImages : null,
+              status: shouldPublish ? 'published' : 'draft',
+              published_at: shouldPublish ? new Date().toISOString() : null,
+              reading_time: articleData.reading_time || Math.ceil(articleData.content?.split(' ').length / 200) || 5
+            })
+            .select()
+            .single();
 
-        if (insertError) {
-          throw new Error(`DB_INSERT_FAILED: ${insertError.message}`);
+          if (insertError) {
+            throw new Error(`DB_INSERT_FAILED: ${insertError.message}`);
+          }
+          
+          article = insertedArticle;
+        }
+        
+        if (!article) {
+          throw new Error('ARTICLE_CREATE_FAILED: No article data after persistence');
         }
 
         // Update queue item to completed
