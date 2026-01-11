@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { getBlogPath } from "@/utils/blogUrl";
 import { Button } from "@/components/ui/button";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Menu, Search, ChevronDown } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -31,6 +32,10 @@ interface BlogHeaderProps {
   ctaText?: string | null;
   ctaUrl?: string | null;
   ctaType?: string | null;
+  // New props for parity with editor
+  showSearch?: boolean;
+  headerCtaText?: string | null;
+  headerCtaUrl?: string | null;
 }
 
 export const BlogHeader = ({ 
@@ -44,9 +49,13 @@ export const BlogHeader = ({
   ctaText,
   ctaUrl,
   ctaType,
+  showSearch = true,
+  headerCtaText,
+  headerCtaUrl,
 }: BlogHeaderProps) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const blogPath = getBlogPath({ slug: blogSlug, custom_domain: customDomain, domain_verified: domainVerified });
 
   useEffect(() => {
@@ -73,14 +82,18 @@ export const BlogHeader = ({
     }
   };
 
+  // Use header-specific CTA if available, otherwise fall back to general CTA
+  const effectiveCtaText = headerCtaText || ctaText;
+  const effectiveCtaUrl = headerCtaUrl || ctaUrl;
+
   const handleCtaClick = () => {
-    if (!ctaUrl) return;
+    if (!effectiveCtaUrl) return;
     
     if (ctaType === "whatsapp") {
-      const cleanNumber = ctaUrl.replace(/\D/g, "");
+      const cleanNumber = effectiveCtaUrl.replace(/\D/g, "");
       window.open(`https://wa.me/${cleanNumber}`, "_blank");
     } else {
-      window.open(ctaUrl, "_blank");
+      window.open(effectiveCtaUrl, "_blank");
     }
   };
 
@@ -88,8 +101,15 @@ export const BlogHeader = ({
     return `${blogPath}?categoria=${categorySlug}`;
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      window.location.href = `${blogPath}?busca=${encodeURIComponent(searchQuery.trim())}`;
+    }
+  };
+
   return (
-    <header className="border-b border-border/40 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+    <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         {/* Logo and Name */}
         <Link 
@@ -105,21 +125,21 @@ export const BlogHeader = ({
           ) : (
             <div 
               className="h-8 w-8 rounded flex items-center justify-center text-white font-bold text-sm"
-              style={{ backgroundColor: primaryColor || "hsl(var(--primary))" }}
+              style={{ backgroundColor: primaryColor || "#6366f1" }}
             >
               {blogName.charAt(0).toUpperCase()}
             </div>
           )}
-          <span className="font-heading font-semibold text-lg text-foreground">
+          <span className="font-heading font-semibold text-lg text-gray-900">
             {blogName}
           </span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-4">
           <Link 
             to={blogPath}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             Início
           </Link>
@@ -127,15 +147,15 @@ export const BlogHeader = ({
           {categories.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition-colors">
                   Categorias
                   <ChevronDown className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuContent align="end" className="min-w-[180px] bg-white border-gray-200">
                 {categories.map((category) => (
                   <DropdownMenuItem key={category.id} asChild>
-                    <Link to={getCategoryUrl(category.slug)}>
+                    <Link to={getCategoryUrl(category.slug)} className="text-gray-700 hover:text-gray-900">
                       {category.name}
                     </Link>
                   </DropdownMenuItem>
@@ -144,7 +164,21 @@ export const BlogHeader = ({
             </DropdownMenu>
           )}
 
-          {ctaText && ctaUrl && (
+          {/* Search field - conditional */}
+          {showSearch && (
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="search"
+                placeholder="Buscar..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-40 pl-9 text-sm bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-gray-300"
+              />
+            </form>
+          )}
+
+          {effectiveCtaText && effectiveCtaUrl && (
             <Button
               size="sm"
               onClick={handleCtaClick}
@@ -154,7 +188,7 @@ export const BlogHeader = ({
                 !primaryColor && "bg-primary"
               )}
             >
-              {ctaText}
+              {effectiveCtaText}
             </Button>
           )}
 
@@ -166,15 +200,29 @@ export const BlogHeader = ({
           <LanguageSwitcher />
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="text-gray-900">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[280px]">
+            <SheetContent side="right" className="w-[280px] bg-white">
               <nav className="flex flex-col gap-4 mt-8">
+                {/* Mobile Search */}
+                {showSearch && (
+                  <form onSubmit={handleSearch} className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      type="search"
+                      placeholder="Buscar..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 text-sm bg-white border-gray-200 text-gray-900"
+                    />
+                  </form>
+                )}
+
                 <Link 
                   to={blogPath}
-                  className="text-lg font-medium hover:text-primary transition-colors"
+                  className="text-lg font-medium text-gray-900 hover:text-gray-700 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Início
@@ -182,12 +230,12 @@ export const BlogHeader = ({
 
                 {categories.length > 0 && (
                   <div className="space-y-2">
-                    <span className="text-sm text-muted-foreground">Categorias</span>
+                    <span className="text-sm text-gray-500">Categorias</span>
                     {categories.map((category) => (
                       <Link
                         key={category.id}
                         to={getCategoryUrl(category.slug)}
-                        className="block pl-4 py-1 text-foreground hover:text-primary transition-colors"
+                        className="block pl-4 py-1 text-gray-700 hover:text-gray-900 transition-colors"
                         onClick={() => setMobileMenuOpen(false)}
                       >
                         {category.name}
@@ -196,7 +244,7 @@ export const BlogHeader = ({
                   </div>
                 )}
 
-                {ctaText && ctaUrl && (
+                {effectiveCtaText && effectiveCtaUrl && (
                   <Button
                     onClick={() => {
                       handleCtaClick();
@@ -208,7 +256,7 @@ export const BlogHeader = ({
                       !primaryColor && "bg-primary"
                     )}
                   >
-                    {ctaText}
+                    {effectiveCtaText}
                   </Button>
                 )}
               </nav>
