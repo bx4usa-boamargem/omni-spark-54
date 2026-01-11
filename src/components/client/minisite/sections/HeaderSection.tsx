@@ -23,12 +23,12 @@ export function HeaderSection({
   return (
     <div className="space-y-6">
       {/* Show Search Toggle */}
-      <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+      <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
-          <Search className="h-5 w-5 text-muted-foreground" />
+          <Search className="h-5 w-5 text-gray-500" />
           <div>
-            <p className="font-medium">Campo de Busca</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="font-medium text-gray-900">Campo de Busca</p>
+            <p className="text-sm text-gray-500">
               Exibir barra de pesquisa no cabeçalho
             </p>
           </div>
@@ -42,31 +42,33 @@ export function HeaderSection({
       {/* Header CTA */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <MousePointerClick className="h-4 w-4 text-muted-foreground" />
-          <Label className="text-base font-medium">Botão CTA do Cabeçalho</Label>
+          <MousePointerClick className="h-4 w-4 text-gray-500" />
+          <Label className="text-base font-medium text-gray-900">Botão CTA do Cabeçalho</Label>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm">Texto do Botão</Label>
+            <Label className="text-sm text-gray-700">Texto do Botão</Label>
             <Input
               placeholder="Ex: Fale Conosco"
               value={headerCtaText}
               onChange={(e) => onHeaderCtaTextChange(e.target.value)}
+              className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
             />
           </div>
           
           <div className="space-y-2">
-            <Label className="text-sm">Link do Botão</Label>
+            <Label className="text-sm text-gray-700">Link do Botão</Label>
             <Input
               placeholder="Ex: https://wa.me/5511999999999"
               value={headerCtaUrl}
               onChange={(e) => onHeaderCtaUrlChange(e.target.value)}
+              className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
             />
           </div>
         </div>
         
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-gray-500">
           💡 Para WhatsApp, use: https://wa.me/5511999999999
         </p>
       </div>

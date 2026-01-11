@@ -124,8 +124,8 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Editor do Site</h2>
-          <p className="text-muted-foreground text-sm">
+          <h2 className="text-2xl font-bold text-gray-900">Editor do Site</h2>
+          <p className="text-gray-500 text-sm">
             Configure a aparência do seu mini-site
           </p>
         </div>
@@ -145,15 +145,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
       {/* Accordion Sections */}
       <Accordion type="multiple" defaultValue={["identity", "design"]} className="space-y-4">
         {/* Brand Identity */}
-        <AccordionItem value="identity" className="border rounded-xl px-4">
+        <AccordionItem value="identity" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Marca e Identidade</p>
-                <p className="text-sm text-muted-foreground">Nome, cidade, logos</p>
+                <p className="font-semibold text-gray-900">Marca e Identidade</p>
+                <p className="text-sm text-gray-500">Nome, cidade, logos</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -175,15 +175,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         </AccordionItem>
 
         {/* Design */}
-        <AccordionItem value="design" className="border rounded-xl px-4">
+        <AccordionItem value="design" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                 <Paintbrush className="h-5 w-5 text-purple-500" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Design</p>
-                <p className="text-sm text-muted-foreground">Tema e cores</p>
+                <p className="font-semibold text-gray-900">Design</p>
+                <p className="text-sm text-gray-500">Tema e cores</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -200,15 +200,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         </AccordionItem>
 
         {/* Header */}
-        <AccordionItem value="header" className="border rounded-xl px-4">
+        <AccordionItem value="header" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                 <Layout className="h-5 w-5 text-blue-500" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Cabeçalho</p>
-                <p className="text-sm text-muted-foreground">Busca e CTA do header</p>
+                <p className="font-semibold text-gray-900">Cabeçalho</p>
+                <p className="text-sm text-gray-500">Busca e CTA do header</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -225,15 +225,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         </AccordionItem>
 
         {/* Hero */}
-        <AccordionItem value="hero" className="border rounded-xl px-4">
+        <AccordionItem value="hero" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                 <Sparkles className="h-5 w-5 text-amber-500" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Hero / Banner</p>
-                <p className="text-sm text-muted-foreground">Seção de destaque</p>
+                <p className="font-semibold text-gray-900">Hero / Banner</p>
+                <p className="text-sm text-gray-500">Seção de destaque</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -257,15 +257,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         </AccordionItem>
 
         {/* Contact Buttons */}
-        <AccordionItem value="contact" className="border rounded-xl px-4">
+        <AccordionItem value="contact" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
                 <MessageCircle className="h-5 w-5 text-green-500" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Botões de Contato</p>
-                <p className="text-sm text-muted-foreground">WhatsApp, telefone, etc.</p>
+                <p className="font-semibold text-gray-900">Botões de Contato</p>
+                <p className="text-sm text-gray-500">WhatsApp, telefone, etc.</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -278,15 +278,15 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         </AccordionItem>
 
         {/* Footer */}
-        <AccordionItem value="footer" className="border rounded-xl px-4">
+        <AccordionItem value="footer" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-gray-500/10 flex items-center justify-center">
                 <FileText className="h-5 w-5 text-gray-500" />
               </div>
               <div className="text-left">
-                <p className="font-semibold">Rodapé</p>
-                <p className="text-sm text-muted-foreground">Texto institucional</p>
+                <p className="font-semibold text-gray-900">Rodapé</p>
+                <p className="text-sm text-gray-500">Texto institucional</p>
               </div>
             </div>
           </AccordionTrigger>

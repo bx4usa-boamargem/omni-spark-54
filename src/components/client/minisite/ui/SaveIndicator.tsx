@@ -12,8 +12,8 @@ export function SaveIndicator({ status }: SaveIndicatorProps) {
     <div
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-        status === 'saving' && "bg-muted text-muted-foreground",
-        status === 'saved' && "bg-green-500/10 text-green-600 dark:text-green-400"
+        status === 'saving' && "bg-gray-100 text-gray-600",
+        status === 'saved' && "bg-green-100 text-green-700"
       )}
     >
       {status === 'saving' && (

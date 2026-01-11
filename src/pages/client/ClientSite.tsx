@@ -208,9 +208,10 @@ export default function ClientSite() {
 
       {/* Split View */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Editor - Left */}
-        <div className="w-[45%] overflow-y-auto p-6 border-r">
-          <MiniSiteEditor
+        {/* Editor - Left (Light Theme Forced) */}
+        <div className="w-[45%] overflow-y-auto p-6 border-r bg-white">
+          <div className="text-gray-900">
+            <MiniSiteEditor
             companyName={companyName}
             city={city}
             logoUrl={logoUrl}
@@ -255,7 +256,8 @@ export default function ClientSite() {
             onFooterTextChange={(v) => { setFooterText(v); markChanged(); }}
             onShowCategoriesFooterChange={(v) => { setShowCategoriesFooter(v); markChanged(); }}
             onContactButtonsChange={(v) => { setContactButtons(v); markChanged(); }}
-          />
+            />
+          </div>
         </div>
 
         {/* Preview - Right */}

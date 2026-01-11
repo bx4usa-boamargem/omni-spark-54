@@ -15,21 +15,21 @@ export function ThemeCard({ id, name, description, selected, onClick, preview }:
     <button
       onClick={onClick}
       className={cn(
-        "relative p-4 rounded-xl border-2 text-left transition-all duration-200 group",
+        "relative p-4 rounded-xl border-2 text-left transition-all duration-200 group bg-white",
         selected
-          ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-          : "border-border hover:border-primary/50 hover:bg-muted/50"
+          ? "border-primary shadow-lg shadow-primary/10"
+          : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
       )}
     >
       {/* Preview */}
       {preview && (
-        <div className="mb-3 rounded-lg overflow-hidden bg-muted aspect-video">
+        <div className="mb-3 rounded-lg overflow-hidden bg-gray-100 aspect-video">
           {preview}
         </div>
       )}
 
-      <div className="font-semibold text-foreground">{name}</div>
-      <div className="text-sm text-muted-foreground mt-1">{description}</div>
+      <div className="font-semibold text-gray-900">{name}</div>
+      <div className="text-sm text-gray-500 mt-1">{description}</div>
 
       {/* Selected indicator */}
       {selected && (
