@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { base64ToBlob } from "@/utils/imageUtils";
+import { base64ToBlob, uploadImageToStorage } from "@/utils/imageUtils";
 import type { ImagePrompt } from "./streamArticle";
 
 export interface ContentImage {
@@ -75,7 +75,7 @@ Modern photography style, natural lighting.
 16:9 aspect ratio. Clean, editorial quality.`;
 }
 
-async function generateSingleImage(prompt: string, context: string, theme: string): Promise<string | null> {
+async function generateSingleImage(prompt: string, context: string, theme: string): Promise<{ base64: string | null; publicUrl: string | null }> {
   try {
     // Use supabase.functions.invoke instead of direct fetch to avoid CORS issues
     const { data, error } = await supabase.functions.invoke('generate-image', {
@@ -89,14 +89,17 @@ async function generateSingleImage(prompt: string, context: string, theme: strin
 
     if (error) {
       console.error('Image generation failed:', error);
-      return null;
+      return { base64: null, publicUrl: null };
     }
 
-    // Return base64 data for further processing
-    return data?.imageBase64 || null;
+    // Return both base64 and publicUrl - prefer publicUrl if available
+    return {
+      base64: data?.imageBase64 || null,
+      publicUrl: data?.publicUrl || null
+    };
   } catch (error) {
     console.error('Error generating image:', error);
-    return null;
+    return { base64: null, publicUrl: null };
   }
 }
 
@@ -108,7 +111,7 @@ async function generateImageWithFallback(
   imagePrompt: ImagePrompt,
   theme: string,
   niche: string
-): Promise<string | null> {
+): Promise<{ base64: string | null; publicUrl: string | null }> {
   const context = imagePrompt.context;
   
   // Attempt 1: Contextualized prompt (if section details available)
@@ -116,7 +119,7 @@ async function generateImageWithFallback(
     console.log(`Attempt 1: Contextualized prompt for section ${imagePrompt.section_title}`);
     const contextualizedPrompt = buildContextualizedPrompt(imagePrompt, theme, niche);
     const result = await generateSingleImage(contextualizedPrompt, context, theme);
-    if (result) return result;
+    if (result.publicUrl || result.base64) return result;
     console.log('Contextualized prompt failed, trying fallback...');
   }
   
@@ -125,7 +128,7 @@ async function generateImageWithFallback(
     console.log(`Attempt 2: Fallback with visual_concept for ${context}`);
     const fallbackPrompt = buildFallbackPrompt(imagePrompt.visual_concept, theme, niche);
     const result = await generateSingleImage(fallbackPrompt, context, theme);
-    if (result) return result;
+    if (result.publicUrl || result.base64) return result;
     console.log('Visual concept fallback failed, trying generic...');
   }
   
@@ -133,7 +136,7 @@ async function generateImageWithFallback(
   console.log(`Attempt 3: Generic fallback for ${context}`);
   const genericPrompt = buildGenericFallbackPrompt(theme, niche);
   const result = await generateSingleImage(genericPrompt, context, theme);
-  if (result) return result;
+  if (result.publicUrl || result.base64) return result;
   
   // Attempt 4: Original prompt as last resort
   if (imagePrompt.prompt) {
@@ -141,38 +144,10 @@ async function generateImageWithFallback(
     return await generateSingleImage(imagePrompt.prompt, context, theme);
   }
   
-  return null;
+  return { base64: null, publicUrl: null };
 }
 
-async function uploadImageToStorage(base64Data: string, fileName: string): Promise<string | null> {
-  try {
-    // Convert base64 to blob using helper to avoid prefix duplication
-    const blob = await base64ToBlob(base64Data);
-
-    // Upload to Supabase storage
-    const { data, error } = await supabase.storage
-      .from('article-images')
-      .upload(fileName, blob, {
-        contentType: 'image/png',
-        upsert: true
-      });
-
-    if (error) {
-      console.error('Upload error:', error);
-      return null;
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('article-images')
-      .getPublicUrl(data.path);
-
-    return urlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    return null;
-  }
-}
+// uploadImageToStorage is now imported from imageUtils.ts
 
 export async function generateContentImages(
   imagePrompts: ImagePrompt[],
@@ -191,10 +166,14 @@ export async function generateContentImages(
   // Generate hero image first
   onProgress?.({ current: 1, total: totalImages, context: 'hero', status: 'generating' });
   
-  const heroBase64 = await generateSingleImage(heroPrompt, 'hero', theme);
-  if (heroBase64) {
+  const heroResult = await generateSingleImage(heroPrompt, 'hero', theme);
+  
+  // Prefer publicUrl, fallback to uploading base64
+  if (heroResult.publicUrl) {
+    heroImage = heroResult.publicUrl;
+  } else if (heroResult.base64) {
     const heroFileName = `hero-${Date.now()}.png`;
-    heroImage = await uploadImageToStorage(heroBase64, heroFileName);
+    heroImage = await uploadImageToStorage(heroResult.base64, heroFileName);
   }
   
   onProgress?.({ current: 1, total: totalImages, context: 'hero', status: heroImage ? 'done' : 'error' });
@@ -210,26 +189,30 @@ export async function generateContentImages(
     });
 
     // Use intelligent fallback for content images
-    const imageBase64 = await generateImageWithFallback(imagePrompt, theme, detectedNiche);
+    const imageResult = await generateImageWithFallback(imagePrompt, theme, detectedNiche);
     
-    if (imageBase64) {
+    // Prefer publicUrl, fallback to uploading base64
+    let uploadedUrl: string | null = null;
+    if (imageResult.publicUrl) {
+      uploadedUrl = imageResult.publicUrl;
+    } else if (imageResult.base64) {
       const fileName = `${imagePrompt.context}-${Date.now()}.png`;
-      const uploadedUrl = await uploadImageToStorage(imageBase64, fileName);
-      
-      if (uploadedUrl) {
-        contentImages.push({
-          context: imagePrompt.context as ContentImage['context'],
-          url: uploadedUrl,
-          after_section: imagePrompt.after_section
-        });
-      }
+      uploadedUrl = await uploadImageToStorage(imageResult.base64, fileName);
+    }
+    
+    if (uploadedUrl) {
+      contentImages.push({
+        context: imagePrompt.context as ContentImage['context'],
+        url: uploadedUrl,
+        after_section: imagePrompt.after_section
+      });
     }
 
     onProgress?.({ 
       current: currentImage + 1, 
       total: totalImages, 
       context: imagePrompt.context, 
-      status: contentImages.find(c => c.context === imagePrompt.context) ? 'done' : 'error'
+      status: uploadedUrl ? 'done' : 'error'
     });
     
     currentImage++;

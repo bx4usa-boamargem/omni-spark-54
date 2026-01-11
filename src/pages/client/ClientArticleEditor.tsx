@@ -14,7 +14,7 @@ import { ArticlePreview } from '@/components/ArticlePreview';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { GenerationProgress } from '@/components/seo/GenerationProgress';
 import { ImproveArticleDialog } from '@/components/editor/ImproveArticleDialog';
-import { extractImageUrl } from '@/utils/imageUtils';
+import { extractImageUrl, uploadImageToStorage, updateArticleImage } from '@/utils/imageUtils';
 import { 
   ArrowLeft, 
   Save, 
@@ -219,16 +219,33 @@ export default function ClientArticleEditor() {
       
       const { data: coverResult, error: coverError } = await supabase.functions.invoke('generate-image', {
         body: {
-          articleTitle: articleData.title,  // Principal - sempre enviar
-          articleTheme: articleData.title,  // Fallback para compatibilidade
+          articleTitle: articleData.title,
+          articleTheme: articleData.title,
           context: 'cover',
+          blog_id: blog.id,
+          article_id: existingArticleId, // If editing, persist directly
         }
       });
       
-      if (!coverError && coverResult?.imageUrl) {
-        setFeaturedImage(coverResult.imageUrl);
-      } else if (!coverError && coverResult?.imageBase64) {
-        setFeaturedImage(extractImageUrl(coverResult));
+      if (!coverError) {
+        // Prefer publicUrl from storage, fallback to base64
+        let coverUrl = coverResult?.publicUrl || null;
+        
+        if (!coverUrl && coverResult?.imageBase64) {
+          // Fallback: upload manually if edge function didn't
+          const fileName = `cover-${existingArticleId || Date.now()}.png`;
+          coverUrl = await uploadImageToStorage(coverResult.imageBase64, fileName);
+        }
+        
+        if (coverUrl) {
+          setFeaturedImage(coverUrl);
+          console.log('[generateImages] Cover image URL:', coverUrl);
+          
+          // If we have an existing article but edge function didn't persist, do it now
+          if (existingArticleId && !coverResult?.publicUrl) {
+            await updateArticleImage(existingArticleId, 'cover', coverUrl);
+          }
+        }
       }
       
       // Generate content images from prompts
@@ -247,22 +264,40 @@ export default function ClientArticleEditor() {
           body: {
             prompt: prompt.prompt,
             context: prompt.context,
-            articleTitle: articleData.title,  // Principal - sempre enviar
-            articleTheme: articleData.title,  // Fallback para compatibilidade
+            articleTitle: articleData.title,
+            articleTheme: articleData.title,
+            blog_id: blog.id,
           }
         });
         
-        if (!imgError && (imgResult?.imageUrl || imgResult?.imageBase64)) {
-          newContentImages.push({
-            context: prompt.context,
-            url: extractImageUrl(imgResult) || '',
-            after_section: prompt.after_section
-          });
+        if (!imgError) {
+          let imgUrl = imgResult?.publicUrl || null;
+          
+          if (!imgUrl && imgResult?.imageBase64) {
+            // Fallback: upload manually
+            const fileName = `${prompt.context}-${Date.now()}.png`;
+            imgUrl = await uploadImageToStorage(imgResult.imageBase64, fileName);
+          }
+          
+          if (imgUrl) {
+            newContentImages.push({
+              context: prompt.context,
+              url: imgUrl,
+              after_section: prompt.after_section
+            });
+          }
         }
       }
       
       setContentImages(newContentImages);
-      toast.success(`${newContentImages.length + (featuredImage ? 1 : 0)} imagens geradas!`);
+      
+      // Persist content images if we have an existing article
+      if (existingArticleId && newContentImages.length > 0) {
+        await updateArticleImage(existingArticleId, 'content', '', newContentImages);
+      }
+      
+      const totalGenerated = newContentImages.length + (featuredImage ? 1 : 0);
+      toast.success(`${totalGenerated} imagens geradas e salvas!`);
       
     } catch (error) {
       console.error('Error generating images:', error);
@@ -283,15 +318,32 @@ export default function ClientArticleEditor() {
         
         const { data, error } = await supabase.functions.invoke('generate-image', {
           body: {
-            articleTitle: title,  // Principal - sempre enviar
-            articleTheme: title,  // Fallback para compatibilidade
+            articleTitle: title,
+            articleTheme: title,
             context: 'cover',
+            blog_id: blog?.id,
+            article_id: existingArticleId, // Persist directly if editing
           }
         });
         
-        if (!error && (data?.imageUrl || data?.imageBase64)) {
-          setFeaturedImage(extractImageUrl(data));
-          toast.success('Imagem de capa regenerada!');
+        if (!error) {
+          let coverUrl = data?.publicUrl || null;
+          
+          if (!coverUrl && data?.imageBase64) {
+            const fileName = `cover-${existingArticleId || Date.now()}.png`;
+            coverUrl = await uploadImageToStorage(data.imageBase64, fileName);
+          }
+          
+          if (coverUrl) {
+            setFeaturedImage(coverUrl);
+            
+            // Persist if edge function didn't
+            if (existingArticleId && !data?.publicUrl) {
+              await updateArticleImage(existingArticleId, 'cover', coverUrl);
+            }
+            
+            toast.success('Imagem de capa regenerada!');
+          }
         }
       } else if (typeof index === 'number' && contentImages[index]) {
         const img = contentImages[index];
@@ -300,19 +352,32 @@ export default function ClientArticleEditor() {
         const { data, error } = await supabase.functions.invoke('generate-image', {
           body: {
             context: img.context,
-            articleTitle: title,  // Principal - sempre enviar
-            articleTheme: title,  // Fallback para compatibilidade
+            articleTitle: title,
+            articleTheme: title,
+            blog_id: blog?.id,
           }
         });
         
-        if (!error && (data?.imageUrl || data?.imageBase64)) {
-          const newImages = [...contentImages];
-          newImages[index] = {
-            ...img,
-            url: extractImageUrl(data) || ''
-          };
-          setContentImages(newImages);
-          toast.success('Imagem regenerada!');
+        if (!error) {
+          let imgUrl = data?.publicUrl || null;
+          
+          if (!imgUrl && data?.imageBase64) {
+            const fileName = `${img.context}-${Date.now()}.png`;
+            imgUrl = await uploadImageToStorage(data.imageBase64, fileName);
+          }
+          
+          if (imgUrl) {
+            const newImages = [...contentImages];
+            newImages[index] = { ...img, url: imgUrl };
+            setContentImages(newImages);
+            
+            // Persist content images
+            if (existingArticleId) {
+              await updateArticleImage(existingArticleId, 'content', '', newImages);
+            }
+            
+            toast.success('Imagem regenerada!');
+          }
         }
       }
     } catch (error) {

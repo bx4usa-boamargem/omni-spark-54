@@ -14,6 +14,7 @@ interface ImageRequest {
   targetAudience?: string;
   user_id?: string;
   blog_id?: string;
+  article_id?: string;  // Se fornecido, faz upload e persiste no DB
 }
 
 // Generate a normalized hash for cache lookup
@@ -68,7 +69,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { prompt, context, articleTitle, articleTheme, targetAudience, user_id, blog_id }: ImageRequest = await req.json();
+    const { prompt, context, articleTitle, articleTheme, targetAudience, user_id, blog_id, article_id }: ImageRequest = await req.json();
 
     // Aceitar articleTitle OU articleTheme para máxima compatibilidade
     const effectiveTitle = articleTitle || articleTheme || '';
@@ -284,6 +285,62 @@ NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustraçõe
 
     const estimatedCost = 0.02;
 
+    // === UPLOAD TO STORAGE AND PERSIST ===
+    let publicUrl: string | null = null;
+    let storagePath: string | null = null;
+    
+    // Upload to storage if we have an article_id or just generate a unique filename
+    try {
+      const timestamp = Date.now();
+      const fileName = article_id 
+        ? `${effectiveContext}-${article_id}-${timestamp}.png`
+        : `${effectiveContext}-${blog_id || 'standalone'}-${timestamp}.png`;
+      
+      // Decode base64 and upload
+      const imageBytes = Uint8Array.from(atob(imageData), c => c.charCodeAt(0));
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('article-images')
+        .upload(fileName, imageBytes, {
+          contentType: 'image/png',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error(`[${requestId}] Storage upload failed:`, uploadError);
+      } else {
+        storagePath = uploadData.path;
+        const { data: urlData } = supabase.storage
+          .from('article-images')
+          .getPublicUrl(uploadData.path);
+        publicUrl = urlData.publicUrl;
+        console.log(`[${requestId}] Image uploaded to storage: ${publicUrl}`);
+      }
+    } catch (uploadError) {
+      console.error(`[${requestId}] Upload error:`, uploadError);
+    }
+
+    // Persist to article if article_id provided and is cover/hero
+    if (article_id && publicUrl && (effectiveContext === 'cover' || effectiveContext === 'hero')) {
+      try {
+        const { error: updateError } = await supabase
+          .from('articles')
+          .update({ 
+            featured_image_url: publicUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', article_id);
+
+        if (updateError) {
+          console.error(`[${requestId}] Article update failed:`, updateError);
+        } else {
+          console.log(`[${requestId}] Article ${article_id} updated with featured_image_url`);
+        }
+      } catch (dbError) {
+        console.error(`[${requestId}] DB error:`, dbError);
+      }
+    }
+
     // Log consumption if user_id provided
     if (user_id) {
       try {
@@ -297,7 +354,7 @@ NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustraçõe
           output_tokens: 0,
           images_generated: 1,
           estimated_cost_usd: estimatedCost,
-          metadata: { context: effectiveContext, articleTitle: effectiveTitle },
+          metadata: { context: effectiveContext, articleTitle: effectiveTitle, publicUrl },
         });
         console.log("Consumption logged for image generation");
       } catch (logError) {
@@ -312,7 +369,7 @@ NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustraçõe
         cache_type: "image",
         content_hash: contentHash,
         prompt_text: cacheKey,
-        response_data: { imageBase64: imageData },
+        response_data: { imageBase64: imageData, publicUrl },
         model_used: imageModel,
         tokens_saved: 0,
         cost_saved_usd: estimatedCost,
@@ -330,7 +387,10 @@ NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustraçõe
       JSON.stringify({
         success: true,
         imageBase64: imageData,
-        context: effectiveContext
+        publicUrl,        // NEW: Direct storage URL
+        storagePath,      // NEW: Storage path
+        context: effectiveContext,
+        requestId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
