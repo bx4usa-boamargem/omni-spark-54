@@ -7,13 +7,23 @@ import { BlogHeader } from "@/components/public/BlogHeader";
 import { BlogFooter } from "@/components/public/BlogFooter";
 import { DynamicTrackingScripts } from "@/components/public/DynamicTrackingScripts";
 import { ArticleCard } from "@/components/public/ArticleCard";
+import { WhatsAppFloatButton } from "@/components/public/WhatsAppFloatButton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { getBlogUrl } from "@/utils/blogUrl";
 
 interface Category {
   id: string;
   name: string;
   slug: string;
+}
+
+interface ContactButton {
+  id: string;
+  button_type: string;
+  value: string;
+  label: string | null;
+  sort_order: number | null;
 }
 
 interface Blog {
@@ -36,14 +46,20 @@ interface Blog {
   banner_title: string | null;
   banner_description: string | null;
   banner_enabled: boolean | null;
+  banner_image_url: string | null;
   brand_description: string | null;
   show_powered_by: boolean | null;
   footer_text: string | null;
   tracking_config: Record<string, unknown> | null;
   script_head: string | null;
   script_body: string | null;
+  // New fields for parity with editor
+  city: string | null;
+  show_search: boolean | null;
+  header_cta_text: string | null;
+  header_cta_url: string | null;
+  show_categories_footer: boolean | null;
 }
-
 
 interface Article {
   id: string;
@@ -61,6 +77,7 @@ const PublicBlog = () => {
   const [blog, setBlog] = useState<Blog | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [contactButtons, setContactButtons] = useState<ContactButton[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +113,17 @@ const PublicBlog = () => {
           setCategories(categoriesData);
         }
 
+        // Fetch contact buttons
+        const { data: contactButtonsData } = await supabase
+          .from("blog_contact_buttons")
+          .select("*")
+          .eq("blog_id", blogData.id)
+          .order("sort_order", { ascending: true });
+
+        if (contactButtonsData) {
+          setContactButtons(contactButtonsData);
+        }
+
         // Fetch published articles
         const { data: articlesData, error: articlesError } = await supabase
           .from("articles")
@@ -120,10 +148,22 @@ const PublicBlog = () => {
     fetchBlogAndArticles();
   }, [blogSlug, t]);
 
+  const handleCtaClick = (url?: string | null, type?: string | null) => {
+    if (!url) return;
+    
+    if (type === "whatsapp") {
+      const cleanNumber = url.replace(/\D/g, "");
+      window.open(`https://wa.me/${cleanNumber}`, "_blank");
+    } else {
+      window.open(url, "_blank");
+    }
+  };
+
+  // Loading state - always light theme
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="border-b border-border/40 p-4">
+      <div className="min-h-screen bg-white">
+        <div className="border-b border-gray-200 p-4 bg-white">
           <Skeleton className="h-8 w-40" />
         </div>
         <div className="container mx-auto px-4 py-12">
@@ -139,14 +179,15 @@ const PublicBlog = () => {
     );
   }
 
+  // Error state - always light theme
   if (error || !blog) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="font-heading text-4xl font-bold text-foreground mb-4">
+          <h1 className="font-heading text-4xl font-bold text-gray-900 mb-4">
             {t('blog.notFound')}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-gray-600">
             {t('blog.notFoundDescription')}
           </p>
         </div>
@@ -155,9 +196,14 @@ const PublicBlog = () => {
   }
 
   const canonicalUrl = getBlogUrl(blog);
+  const primaryColor = blog.primary_color || '#6366f1';
+  const secondaryColor = blog.secondary_color || '#8b5cf6';
+  
+  // Find WhatsApp button for floating button
+  const whatsappButton = contactButtons.find(btn => btn.button_type === 'whatsapp');
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
       <DynamicTrackingScripts
         trackingConfig={blog.tracking_config as Record<string, string> | null}
         scriptHead={blog.script_head}
@@ -176,55 +222,89 @@ const PublicBlog = () => {
         blogName={blog.name}
         blogSlug={blog.slug}
         logoUrl={blog.logo_url}
-        primaryColor={blog.primary_color || undefined}
+        primaryColor={primaryColor}
         customDomain={blog.custom_domain}
         domainVerified={blog.domain_verified}
         ctaText={blog.cta_text}
         ctaUrl={blog.cta_url}
         ctaType={blog.cta_type}
+        showSearch={blog.show_search ?? true}
+        headerCtaText={blog.header_cta_text}
+        headerCtaUrl={blog.header_cta_url}
       />
 
+      {/* Hero Section - Two modes based on banner_enabled */}
+      {blog.banner_enabled ? (
+        // Hero with full gradient (banner enabled)
+        <section
+          className="py-16 md:py-24 relative overflow-hidden"
+          style={{
+            background: blog.banner_image_url 
+              ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${blog.banner_image_url}) center/cover`
+              : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+          }}
+        >
+          <div className="container mx-auto px-4 text-center relative z-10">
+            <h1 className="font-heading text-4xl md:text-5xl font-bold text-white mb-4">
+              {blog.banner_title || blog.name}
+            </h1>
+            {blog.banner_description && (
+              <p className="text-white/90 text-lg md:text-xl max-w-2xl mx-auto mb-6">
+                {blog.banner_description}
+              </p>
+            )}
+            {blog.cta_text && blog.cta_url && (
+              <Button
+                onClick={() => handleCtaClick(blog.cta_url, blog.cta_type)}
+                className="bg-white text-gray-900 hover:bg-gray-100 px-8 py-3"
+              >
+                {blog.cta_text}
+              </Button>
+            )}
+          </div>
+        </section>
+      ) : (
+        // Simple hero with light gradient (banner disabled)
+        <section 
+          className="py-12 md:py-16"
+          style={{
+            background: `linear-gradient(135deg, ${primaryColor}15, ${secondaryColor}10)`,
+          }}
+        >
+          <div className="container mx-auto px-4 text-center">
+            {blog.logo_url && (
+              <img
+                src={blog.logo_url}
+                alt={blog.name}
+                className="h-16 w-16 object-contain mx-auto mb-6 rounded-xl"
+              />
+            )}
+            <h1 className="font-heading text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              {blog.name}
+            </h1>
+            {blog.description && (
+              <p className="text-gray-600 text-lg md:text-xl max-w-2xl mx-auto">
+                {blog.description}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
-      {/* Hero Section */}
-      <section 
-        className="py-16 md:py-24"
-        style={{
-          background: `linear-gradient(135deg, ${blog.primary_color || "hsl(var(--primary))"}10, ${blog.secondary_color || "hsl(var(--primary))"}05)`,
-        }}
-      >
-        <div className="container mx-auto px-4 text-center">
-          {blog.logo_url && (
-            <img
-              src={blog.logo_url}
-              alt={blog.name}
-              className="h-16 w-16 object-contain mx-auto mb-6 rounded-xl"
-            />
-          )}
-          <h1 className="font-heading text-4xl md:text-5xl font-bold text-foreground mb-4">
-            {blog.name}
-          </h1>
-          {blog.description && (
-            <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto">
-              {blog.description}
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* Articles Grid */}
-      <main className="container mx-auto px-4 py-12">
+      {/* Articles Grid - Always light theme */}
+      <main className="container mx-auto px-4 py-12 flex-1 bg-gray-50">
         {articles.length === 0 ? (
           <div className="text-center py-16">
-            <h2 className="font-heading text-2xl font-semibold text-foreground mb-2">
+            <h2 className="font-heading text-2xl font-semibold text-gray-900 mb-2">
               {t('blog.noArticles')}
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-gray-600">
               {t('blog.noArticlesDescription')}
             </p>
           </div>
         ) : (
           <>
-            <h2 className="font-heading text-2xl font-bold text-foreground mb-8">
+            <h2 className="font-heading text-2xl font-bold text-gray-900 mb-8">
               {t('blog.recentArticles')}
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -238,16 +318,40 @@ const PublicBlog = () => {
                   category={article.category}
                   publishedAt={article.published_at}
                   featuredImageUrl={article.featured_image_url}
-                  primaryColor={blog.primary_color || undefined}
+                  primaryColor={primaryColor}
                   customDomain={blog.custom_domain}
                   domainVerified={blog.domain_verified}
                 />
               ))}
             </div>
-
           </>
         )}
       </main>
+
+      {/* Pre-footer CTA Banner */}
+      {blog.cta_text && blog.cta_url && (
+        <section className="container mx-auto px-4 py-8">
+          <div
+            className="p-12 rounded-2xl text-center"
+            style={{
+              background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+            }}
+          >
+            <h3 className="text-2xl md:text-3xl font-bold text-white mb-3">
+              {blog.banner_title || "Pronto para começar?"}
+            </h3>
+            <p className="text-white/90 mb-6 max-w-xl mx-auto">
+              {blog.banner_description || "Entre em contato conosco hoje mesmo."}
+            </p>
+            <Button
+              onClick={() => handleCtaClick(blog.cta_url, blog.cta_type)}
+              className="bg-white text-gray-900 hover:bg-gray-100 px-8 py-3"
+            >
+              {blog.cta_text}
+            </Button>
+          </div>
+        </section>
+      )}
 
       <BlogFooter
         blogName={blog.name}
@@ -256,7 +360,7 @@ const PublicBlog = () => {
         brandDescription={blog.brand_description}
         logoUrl={blog.logo_url}
         logoNegativeUrl={blog.logo_negative_url}
-        primaryColor={blog.primary_color || undefined}
+        primaryColor={primaryColor}
         categories={categories}
         bannerTitle={blog.banner_title}
         bannerDescription={blog.banner_description}
@@ -267,7 +371,14 @@ const PublicBlog = () => {
         footerText={blog.footer_text}
         customDomain={blog.custom_domain}
         domainVerified={blog.domain_verified}
+        contactButtons={contactButtons}
+        showCategoriesFooter={blog.show_categories_footer ?? true}
       />
+
+      {/* WhatsApp Floating Button */}
+      {whatsappButton?.value && (
+        <WhatsAppFloatButton phoneNumber={whatsappButton.value} />
+      )}
     </div>
   );
 };

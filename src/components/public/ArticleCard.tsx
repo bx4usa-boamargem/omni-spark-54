@@ -46,9 +46,9 @@ export const ArticleCard = ({
       to={articlePath}
       className="group block"
     >
-      <article className="bg-card border border-border/50 rounded-xl overflow-hidden hover:shadow-lg hover:border-border transition-all duration-300 h-full flex flex-col">
+      <article className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-300 h-full flex flex-col">
         {featuredImageUrl ? (
-          <div className="aspect-video overflow-hidden bg-muted">
+          <div className="aspect-video overflow-hidden bg-gray-100">
             <img
               src={featuredImageUrl}
               alt={title}
@@ -58,12 +58,12 @@ export const ArticleCard = ({
           </div>
         ) : (
           <div 
-            className="aspect-video flex items-center justify-center"
-            style={{ backgroundColor: `${primaryColor}15` || "hsl(var(--primary) / 0.1)" }}
+            className="aspect-video flex items-center justify-center bg-gray-100"
+            style={{ backgroundColor: `${primaryColor}15` }}
           >
             <span 
               className="text-4xl font-heading font-bold opacity-30"
-              style={{ color: primaryColor || "hsl(var(--primary))" }}
+              style={{ color: primaryColor || "#6366f1" }}
             >
               {title.charAt(0).toUpperCase()}
             </span>
@@ -76,25 +76,25 @@ export const ArticleCard = ({
               variant="secondary" 
               className="w-fit mb-3 text-xs"
               style={{ 
-                backgroundColor: `${primaryColor}15` || "hsl(var(--primary) / 0.1)",
-                color: primaryColor || "hsl(var(--primary))"
+                backgroundColor: `${primaryColor}15`,
+                color: primaryColor || "#6366f1"
               }}
             >
               {category}
             </Badge>
           )}
           
-          <h2 className="font-heading font-semibold text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-2">
+          <h2 className="font-heading font-semibold text-lg text-gray-900 group-hover:text-primary transition-colors line-clamp-2 mb-2">
             {title}
           </h2>
           
           {excerpt && (
-            <p className="text-muted-foreground text-sm line-clamp-2 mb-4 flex-1">
+            <p className="text-gray-600 text-sm line-clamp-2 mb-4 flex-1">
               {excerpt}
             </p>
           )}
           
-          <div className="flex items-center gap-4 text-xs text-muted-foreground mt-auto pt-3 border-t border-border/30">
+          <div className="flex items-center gap-4 text-xs text-gray-500 mt-auto pt-3 border-t border-gray-200">
             {publishedAt && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
