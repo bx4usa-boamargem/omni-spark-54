@@ -316,3 +316,143 @@ html {
     transition: opacity 0.15s ease !important;
   }
 }
+
+/* ================================================
+   CLIENT SUBACCOUNT PREMIUM STYLES
+   ================================================ */
+
+/* Dark gradient background for client pages */
+.client-bg {
+  background: linear-gradient(135deg, 
+    hsl(277 76% 8%) 0%, 
+    hsl(220 50% 12%) 50%, 
+    hsl(240 30% 8%) 100%
+  );
+  min-height: 100vh;
+}
+
+/* Glass card effect */
+.client-card {
+  background: hsla(0, 0%, 100%, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsla(0, 0%, 100%, 0.1);
+  box-shadow: 0 8px 32px hsla(0, 0%, 0%, 0.4);
+  border-radius: 1rem;
+}
+
+.client-card-glow {
+  box-shadow: 
+    0 8px 32px hsla(0, 0%, 0%, 0.4),
+    0 0 40px hsla(277, 76%, 40%, 0.2);
+}
+
+.client-card-glow-success {
+  box-shadow: 
+    0 8px 32px hsla(0, 0%, 0%, 0.4),
+    0 0 30px hsla(142, 76%, 36%, 0.25);
+}
+
+.client-card-glow-warning {
+  box-shadow: 
+    0 8px 32px hsla(0, 0%, 0%, 0.4),
+    0 0 30px hsla(38, 92%, 50%, 0.25);
+}
+
+/* Client sidebar glass effect */
+.client-sidebar {
+  background: hsla(0, 0%, 8%, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid hsla(0, 0%, 100%, 0.08);
+}
+
+/* Client nav item styles */
+.client-nav-item {
+  @apply transition-all duration-200 rounded-xl px-4 py-3;
+}
+
+.client-nav-item:hover {
+  background: hsla(277, 76%, 40%, 0.15);
+}
+
+.client-nav-item.active {
+  background: linear-gradient(135deg, 
+    hsla(277, 76%, 40%, 0.25) 0%, 
+    hsla(24, 100%, 50%, 0.15) 100%
+  );
+  box-shadow: 0 0 20px hsla(277, 76%, 40%, 0.2);
+}
+
+/* Client button primary with gradient */
+.client-btn-primary {
+  @apply font-semibold;
+  background: linear-gradient(135deg, 
+    hsl(277 76% 40%) 0%, 
+    hsl(24 100% 50%) 100%
+  );
+  color: white;
+  box-shadow: 0 4px 20px hsla(277, 76%, 40%, 0.4);
+  transition: all 0.3s ease;
+}
+
+.client-btn-primary:hover {
+  box-shadow: 0 6px 30px hsla(277, 76%, 40%, 0.6);
+  transform: translateY(-2px);
+}
+
+/* Status badges */
+.client-status-active {
+  background: linear-gradient(135deg, 
+    hsla(142, 76%, 36%, 0.2) 0%, 
+    hsla(142, 76%, 45%, 0.1) 100%
+  );
+  border: 1px solid hsla(142, 76%, 36%, 0.4);
+  color: hsl(142 76% 50%);
+}
+
+.client-status-paused {
+  background: linear-gradient(135deg, 
+    hsla(38, 92%, 50%, 0.2) 0%, 
+    hsla(38, 92%, 60%, 0.1) 100%
+  );
+  border: 1px solid hsla(38, 92%, 50%, 0.4);
+  color: hsl(38 92% 55%);
+}
+
+/* Pulse animation for status */
+@keyframes client-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.client-pulse {
+  animation: client-pulse 2s ease-in-out infinite;
+}
+
+/* Floating animation for hero elements */
+@keyframes client-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.client-float {
+  animation: client-float 4s ease-in-out infinite;
+}
+
+/* Glow text effect */
+.client-text-glow {
+  text-shadow: 0 0 20px hsla(277, 76%, 50%, 0.5);
+}
+
+/* Mobile adjustments for client */
+@media (max-width: 768px) {
+  .client-card {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  .client-float {
+    animation: none;
+  }
+}
