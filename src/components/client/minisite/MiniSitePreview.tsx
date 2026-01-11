@@ -146,7 +146,7 @@ export function MiniSitePreview({
       <div className="flex-1 overflow-auto p-4 bg-muted/50">
         <div
           className={cn(
-            "bg-white rounded-xl shadow-lg overflow-hidden mx-auto transition-all duration-300",
+            "bg-white rounded-xl shadow-lg overflow-hidden mx-auto transition-all duration-300 relative",
             viewMode === "desktop" ? "w-full max-w-4xl" : "w-[375px]"
           )}
           style={{ minHeight: "600px" }}
@@ -427,6 +427,36 @@ export function MiniSitePreview({
               </p>
             </div>
           </footer>
+
+          {/* WhatsApp Floating Button */}
+          {(() => {
+            const whatsappButton = contactButtons.find(btn => btn.button_type === 'whatsapp');
+            if (!whatsappButton?.value) return null;
+            
+            return (
+              <div className="absolute bottom-4 right-4 z-10 group">
+                <div className="relative">
+                  {/* Pulse effect */}
+                  <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-30" />
+                  
+                  {/* Button */}
+                  <a
+                    href={`https://wa.me/${whatsappButton.value.replace(/\D/g, '')}?text=${encodeURIComponent('Olá! Vi seu blog e gostaria de saber mais.')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105"
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    {viewMode === "desktop" && (
+                      <span className="font-medium text-sm pr-1">
+                        WhatsApp
+                      </span>
+                    )}
+                  </a>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
