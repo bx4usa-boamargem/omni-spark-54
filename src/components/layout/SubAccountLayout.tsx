@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, PenSquare, Globe, Zap, Building2, User, Menu, LogOut } from 'lucide-react';
+import { Home, PenSquare, Globe, Zap, Building2, User, Menu, LogOut, BarChart3, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
@@ -21,9 +21,14 @@ const navItems: NavItem[] = [
   { icon: Home, label: 'Início', path: '/client/dashboard' },
   { icon: PenSquare, label: 'Criar Artigo', path: '/client/create' },
   { icon: Globe, label: 'Meu Mini-Site', path: '/client/site' },
+  { icon: BarChart3, label: 'Desempenho', path: '/client/performance' },
   { icon: Zap, label: 'Automação', path: '/client/automation' },
   { icon: Building2, label: 'Minha Empresa', path: '/client/company' },
   { icon: User, label: 'Minha Conta', path: '/client/account' },
+];
+
+const integrationItems: NavItem[] = [
+  { icon: Search, label: 'Google Search Console', path: '/client/integrations/gsc' },
 ];
 
 export function SubAccountLayout({ children }: SubAccountLayoutProps) {
@@ -81,6 +86,18 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
         ))}
       </nav>
 
+      {/* Integrações Section */}
+      <div className="px-4 pb-2 border-t border-white/10 pt-4">
+        <span className="px-4 text-xs text-gray-500 uppercase tracking-wider font-medium">
+          Integrações
+        </span>
+        <div className="mt-2 space-y-1">
+          {integrationItems.map((item) => (
+            <NavButton key={item.path} item={item} />
+          ))}
+        </div>
+      </div>
+
       {/* Logout */}
       <div className="p-4 border-t border-white/10">
         <button
@@ -96,13 +113,13 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
 
   return (
     <div className="min-h-screen client-bg flex">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 client-sidebar flex-col fixed h-full z-40">
+      {/* Desktop Sidebar - visible on md (768px+) */}
+      <aside className="hidden md:flex w-64 client-sidebar flex-col fixed h-full z-40">
         <SidebarContent />
       </aside>
 
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 client-sidebar z-50 flex items-center justify-between px-4 border-b border-white/10">
+      {/* Mobile Header - visible below md (< 768px) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 client-sidebar z-50 flex items-center justify-between px-4 border-b border-white/10">
         <OmniseenLogo size="md" />
         
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -118,9 +135,9 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64">
-        <div className="pt-16 lg:pt-0 min-h-screen">
-          <div className="p-4 lg:p-8 max-w-5xl mx-auto">
+      <main className="flex-1 md:ml-64">
+        <div className="pt-16 md:pt-0 min-h-screen">
+          <div className="p-4 md:p-8 max-w-5xl mx-auto">
             {children}
           </div>
         </div>
