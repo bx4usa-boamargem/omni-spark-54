@@ -66,6 +66,8 @@ import ClientAutomation from "./pages/client/ClientAutomation";
 import ClientCompany from "./pages/client/ClientCompany";
 import ClientAccount from "./pages/client/ClientAccount";
 import ClientSEO from "./pages/client/ClientSEO";
+import ClientPerformance from "./pages/client/ClientPerformance";
+import ClientGSCIntegration from "./pages/client/ClientGSCIntegration";
 
 const queryClient = new QueryClient();
 
@@ -136,10 +138,12 @@ const ClientRoutes = () => (
         <Route path="dashboard" element={<ClientDashboard />} />
         <Route path="create" element={<ClientCreateArticle />} />
         <Route path="site" element={<ClientSite />} />
+        <Route path="performance" element={<ClientPerformance />} />
         <Route path="automation" element={<ClientAutomation />} />
         <Route path="company" element={<ClientCompany />} />
         <Route path="account" element={<ClientAccount />} />
         <Route path="seo" element={<ClientSEO />} />
+        <Route path="integrations/gsc" element={<ClientGSCIntegration />} />
         <Route path="*" element={<Navigate to="/client/dashboard" replace />} />
       </Routes>
     </SubAccountLayout>
