@@ -1,7 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Building2, Paintbrush, Layout, Sparkles, MessageCircle, FileText } from "lucide-react";
-import { PremiumBrandKitSection } from "./sections/PremiumBrandKitSection";
-import { BrandIdentitySection } from "./sections/BrandIdentitySection";
+import { Paintbrush, Layout, Sparkles, MessageCircle, FileText } from "lucide-react";
+import { UnifiedBrandSection } from "./sections/UnifiedBrandSection";
 import { DesignSection } from "./sections/DesignSection";
 import { HeaderSection } from "./sections/HeaderSection";
 import { HeroSection } from "./sections/HeroSection";
@@ -132,15 +131,18 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
         <SaveIndicator status={saveStatus} />
       </div>
 
-      {/* Premium Brand Kit */}
-      <PremiumBrandKitSection
+      {/* Unified Brand Section - Single consolidated module */}
+      <UnifiedBrandSection
+        companyName={companyName}
+        city={city}
         logoUrl={logoUrl}
         logoNegativeUrl={logoNegativeUrl}
         faviconUrl={faviconUrl}
         primaryColor={primaryColor}
         secondaryColor={secondaryColor}
-        companyName={companyName}
         userId={userId}
+        onCompanyNameChange={onCompanyNameChange}
+        onCityChange={onCityChange}
         onLogoUrlChange={onLogoUrlChange}
         onLogoNegativeUrlChange={onLogoNegativeUrlChange}
         onFaviconUrlChange={onFaviconUrlChange}
@@ -149,38 +151,8 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
       />
 
       {/* Accordion Sections */}
-      <Accordion type="multiple" defaultValue={["identity", "design"]} className="space-y-4">
-        {/* Brand Identity */}
-        <AccordionItem value="identity" className="border border-gray-200 rounded-xl px-4 bg-white">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div className="text-left">
-                <p className="font-semibold text-gray-900">Marca e Identidade</p>
-                <p className="text-sm text-gray-500">Nome, cidade, logos</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-6">
-            <BrandIdentitySection
-              companyName={companyName}
-              city={city}
-              logoUrl={logoUrl}
-              logoNegativeUrl={logoNegativeUrl}
-              faviconUrl={faviconUrl}
-              userId={userId}
-              onCompanyNameChange={onCompanyNameChange}
-              onCityChange={onCityChange}
-              onLogoUrlChange={onLogoUrlChange}
-              onLogoNegativeUrlChange={onLogoNegativeUrlChange}
-              onFaviconUrlChange={onFaviconUrlChange}
-            />
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Design */}
+      <Accordion type="multiple" defaultValue={["design"]} className="space-y-4">
+        {/* Design (Theme Only) */}
         <AccordionItem value="design" className="border border-gray-200 rounded-xl px-4 bg-white">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
@@ -189,18 +161,14 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
               </div>
               <div className="text-left">
                 <p className="font-semibold text-gray-900">Design</p>
-                <p className="text-sm text-gray-500">Tema e cores</p>
+                <p className="text-sm text-gray-500">Escolha o estilo do seu site</p>
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-6">
             <DesignSection
               layoutTemplate={layoutTemplate}
-              primaryColor={primaryColor}
-              secondaryColor={secondaryColor}
               onLayoutChange={onLayoutChange}
-              onPrimaryColorChange={onPrimaryColorChange}
-              onSecondaryColorChange={onSecondaryColorChange}
             />
           </AccordionContent>
         </AccordionItem>

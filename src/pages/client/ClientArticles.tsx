@@ -503,13 +503,13 @@ export default function ClientArticles() {
                       Visualizar
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => handleEdit(article.id)}>
+                  <DropdownMenuItem onClick={() => navigate(`/client/articles/${article.id}/edit?rewrite=true`)}>
                     <Sparkles className="h-4 w-4 mr-2" />
                     Reescrever com IA
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleEdit(article.id)}>
+                  <DropdownMenuItem onClick={() => navigate(`/client/articles/${article.id}/edit?tab=images`)}>
                     <ImagePlus className="h-4 w-4 mr-2" />
-                    {article.featured_image_url ? 'Regenerar Imagem' : 'Gerar Imagem'}
+                    Gerenciar Imagens
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {article.status !== 'archived' && (
