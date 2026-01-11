@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Globe, ExternalLink, Plus, Trash2, Loader2, Save, Image as ImageIcon } from 'lucide-react';
+import { Globe, ExternalLink, Plus, Trash2, Loader2, Save, Image as ImageIcon, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getBlogUrl } from '@/utils/blogUrl';
 
 interface ContactButton {
   id?: string;
@@ -141,9 +142,27 @@ export default function ClientSite() {
     setContactButtons(updated);
   };
 
+  const [copied, setCopied] = useState(false);
+
+  const getBlogUrlSafe = () => {
+    if (!blog) return '';
+    return getBlogUrl(blog);
+  };
+
   const openSite = () => {
-    if (blog?.slug) {
-      window.open(`https://omniseen.app/${blog.slug}`, '_blank');
+    const url = getBlogUrlSafe();
+    if (url) {
+      window.open(url, '_blank');
+    }
+  };
+
+  const copyBlogUrl = () => {
+    const url = getBlogUrlSafe();
+    if (url) {
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success('Link copiado!');
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -168,11 +187,34 @@ export default function ClientSite() {
             Configure a aparência do seu blog
           </p>
         </div>
-        <Button onClick={openSite} variant="outline" className="gap-2">
-          <ExternalLink className="h-4 w-4" />
-          Ver meu site
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={copyBlogUrl} variant="outline" size="icon" title="Copiar link">
+            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+          </Button>
+          <Button onClick={openSite} className="gap-2">
+            <ExternalLink className="h-4 w-4" />
+            Abrir Meu Blog
+          </Button>
+        </div>
       </div>
+
+      {/* Blog URL Display */}
+      {blog && (
+        <Card className="bg-muted/50">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-muted-foreground mb-1">Endereço do seu blog:</p>
+                <p className="font-mono text-sm truncate">{getBlogUrlSafe()}</p>
+              </div>
+              <Button onClick={openSite} variant="secondary" size="sm" className="gap-2 shrink-0">
+                <ExternalLink className="h-3 w-3" />
+                Abrir
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Identity */}
       <Card>
