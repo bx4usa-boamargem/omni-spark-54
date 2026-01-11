@@ -21,6 +21,8 @@ export interface ArticleData {
   faq: Array<{ question: string; answer: string }>;
   reading_time?: number;
   image_prompts?: ImagePrompt[];
+  featured_image_url?: string | null;
+  content_images?: Array<{ context: string; url: string; after_section: number }>;
 }
 
 interface EditorialTemplate {
