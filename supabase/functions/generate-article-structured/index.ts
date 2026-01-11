@@ -1261,78 +1261,53 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
     console.log(`Images block validated successfully: cover + ${imagesBlock.content_images.length} content images`);
     
     // =========================================================================
-    // CONTRATO EDITORIAL ABSOLUTO - VALIDAÇÕES OBRIGATÓRIAS
+    // CONTRATO EDITORIAL ABSOLUTO - VALIDAÇÕES COM AUTO-CORREÇÃO
+    // =========================================================================
+    // PRINCÍPIO: Sempre corrigir automaticamente, NUNCA lançar erro por H1
     // =========================================================================
     
     const MANDATORY_FINAL_SECTION = '## Próximo passo';
-    const contentText = articleData.content as string;
-    const contentLines = contentText.split('\n');
+    let workingContent = (articleData.content as string) || '';
+    const title = (articleData.title as string) || 'Artigo';
     
-    // REGRA 3: Validar estrutura H1 obrigatória (H1 → linha em branco → parágrafo)
-    // Remove leading empty lines and find the first non-empty line
-    let firstNonEmptyIndex = 0;
-    while (firstNonEmptyIndex < contentLines.length && contentLines[firstNonEmptyIndex].trim() === '') {
-      firstNonEmptyIndex++;
-    }
+    // REGRA 3: Garantir que o artigo começa com H1
+    // Remove leading empty lines
+    workingContent = workingContent.replace(/^\s*\n+/, '');
     
-    // Get the lines starting from the first non-empty line
-    const trimmedLines = contentLines.slice(firstNonEmptyIndex);
+    // Check if first line is H1
+    const firstLine = workingContent.split('\n')[0]?.trim() || '';
+    const startsWithH1 = firstLine.startsWith('# ') && !firstLine.startsWith('## ');
     
-    if (trimmedLines.length >= 3) {
-      const line1 = trimmedLines[0];
-      const line2 = trimmedLines[1];
-      const line3 = trimmedLines[2];
+    if (!startsWithH1) {
+      console.log(`AUTO-FIX H1: First line is "${firstLine.substring(0, 50)}..." - prepending title as H1`);
       
-      // Verificar H1 na primeira linha (# mas não ##)
-      const trimmedLine1 = line1.trim();
-      if (!trimmedLine1.startsWith('# ') || trimmedLine1.startsWith('## ')) {
-        console.error('AI_OUTPUT_INVALID: Article must start with H1. First line:', JSON.stringify(trimmedLine1.substring(0, 100)));
-        // Instead of throwing, try to auto-fix by prepending H1 if title exists
-        const title = articleData.title as string;
-        if (title && trimmedLine1 && !trimmedLine1.startsWith('#')) {
-          console.log('AUTO-FIX: Content missing H1 header, will prepend title');
-          articleData.content = `# ${title}\n\n${contentText.trim()}`;
-          console.log('✅ H1 structure auto-fixed: prepended title as H1');
-        } else if (!trimmedLine1.startsWith('# ')) {
-          throw new Error('AI_OUTPUT_INVALID: O artigo DEVE começar com H1 (# Título). Formato atual inválido.');
-        }
-      } else {
-        // Verificar linha em branco após H1 (only if H1 was present)
-        if (line2.trim() !== '') {
-          console.warn('EDITORIAL WARNING: H1 should be followed by blank line, auto-fixing...');
-          // Auto-fix: insert blank line after H1
-          const h1Line = trimmedLines[0];
-          const restOfContent = trimmedLines.slice(1).join('\n');
-          articleData.content = `${h1Line}\n\n${restOfContent.trim()}`;
-          console.log('✅ H1 structure auto-fixed: added blank line after H1');
-        } else if (line3.trim() === '' || line3.trim().startsWith('#')) {
-          console.warn('EDITORIAL WARNING: Third line should be first paragraph');
-          // This is acceptable but log it
-        } else {
-          console.log('✅ H1 structure validated: H1 → blank → paragraph');
-        }
+      // Remove any existing H1 that might be somewhere else in the content
+      workingContent = workingContent.replace(/^# .+\n\n?/m, '');
+      
+      // Prepend the title as H1
+      workingContent = `# ${title}\n\n${workingContent.trim()}`;
+      console.log('✅ H1 auto-fixed: prepended title as H1');
+    } else {
+      // Check if there's a blank line after H1
+      const contentLines = workingContent.split('\n');
+      if (contentLines.length > 1 && contentLines[1].trim() !== '') {
+        console.log('AUTO-FIX H1: Adding blank line after H1');
+        contentLines.splice(1, 0, '');
+        workingContent = contentLines.join('\n');
       }
-    } else if (trimmedLines.length > 0) {
-      // Very short content - just verify it starts with H1
-      const line1 = trimmedLines[0].trim();
-      if (!line1.startsWith('# ') || line1.startsWith('## ')) {
-        const title = articleData.title as string;
-        if (title) {
-          console.log('AUTO-FIX: Short content missing H1, prepending title');
-          articleData.content = `# ${title}\n\n${contentText.trim()}`;
-        }
-      }
+      console.log('✅ H1 structure validated');
     }
     
-    // Re-check content after auto-fix
-    const finalContentLines = (articleData.content as string).split('\n');
-    const finalFirstNonEmpty = finalContentLines.findIndex(l => l.trim() !== '');
-    if (finalFirstNonEmpty >= 0) {
-      const finalLine1 = finalContentLines[finalFirstNonEmpty].trim();
-      if (!finalLine1.startsWith('# ') || finalLine1.startsWith('## ')) {
-        console.error('AI_OUTPUT_INVALID: Article still does not start with H1 after auto-fix attempt');
-        throw new Error('AI_OUTPUT_INVALID: O artigo DEVE começar com H1 (# Título). Formato atual inválido após tentativa de correção.');
-      }
+    // Apply H1 fixes to articleData
+    articleData.content = workingContent;
+    
+    // Final verification (soft - just log, don't throw)
+    const verifyFirstLine = workingContent.split('\n')[0]?.trim() || '';
+    if (!verifyFirstLine.startsWith('# ') || verifyFirstLine.startsWith('## ')) {
+      console.warn(`WARNING: H1 still not correct after fix: "${verifyFirstLine.substring(0, 50)}"`);
+      // Force it one more time
+      articleData.content = `# ${title}\n\n${workingContent.trim()}`;
+      console.log('✅ H1 force-fixed with title');
     }
     
     // H1 validation complete - continue with CTA validation
