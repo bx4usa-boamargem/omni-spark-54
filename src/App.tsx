@@ -192,6 +192,9 @@ const AppRoutes = () => {
       {/* Redirect root to dashboard */}
       <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
       
+      {/* Landing page for dev/preview access */}
+      <Route path="/landing" element={<Index />} />
+      
       {/* Auth routes */}
       <Route path="/auth" element={<Auth />} />
       <Route path="/reset-password" element={<ResetPassword />} />
