@@ -25,22 +25,22 @@ function ColorChip({ color, label }: ColorChipProps) {
   return (
     <button
       onClick={copyColor}
-      className="group flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+      className="group flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
       title={`Copiar ${color}`}
     >
       <div
-        className="w-8 h-8 rounded-lg border border-border shadow-sm"
+        className="w-8 h-8 rounded-lg border border-gray-200 shadow-sm"
         style={{ backgroundColor: color }}
       />
       <div className="text-left">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-mono font-medium">{color}</p>
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-sm font-mono font-medium text-gray-900">{color}</p>
       </div>
       <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
         {copied ? (
           <Check className="h-4 w-4 text-green-500" />
         ) : (
-          <Copy className="h-4 w-4 text-muted-foreground" />
+          <Copy className="h-4 w-4 text-gray-400" />
         )}
       </div>
     </button>
@@ -79,7 +79,7 @@ export function ColorPaletteDisplay({ primaryColor, secondaryColor }: ColorPalet
 
       {/* Palette preview */}
       <div className="space-y-2">
-        <p className="text-xs text-muted-foreground font-medium">Paleta gerada</p>
+        <p className="text-xs text-gray-500 font-medium">Paleta gerada</p>
         <div className="flex gap-1 rounded-lg overflow-hidden">
           {shades.map((shade) => (
             <div

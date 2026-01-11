@@ -24,8 +24,8 @@ export function FooterSection({
     <div className="space-y-6">
       {/* Brand Description */}
       <div className="space-y-2">
-        <Label className="flex items-center gap-2">
-          <FileText className="h-4 w-4" />
+        <Label className="flex items-center gap-2 text-gray-700">
+          <FileText className="h-4 w-4 text-gray-500" />
           Texto Institucional
         </Label>
         <Textarea
@@ -33,19 +33,20 @@ export function FooterSection({
           value={brandDescription}
           onChange={(e) => onBrandDescriptionChange(e.target.value)}
           rows={3}
+          className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-gray-500">
           Este texto aparece no rodapé do site, ao lado do logo.
         </p>
       </div>
 
       {/* Show Categories Toggle */}
-      <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+      <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
-          <FolderOpen className="h-5 w-5 text-muted-foreground" />
+          <FolderOpen className="h-5 w-5 text-gray-500" />
           <div>
-            <p className="font-medium">Categorias no Rodapé</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="font-medium text-gray-900">Categorias no Rodapé</p>
+            <p className="text-sm text-gray-500">
               Exibir lista de categorias do blog
             </p>
           </div>
@@ -58,8 +59,8 @@ export function FooterSection({
 
       {/* Footer Text */}
       <div className="space-y-2">
-        <Label className="flex items-center gap-2">
-          <Copyright className="h-4 w-4" />
+        <Label className="flex items-center gap-2 text-gray-700">
+          <Copyright className="h-4 w-4 text-gray-500" />
           Texto de Copyright (opcional)
         </Label>
         <Textarea
@@ -67,6 +68,7 @@ export function FooterSection({
           value={footerText}
           onChange={(e) => onFooterTextChange(e.target.value)}
           rows={2}
+          className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
         />
       </div>
     </div>

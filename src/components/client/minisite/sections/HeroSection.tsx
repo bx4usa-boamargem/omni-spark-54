@@ -39,12 +39,12 @@ export function HeroSection({
   return (
     <div className="space-y-6">
       {/* Enable Banner Toggle */}
-      <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+      <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
-          <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <Sparkles className="h-5 w-5 text-gray-500" />
           <div>
-            <p className="font-medium">Seção Hero</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="font-medium text-gray-900">Seção Hero</p>
+            <p className="text-sm text-gray-500">
               Banner destacado no topo do site
             </p>
           </div>
@@ -59,21 +59,22 @@ export function HeroSection({
         <>
           {/* Title */}
           <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Type className="h-4 w-4" />
+            <Label className="flex items-center gap-2 text-gray-700">
+              <Type className="h-4 w-4 text-gray-500" />
               Título do Hero
             </Label>
             <Input
               placeholder="Ex: Soluções completas em limpeza"
               value={bannerTitle}
               onChange={(e) => onBannerTitleChange(e.target.value)}
+              className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
+            <Label className="flex items-center gap-2 text-gray-700">
+              <MessageSquare className="h-4 w-4 text-gray-500" />
               Subtítulo / Descrição
             </Label>
             <Textarea
@@ -81,37 +82,40 @@ export function HeroSection({
               value={bannerDescription}
               onChange={(e) => onBannerDescriptionChange(e.target.value)}
               rows={2}
+              className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
             />
           </div>
 
           {/* CTA */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <MousePointerClick className="h-4 w-4" />
+              <Label className="flex items-center gap-2 text-gray-700">
+                <MousePointerClick className="h-4 w-4 text-gray-500" />
                 Texto do Botão CTA
               </Label>
               <Input
                 placeholder="Ex: Solicitar Orçamento"
                 value={ctaText}
                 onChange={(e) => onCtaTextChange(e.target.value)}
+                className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
               />
             </div>
             
             <div className="space-y-2">
-              <Label>Link do Botão</Label>
+              <Label className="text-gray-700">Link do Botão</Label>
               <Input
                 placeholder="https://..."
                 value={ctaUrl}
                 onChange={(e) => onCtaUrlChange(e.target.value)}
+                className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
               />
             </div>
           </div>
 
           {/* Background Image */}
           <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Image className="h-4 w-4" />
+            <Label className="flex items-center gap-2 text-gray-700">
+              <Image className="h-4 w-4 text-gray-500" />
               Imagem de Fundo (opcional)
             </Label>
             <ImageUpload

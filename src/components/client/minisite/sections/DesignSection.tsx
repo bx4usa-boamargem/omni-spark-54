@@ -42,8 +42,8 @@ export function DesignSection({
     <div className="space-y-6">
       {/* Theme Selection */}
       <div className="space-y-3">
-        <Label className="flex items-center gap-2">
-          <Paintbrush className="h-4 w-4" />
+        <Label className="flex items-center gap-2 text-gray-700">
+          <Paintbrush className="h-4 w-4 text-gray-500" />
           Tema do Site
         </Label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -63,36 +63,36 @@ export function DesignSection({
       {/* Colors */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Cor Primária</Label>
+          <Label className="text-gray-700">Cor Primária</Label>
           <div className="flex items-center gap-3">
             <input
               type="color"
               value={primaryColor}
               onChange={(e) => onPrimaryColorChange(e.target.value)}
-              className="w-12 h-12 rounded-lg border cursor-pointer"
+              className="w-12 h-12 rounded-lg border border-gray-200 cursor-pointer"
             />
             <Input
               value={primaryColor}
               onChange={(e) => onPrimaryColorChange(e.target.value)}
-              className="font-mono"
+              className="font-mono bg-white border-gray-200 text-gray-900"
               placeholder="#6366f1"
             />
           </div>
         </div>
         
         <div className="space-y-2">
-          <Label>Cor Secundária</Label>
+          <Label className="text-gray-700">Cor Secundária</Label>
           <div className="flex items-center gap-3">
             <input
               type="color"
               value={secondaryColor}
               onChange={(e) => onSecondaryColorChange(e.target.value)}
-              className="w-12 h-12 rounded-lg border cursor-pointer"
+              className="w-12 h-12 rounded-lg border border-gray-200 cursor-pointer"
             />
             <Input
               value={secondaryColor}
               onChange={(e) => onSecondaryColorChange(e.target.value)}
-              className="font-mono"
+              className="font-mono bg-white border-gray-200 text-gray-900"
               placeholder="#8b5cf6"
             />
           </div>
@@ -100,8 +100,8 @@ export function DesignSection({
       </div>
 
       {/* Color Preview */}
-      <div className="p-4 rounded-xl border bg-muted/30">
-        <p className="text-sm text-muted-foreground mb-3">Preview do gradiente</p>
+      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <p className="text-sm text-gray-500 mb-3">Preview do gradiente</p>
         <div 
           className="h-16 rounded-lg"
           style={{

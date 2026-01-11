@@ -65,22 +65,22 @@ export function ContactButtonsSection({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-gray-500">
         Adicione formas de seus clientes entrarem em contato. Os botões aparecerão no rodapé do site.
       </p>
 
       {contactButtons.length === 0 ? (
-        <div className="p-8 text-center border-2 border-dashed rounded-lg text-muted-foreground">
+        <div className="p-8 text-center border-2 border-dashed border-gray-300 rounded-lg text-gray-500">
           <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p className="font-medium">Nenhum botão adicionado</p>
-          <p className="text-sm">Clique abaixo para adicionar</p>
+          <p className="font-medium text-gray-700">Nenhum botão adicionado</p>
+          <p className="text-sm text-gray-500">Clique abaixo para adicionar</p>
         </div>
       ) : (
         <div className="space-y-3">
           {contactButtons.map((button, index) => (
             <div
               key={index}
-              className="flex items-center gap-2 p-4 border rounded-lg bg-card"
+              className="flex items-center gap-2 p-4 border border-gray-200 rounded-lg bg-white"
             >
               {/* Reorder buttons */}
               <div className="flex flex-col gap-0.5">
@@ -88,7 +88,7 @@ export function ContactButtonsSection({
                   type="button"
                   onClick={() => moveButton(index, 'up')}
                   disabled={index === 0}
-                  className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
                 >
                   <ChevronUp className="h-3 w-3" />
                 </button>
@@ -96,7 +96,7 @@ export function ContactButtonsSection({
                   type="button"
                   onClick={() => moveButton(index, 'down')}
                   disabled={index === contactButtons.length - 1}
-                  className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
                 >
                   <ChevronDown className="h-3 w-3" />
                 </button>
@@ -108,7 +108,7 @@ export function ContactButtonsSection({
                   value={button.button_type}
                   onValueChange={(value) => updateButton(index, 'button_type', value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -129,7 +129,7 @@ export function ContactButtonsSection({
                 placeholder={BUTTON_TYPES.find(t => t.value === button.button_type)?.placeholder}
                 value={button.value}
                 onChange={(e) => updateButton(index, 'value', e.target.value)}
-                className="flex-1"
+                className="flex-1 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
               />
 
               {/* Delete */}
@@ -149,7 +149,7 @@ export function ContactButtonsSection({
       <Button
         variant="outline"
         onClick={addButton}
-        className="w-full gap-2"
+        className="w-full gap-2 border-gray-200 text-gray-700 hover:bg-gray-50"
       >
         <Plus className="h-4 w-4" />
         Adicionar botão de contato

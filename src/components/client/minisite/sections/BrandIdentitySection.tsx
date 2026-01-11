@@ -34,27 +34,29 @@ export function BrandIdentitySection({
     <div className="space-y-6">
       {/* Company Name */}
       <div className="space-y-2">
-        <Label className="flex items-center gap-2">
-          <Building2 className="h-4 w-4" />
+        <Label className="flex items-center gap-2 text-gray-700">
+          <Building2 className="h-4 w-4 text-gray-500" />
           Nome da Empresa
         </Label>
         <Input
           placeholder="Ex: Limpeza Express"
           value={companyName}
           onChange={(e) => onCompanyNameChange(e.target.value)}
+          className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
         />
       </div>
 
       {/* City */}
       <div className="space-y-2">
-        <Label className="flex items-center gap-2">
-          <MapPin className="h-4 w-4" />
+        <Label className="flex items-center gap-2 text-gray-700">
+          <MapPin className="h-4 w-4 text-gray-500" />
           Cidade / Região
         </Label>
         <Input
           placeholder="Ex: São Paulo, SP"
           value={city}
           onChange={(e) => onCityChange(e.target.value)}
+          className="bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
         />
       </div>
 
