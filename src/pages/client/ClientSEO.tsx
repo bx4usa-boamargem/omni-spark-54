@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBlog } from '@/hooks/useBlog';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { calculateSEOScore, SEOScoreResult } from '@/utils/seoScore';
 import { SEOScoreGauge } from '@/components/seo/SEOScoreGauge';
+import { SEOOptimizationDrawer } from '@/components/seo/SEOOptimizationDrawer';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -17,8 +19,10 @@ import {
   Lightbulb,
   CheckCircle2,
   AlertCircle,
-  XCircle
+  XCircle,
+  Sparkles
 } from 'lucide-react';
+import { OptimizationType } from '@/config/seoOptimizationTypes';
 
 interface ArticleSEO {
   id: string;
@@ -38,11 +42,16 @@ interface SEOTip {
 export default function ClientSEO() {
   const navigate = useNavigate();
   const { blog } = useBlog();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<ArticleSEO[]>([]);
   const [aggregatedScore, setAggregatedScore] = useState(0);
   const [aggregatedDetails, setAggregatedDetails] = useState<SEOScoreResult['details'] | null>(null);
   const [tips, setTips] = useState<SEOTip[]>([]);
+  
+  // Optimization drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerType, setDrawerType] = useState<OptimizationType | null>(null);
 
   const fetchSEOData = useCallback(async (blogId: string) => {
     try {
@@ -190,14 +199,26 @@ export default function ClientSEO() {
     return { icon: XCircle, color: 'text-red-500', label: 'Precisa atenção' };
   };
 
-  const metrics = [
+  const metrics: Array<{ key: OptimizationType; icon: typeof Type; label: string; description: string }> = [
     { key: 'title', icon: Type, label: 'Títulos', description: 'Seus títulos estão atraentes?' },
     { key: 'meta', icon: FileText, label: 'Descrições', description: 'Google mostra isso nos resultados' },
     { key: 'keywords', icon: Hash, label: 'Palavras-chave', description: 'Termos que seu público busca' },
     { key: 'content', icon: AlignLeft, label: 'Conteúdo', description: 'Artigos completos e úteis' },
     { key: 'density', icon: Search, label: 'Densidade', description: 'Palavras-chave bem distribuídas' },
     { key: 'image', icon: Image, label: 'Imagens', description: 'Imagens chamam atenção' }
-  ] as const;
+  ];
+
+  const handleOpenOptimization = (type: OptimizationType) => {
+    setDrawerType(type);
+    setDrawerOpen(true);
+  };
+
+  const handleOptimizationComplete = () => {
+    // Refresh SEO data after optimization
+    if (blog?.id) {
+      fetchSEOData(blog.id);
+    }
+  };
 
   if (loading) {
     return (
@@ -257,7 +278,7 @@ export default function ClientSEO() {
             return (
               <div 
                 key={metric.key}
-                className="client-card p-4 hover:border-purple-500/30 transition-colors"
+                className="client-card p-4 hover:border-purple-500/30 transition-all group"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="p-2 rounded-lg bg-purple-500/20">
@@ -281,6 +302,37 @@ export default function ClientSEO() {
                     style={{ width: `${(detail.score / detail.max) * 100}%` }}
                   />
                 </div>
+                
+                {/* AI Optimization Button */}
+                {(detail.score / detail.max) < 0.8 && metric.key !== 'image' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-4 gap-2 border-purple-500/30 text-purple-600 dark:text-purple-400 
+                               hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:border-purple-500/50
+                               opacity-0 group-hover:opacity-100 transition-all duration-300
+                               hover:shadow-lg hover:shadow-purple-500/20"
+                    onClick={() => handleOpenOptimization(metric.key)}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Melhorar com IA
+                  </Button>
+                )}
+                
+                {/* Special button for images - always visible if needs improvement */}
+                {metric.key === 'image' && (detail.score / detail.max) < 0.8 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-4 gap-2 border-amber-500/30 text-amber-600 dark:text-amber-400 
+                               hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:border-amber-500/50
+                               transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/20"
+                    onClick={() => handleOpenOptimization('image')}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Gerar Imagens
+                  </Button>
+                )}
               </div>
             );
           })}
@@ -330,6 +382,19 @@ export default function ClientSEO() {
           Voltar ao Início
         </Button>
       </div>
+
+      {/* SEO Optimization Drawer */}
+      {blog && user && (
+        <SEOOptimizationDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          type={drawerType}
+          articles={articles}
+          blogId={blog.id}
+          userId={user.id}
+          onComplete={handleOptimizationComplete}
+        />
+      )}
     </div>
   );
 }
