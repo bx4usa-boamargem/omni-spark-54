@@ -122,35 +122,51 @@ serve(async (req) => {
       }
     }
 
-    // Build enhanced prompt based on ClickOne editorial guidelines
-    const contextDescriptionsMap: Record<string, string> = {
-      hero: 'Uma imagem principal impactante que captura a essência do artigo',
-      cover: 'Uma imagem de capa profissional e atraente para o artigo',
-      problem: 'Uma cena que mostra claramente o problema enfrentado pelo público-alvo',
-      pain: 'Uma representação visual da dor ou frustração causada pelo problema',
-      solution: 'Uma imagem que demonstra a solução de forma profissional e moderna',
-      result: 'Uma cena positiva mostrando o resultado após implementar a solução'
+    // ============================================================================
+    // PROMPT EDITORIAL PROFISSIONAL - DIRETOR DE FOTOGRAFIA
+    // Padrão: Estilo Forbes / Harvard Business Review
+    // ============================================================================
+    
+    const contextInstructions: Record<string, string> = {
+      hero: 'Representar o tema principal do artigo de forma impactante e memorável.',
+      cover: 'Representar o tema principal do artigo como uma capa editorial premium.',
+      problem: 'Mostrar a dor, frustração ou dificuldade real enfrentada pelo público-alvo.',
+      pain: 'Representar visualmente a frustração, o obstáculo ou o desconforto real.',
+      solution: 'Mostrar ação, organização, tecnologia ou melhoria sendo implementada.',
+      result: 'Mostrar progresso, alívio, crescimento ou sucesso real e tangível.'
     };
 
     const enhancedPrompt = `
-Crie uma imagem fotorrealista e profissional para um artigo de blog.
+Você é um diretor de fotografia editorial para blogs profissionais.
+Crie uma imagem fotográfica realista que represente VISUALMENTE o conteúdo descrito.
 
-Tema do artigo: ${effectiveTitle}
+REGRAS OBRIGATÓRIAS:
+- A imagem deve ter relação direta com o texto fornecido.
+- Não gerar cenas genéricas ou "stock photo fake".
+- Pessoas devem ser diferentes entre si (proibido rostos duplicados).
+- Evitar simetria artificial.
+- Estilo: fotografia editorial profissional (Forbes, Harvard Business Review).
+- Mostrar situações reais do nicho do artigo.
+- Nunca criar imagens que não façam sentido com o conteúdo.
+- Cada imagem deve ilustrar a IDEIA CENTRAL daquele trecho.
+
+CONTEXTO DO ARTIGO:
+Tema: ${effectiveTitle}
 ${targetAudience ? `Público-alvo: ${targetAudience}` : ''}
-Contexto visual: ${contextDescriptionsMap[effectiveContext] || effectiveContext}
 
-Descrição específica: ${finalPrompt}
+TIPO DE IMAGEM (${effectiveContext.toUpperCase()}):
+${contextInstructions[effectiveContext] || 'Ilustrar o conceito de forma profissional e realista.'}
 
-DIRETRIZES OBRIGATÓRIAS:
-- Pessoas reais em contextos profissionais (não ilustrações ou caricaturas)
-- Ambiente de trabalho moderno e contemporâneo
-- Iluminação natural e profissional
-- Expressões autênticas e situações realistas
-- Cores harmoniosas que transmitam profissionalismo
-- Composição equilibrada adequada para web
-- Alta qualidade, nítida e bem definida
+DESCRIÇÃO ESPECÍFICA:
+${finalPrompt}
+
+REQUISITOS TÉCNICOS:
 - Aspecto 16:9 para web
+- Alta resolução, nítida e bem definida
+- Iluminação natural e profissional
+- Composição equilibrada
 
+A imagem deve parecer uma fotografia real capturada no mundo real, não uma ilustração artificial.
 NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustrações genéricas.
 `.trim();
 
