@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useBlog } from '@/hooks/useBlog';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -7,24 +7,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Rocket, 
   Eye, 
   Pause, 
   Calendar, 
   Loader2, 
-  ArrowRight,
   Sparkles,
   FileText,
   Clock,
   AlertTriangle,
   CheckCircle2,
   CalendarClock,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Settings2,
+  Package
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useLocaleFormat } from '@/hooks/useLocaleFormat';
+import { QueueTab } from '@/components/client/automation/QueueTab';
 
 type AutomationMode = 'manual' | 'suggest' | 'auto';
 
@@ -76,8 +79,12 @@ const MODE_CONFIG = {
 
 export default function ClientAutomation() {
   const { blog } = useBlog();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { formatDateShort } = useLocaleFormat();
+  
+  const initialTab = searchParams.get('tab') || 'config';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<AutomationMode>('manual');
@@ -86,6 +93,11 @@ export default function ClientAutomation() {
   const [queueStats, setQueueStats] = useState<QueueStats>({ total: 0, pending: 0, generated: 0 });
   const [usageData, setUsageData] = useState({ articles_generated: 0, images_generated: 0 });
   const [nextPublication, setNextPublication] = useState<Date | null>(null);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     if (!blog?.id) return;
@@ -322,265 +334,271 @@ export default function ClientAutomation() {
         </p>
       </div>
 
-      {/* Contextual Message */}
-      <Card className={cn("border", contextMessage.bg)}>
-        <CardContent className="py-4">
-          <div className="flex items-center gap-3">
-            <ContextIcon className={cn("h-5 w-5 shrink-0", contextMessage.color)} />
-            <p className="text-sm text-foreground">{contextMessage.message}</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="config" className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            Configurações
+          </TabsTrigger>
+          <TabsTrigger value="queue" className="gap-2">
+            <Package className="h-4 w-4" />
+            Fila de Produção
+            {queueStats.pending > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5">
+                {queueStats.pending}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Mode Selection */}
-      <Card className="client-card overflow-hidden">
-        <CardHeader>
-          <CardTitle>Modo de Operação</CardTitle>
-          <CardDescription>Como você quer que sua máquina trabalhe?</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RadioGroup
-            value={mode}
-            onValueChange={(v) => handleModeChange(v as AutomationMode)}
-            className="space-y-4"
-            disabled={saving}
-          >
-            {/* Auto Mode - DOMINANT */}
-            <label
-              className={cn(
-                "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-300",
-                mode === 'auto'
-                  ? "bg-gradient-to-br from-primary/20 via-primary/10 to-accent/10 ring-2 ring-primary shadow-lg shadow-primary/20 scale-[1.02]"
-                  : "bg-muted/30 hover:bg-muted/50 border border-border",
-              )}
-            >
-              <RadioGroupItem value="auto" id="auto" className="mt-1" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Rocket className={cn(
-                    "h-5 w-5",
-                    mode === 'auto' ? "text-primary animate-pulse" : "text-muted-foreground"
-                  )} />
-                  <span className="font-semibold text-lg text-foreground">{MODE_CONFIG.auto.title}</span>
-                  <Badge className="bg-gradient-to-r from-primary to-accent text-white border-0">
-                    {MODE_CONFIG.auto.badge}
-                  </Badge>
-                </div>
-                <p className="text-muted-foreground mt-1">{MODE_CONFIG.auto.description}</p>
-                <p className={cn(
-                  "text-xs mt-2",
-                  mode === 'auto' ? "text-primary" : "text-muted-foreground/70"
-                )}>
-                  {MODE_CONFIG.auto.microcopy}
-                </p>
+        {/* Config Tab */}
+        <TabsContent value="config" className="space-y-6 mt-6">
+          {/* Contextual Message */}
+          <Card className={cn("border", contextMessage.bg)}>
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <ContextIcon className={cn("h-5 w-5 shrink-0", contextMessage.color)} />
+                <p className="text-sm text-foreground">{contextMessage.message}</p>
               </div>
-            </label>
+            </CardContent>
+          </Card>
 
-            {/* Suggest Mode - INTERMEDIATE */}
-            <label
-              className={cn(
-                "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-200",
-                mode === 'suggest'
-                  ? "bg-blue-500/10 ring-2 ring-blue-500/50"
-                  : "bg-muted/30 hover:bg-muted/50 border border-border",
-              )}
-            >
-              <RadioGroupItem value="suggest" id="suggest" className="mt-1" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Eye className={cn(
-                    "h-5 w-5",
-                    mode === 'suggest' ? "text-blue-500" : "text-muted-foreground"
-                  )} />
-                  <span className="font-medium text-foreground">{MODE_CONFIG.suggest.title}</span>
-                  <Badge variant="outline" className="border-blue-500/50 text-blue-600 dark:text-blue-400">
-                    {MODE_CONFIG.suggest.badge}
-                  </Badge>
-                </div>
-                <p className="text-muted-foreground mt-1 text-sm">{MODE_CONFIG.suggest.description}</p>
-                <p className="text-xs text-muted-foreground/70 mt-2">{MODE_CONFIG.suggest.microcopy}</p>
-              </div>
-            </label>
-
-            {/* Manual Mode - DISCOURAGED */}
-            <label
-              className={cn(
-                "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-200",
-                mode === 'manual'
-                  ? "bg-muted/50 ring-1 ring-border"
-                  : "bg-muted/20 hover:bg-muted/30 border border-dashed border-border/50 opacity-70",
-              )}
-            >
-              <RadioGroupItem value="manual" id="manual" className="mt-1" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Pause className="h-5 w-5 text-muted-foreground" />
-                  <span className="font-medium text-muted-foreground">{MODE_CONFIG.manual.title}</span>
-                  <Badge variant="secondary" className="opacity-70">
-                    {MODE_CONFIG.manual.badge}
-                  </Badge>
-                </div>
-                <p className="text-muted-foreground/80 mt-1 text-sm">{MODE_CONFIG.manual.description}</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{MODE_CONFIG.manual.microcopy}</p>
-              </div>
-            </label>
-          </RadioGroup>
-        </CardContent>
-      </Card>
-
-      {/* Configuration Cards */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Content Type */}
-        <Card className="client-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-accent" />
-              Tipo de Conteúdo
-            </CardTitle>
-            <CardDescription>Qual estratégia combina com seu negócio?</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Select value={contentType} onValueChange={handleContentTypeChange} disabled={saving}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CONTENT_TYPE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div className="flex flex-col">
-                      <span>{option.label}</span>
-                      <span className="text-xs text-muted-foreground">{option.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        {/* Frequency */}
-        <Card className="client-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              Frequência
-            </CardTitle>
-            <CardDescription>Quantos artigos por semana?</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup value={frequency} onValueChange={handleFrequencyChange} className="space-y-2" disabled={saving}>
-              {FREQUENCY_OPTIONS.map((option) => (
+          {/* Mode Selection */}
+          <Card className="client-card overflow-hidden">
+            <CardHeader>
+              <CardTitle>Modo de Operação</CardTitle>
+              <CardDescription>Como você quer que sua máquina trabalhe?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup
+                value={mode}
+                onValueChange={(v) => handleModeChange(v as AutomationMode)}
+                className="space-y-4"
+                disabled={saving}
+              >
+                {/* Auto Mode - DOMINANT */}
                 <label
-                  key={option.value}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
-                    frequency === option.value
-                      ? "bg-primary/10 border border-primary/30"
-                      : "bg-muted/30 hover:bg-muted/50 border border-transparent"
+                    "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-300",
+                    mode === 'auto'
+                      ? "bg-gradient-to-br from-primary/20 via-primary/10 to-accent/10 ring-2 ring-primary shadow-lg shadow-primary/20 scale-[1.02]"
+                      : "bg-muted/30 hover:bg-muted/50 border border-border",
                   )}
                 >
-                  <RadioGroupItem value={option.value} id={option.value} />
-                  <span className="text-sm text-foreground">{option.label}</span>
+                  <RadioGroupItem value="auto" id="auto" className="mt-1" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Rocket className={cn(
+                        "h-5 w-5",
+                        mode === 'auto' ? "text-primary animate-pulse" : "text-muted-foreground"
+                      )} />
+                      <span className="font-semibold text-lg text-foreground">{MODE_CONFIG.auto.title}</span>
+                      <Badge className="bg-gradient-to-r from-primary to-accent text-white border-0">
+                        {MODE_CONFIG.auto.badge}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground mt-1">{MODE_CONFIG.auto.description}</p>
+                    <p className={cn(
+                      "text-xs mt-2",
+                      mode === 'auto' ? "text-primary" : "text-muted-foreground/70"
+                    )}>
+                      {MODE_CONFIG.auto.microcopy}
+                    </p>
+                  </div>
                 </label>
-              ))}
-            </RadioGroup>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="client-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{usageData.articles_generated}</p>
-                <p className="text-sm text-muted-foreground">Artigos este mês</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                {/* Suggest Mode - INTERMEDIATE */}
+                <label
+                  className={cn(
+                    "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-200",
+                    mode === 'suggest'
+                      ? "bg-blue-500/10 ring-2 ring-blue-500/50"
+                      : "bg-muted/30 hover:bg-muted/50 border border-border",
+                  )}
+                >
+                  <RadioGroupItem value="suggest" id="suggest" className="mt-1" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Eye className={cn(
+                        "h-5 w-5",
+                        mode === 'suggest' ? "text-blue-500" : "text-muted-foreground"
+                      )} />
+                      <span className="font-medium text-foreground">{MODE_CONFIG.suggest.title}</span>
+                      <Badge variant="outline" className="border-blue-500/50 text-blue-600 dark:text-blue-400">
+                        {MODE_CONFIG.suggest.badge}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-sm">{MODE_CONFIG.suggest.description}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-2">{MODE_CONFIG.suggest.microcopy}</p>
+                  </div>
+                </label>
 
-        <Card className="client-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-accent/10">
-                <ImageIcon className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{usageData.images_generated}</p>
-                <p className="text-sm text-muted-foreground">Imagens este mês</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                {/* Manual Mode - DISCOURAGED */}
+                <label
+                  className={cn(
+                    "relative flex items-start gap-4 p-5 rounded-xl cursor-pointer transition-all duration-200",
+                    mode === 'manual'
+                      ? "bg-muted/50 ring-1 ring-border"
+                      : "bg-muted/20 hover:bg-muted/30 border border-dashed border-border/50 opacity-70",
+                  )}
+                >
+                  <RadioGroupItem value="manual" id="manual" className="mt-1" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Pause className="h-5 w-5 text-muted-foreground" />
+                      <span className="font-medium text-muted-foreground">{MODE_CONFIG.manual.title}</span>
+                      <Badge variant="secondary" className="opacity-70">
+                        {MODE_CONFIG.manual.badge}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground/80 mt-1 text-sm">{MODE_CONFIG.manual.description}</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{MODE_CONFIG.manual.microcopy}</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </CardContent>
+          </Card>
 
-        <Card className="client-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Clock className="h-6 w-6 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{queueStats.pending}</p>
-                <p className="text-sm text-muted-foreground">Na fila</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Configuration Cards */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Content Type */}
+            <Card className="client-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-accent" />
+                  Tipo de Conteúdo
+                </CardTitle>
+                <CardDescription>Qual estratégia combina com seu negócio?</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select value={contentType} onValueChange={handleContentTypeChange} disabled={saving}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex flex-col">
+                          <span>{option.label}</span>
+                          <span className="text-xs text-muted-foreground">{option.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
 
-        <Card className="client-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <CalendarClock className="h-6 w-6 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">
-                  {nextPublication ? formatDateShort(nextPublication) : '—'}
-                </p>
-                <p className="text-sm text-muted-foreground">Próxima publicação</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* CTA to Queue */}
-      <Card className="client-card client-card-glow overflow-hidden">
-        <CardContent className="py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="font-semibold text-foreground">Fila de Produção</h3>
-              <p className="text-sm text-muted-foreground">
-                Veja tudo que está sendo preparado para o seu blog
-              </p>
-            </div>
-            <Button
-              onClick={() => navigate('/client/queue')}
-              className="client-btn-primary gap-2 shrink-0"
-            >
-              Ver Fila de Produção
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            {/* Frequency */}
+            <Card className="client-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Frequência
+                </CardTitle>
+                <CardDescription>Quantos artigos por semana?</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={frequency} onValueChange={handleFrequencyChange} className="space-y-2" disabled={saving}>
+                  {FREQUENCY_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        frequency === option.value
+                          ? "bg-primary/10 border border-primary/30"
+                          : "bg-muted/30 hover:bg-muted/50 border border-transparent"
+                      )}
+                    >
+                      <RadioGroupItem value={option.value} id={option.value} />
+                      <span className="text-sm text-foreground">{option.label}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
-        <CardContent className="pt-6">
-          <h3 className="font-semibold mb-2 text-foreground">🤖 Como funciona?</h3>
-          <p className="text-sm text-muted-foreground">
-            Sua máquina analisa o perfil da empresa e cria artigos relevantes automaticamente.
-            Cada artigo é otimizado para o Google e, dependendo do modo escolhido, publicado
-            automaticamente ou enviado para sua aprovação.
-          </p>
-        </CardContent>
-      </Card>
+          {/* Stats Cards */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            <Card className="client-card">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <FileText className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{usageData.articles_generated}</p>
+                    <p className="text-sm text-muted-foreground">Artigos este mês</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="client-card">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-accent/10">
+                    <ImageIcon className="h-6 w-6 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{usageData.images_generated}</p>
+                    <p className="text-sm text-muted-foreground">Imagens este mês</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="client-card">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-amber-500/10">
+                    <Clock className="h-6 w-6 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{queueStats.pending}</p>
+                    <p className="text-sm text-muted-foreground">Na fila</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="client-card">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-emerald-500/10">
+                    <CalendarClock className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {nextPublication ? formatDateShort(nextPublication) : '—'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Próxima publicação</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Info Card */}
+          <Card className="bg-muted/30 border-dashed">
+            <CardContent className="pt-6">
+              <h3 className="font-semibold mb-2 text-foreground">🤖 Como funciona?</h3>
+              <p className="text-sm text-muted-foreground">
+                Sua máquina analisa o perfil da empresa e cria artigos relevantes automaticamente.
+                Cada artigo é otimizado para o Google e, dependendo do modo escolhido, publicado
+                automaticamente ou enviado para sua aprovação.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Queue Tab */}
+        <TabsContent value="queue" className="mt-6">
+          {blog?.id && <QueueTab blogId={blog.id} />}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
