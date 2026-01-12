@@ -38,6 +38,7 @@ export default function ClientSite() {
   const [bannerDescription, setBannerDescription] = useState('');
   const [bannerImageUrl, setBannerImageUrl] = useState('');
   const [bannerBackgroundColor, setBannerBackgroundColor] = useState<string | null>(null);
+  const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState(50);
   const [ctaText, setCtaText] = useState('');
   const [ctaUrl, setCtaUrl] = useState('');
   const [brandDescription, setBrandDescription] = useState('');
@@ -67,6 +68,7 @@ export default function ClientSite() {
     setBannerDescription(blog.banner_description || '');
     setBannerImageUrl(blog.banner_image_url || '');
     setBannerBackgroundColor((blog as any).hero_background_color || null);
+    setBannerOverlayOpacity((blog as any).banner_overlay_opacity ?? 50);
     setLogoBackgroundColor((blog as any).logo_background_color || null);
     setLogoNegativeBackgroundColor((blog as any).logo_negative_background_color || null);
     setCtaText(blog.cta_text || '');
@@ -130,6 +132,7 @@ export default function ClientSite() {
             banner_description: bannerDescription,
             banner_image_url: bannerImageUrl,
             hero_background_color: bannerBackgroundColor,
+            banner_overlay_opacity: bannerOverlayOpacity,
             cta_text: ctaText,
             cta_url: ctaUrl,
             brand_description: brandDescription,
@@ -174,7 +177,7 @@ export default function ClientSite() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [hasChanges, blog?.id, companyName, city, logoUrl, logoNegativeUrl, faviconUrl, logoBackgroundColor, logoNegativeBackgroundColor, layoutTemplate, primaryColor, secondaryColor, showSearch, headerCtaText, headerCtaUrl, bannerEnabled, bannerTitle, bannerDescription, bannerImageUrl, bannerBackgroundColor, ctaText, ctaUrl, brandDescription, footerText, showCategoriesFooter, contactButtons, brandDisplayMode]);
+  }, [hasChanges, blog?.id, companyName, city, logoUrl, logoNegativeUrl, faviconUrl, logoBackgroundColor, logoNegativeBackgroundColor, layoutTemplate, primaryColor, secondaryColor, showSearch, headerCtaText, headerCtaUrl, bannerEnabled, bannerTitle, bannerDescription, bannerImageUrl, bannerBackgroundColor, bannerOverlayOpacity, ctaText, ctaUrl, brandDescription, footerText, showCategoriesFooter, contactButtons, brandDisplayMode]);
 
   // Mark as changed
   const markChanged = useCallback(() => setHasChanges(true), []);
@@ -249,6 +252,7 @@ export default function ClientSite() {
             bannerDescription={bannerDescription}
             bannerImageUrl={bannerImageUrl}
             bannerBackgroundColor={bannerBackgroundColor}
+            bannerOverlayOpacity={bannerOverlayOpacity}
             ctaText={ctaText}
             ctaUrl={ctaUrl}
             brandDescription={brandDescription}
@@ -276,6 +280,7 @@ export default function ClientSite() {
             onBannerDescriptionChange={(v) => { setBannerDescription(v); markChanged(); }}
             onBannerImageUrlChange={(v) => { setBannerImageUrl(v || ''); markChanged(); }}
             onBannerBackgroundColorChange={(v) => { setBannerBackgroundColor(v); markChanged(); }}
+            onBannerOverlayOpacityChange={(v) => { setBannerOverlayOpacity(v); markChanged(); }}
             onCtaTextChange={(v) => { setCtaText(v); markChanged(); }}
             onCtaUrlChange={(v) => { setCtaUrl(v); markChanged(); }}
             onBrandDescriptionChange={(v) => { setBrandDescription(v); markChanged(); }}
@@ -304,6 +309,7 @@ export default function ClientSite() {
             bannerTitle={bannerTitle}
             bannerDescription={bannerDescription}
             bannerImageUrl={bannerImageUrl}
+            bannerOverlayOpacity={bannerOverlayOpacity}
             ctaText={ctaText}
             ctaUrl={ctaUrl}
             brandDescription={brandDescription}

@@ -2,8 +2,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { MediaSlotControl } from "@/components/ui/MediaSlotControl";
-import { Sparkles, Type, MessageSquare, MousePointerClick } from "lucide-react";
+import { Sparkles, Type, MessageSquare, MousePointerClick, Eye } from "lucide-react";
 
 interface HeroSectionProps {
   bannerEnabled: boolean;
@@ -11,6 +12,7 @@ interface HeroSectionProps {
   bannerDescription: string;
   bannerImageUrl: string;
   bannerBackgroundColor?: string | null;
+  bannerOverlayOpacity?: number;
   ctaText: string;
   ctaUrl: string;
   userId: string;
@@ -19,6 +21,7 @@ interface HeroSectionProps {
   onBannerDescriptionChange: (value: string) => void;
   onBannerImageUrlChange: (value: string | null) => void;
   onBannerBackgroundColorChange?: (value: string | null) => void;
+  onBannerOverlayOpacityChange?: (value: number) => void;
   onCtaTextChange: (value: string) => void;
   onCtaUrlChange: (value: string) => void;
 }
@@ -29,6 +32,7 @@ export function HeroSection({
   bannerDescription,
   bannerImageUrl,
   bannerBackgroundColor,
+  bannerOverlayOpacity = 50,
   ctaText,
   ctaUrl,
   userId,
@@ -37,6 +41,7 @@ export function HeroSection({
   onBannerDescriptionChange,
   onBannerImageUrlChange,
   onBannerBackgroundColorChange,
+  onBannerOverlayOpacityChange,
   onCtaTextChange,
   onCtaUrlChange,
 }: HeroSectionProps) {
@@ -129,6 +134,27 @@ export function HeroSection({
             showColorOption={!!onBannerBackgroundColorChange}
             hint="Use uma imagem panorâmica (1920x600) ou escolha uma cor sólida"
           />
+
+          {/* Overlay Opacity Slider - Only show when image is set */}
+          {bannerImageUrl && onBannerOverlayOpacityChange && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-gray-700">
+                <Eye className="h-4 w-4 text-gray-500" />
+                Opacidade do Overlay ({bannerOverlayOpacity}%)
+              </Label>
+              <Slider
+                value={[bannerOverlayOpacity]}
+                onValueChange={([value]) => onBannerOverlayOpacityChange(value)}
+                min={30}
+                max={80}
+                step={5}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500">
+                Controle a escuridão sobre a imagem de fundo para melhorar a legibilidade do texto
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>
