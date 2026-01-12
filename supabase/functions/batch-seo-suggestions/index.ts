@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,104 +22,246 @@ interface SuggestionOutput {
   predictedImpact: 'high' | 'medium' | 'low';
 }
 
+// Optimized prompts for concise JSON output
 const PROMPTS: Record<string, string> = {
-  title: `Você é um especialista em SEO e copywriting. Analise os títulos dos artigos abaixo e gere títulos otimizados.
+  title: `Você é um especialista em SEO. Otimize títulos de artigos para melhor CTR.
 
-Para cada artigo, crie um título que:
-- Tenha entre 50-60 caracteres
-- Inclua a palavra-chave principal naturalmente
-- Seja atraente e aumente o CTR
+REGRAS ABSOLUTAS:
+- Responda APENAS JSON válido, SEM markdown, SEM texto antes ou depois
+- Títulos entre 50-60 caracteres
 - Use números quando apropriado (ex: "7 Dicas...")
-- Crie urgência ou curiosidade
+- Campo "improvement" máximo 8 palavras
 
-Responda APENAS com um JSON válido no formato:
-[
-  {
-    "articleId": "id_do_artigo",
-    "originalValue": "título original",
-    "suggestedValue": "título otimizado",
-    "improvement": "motivo da melhoria em até 10 palavras",
-    "predictedImpact": "high" ou "medium" ou "low"
-  }
-]`,
+FORMATO OBRIGATÓRIO (array JSON puro):
+[{"articleId":"ID","originalValue":"título atual","suggestedValue":"título otimizado","improvement":"motivo breve","predictedImpact":"high"}]`,
 
-  meta: `Você é um especialista em SEO. Crie meta descriptions otimizadas para os artigos abaixo.
+  meta: `Você é um especialista em SEO. Crie meta descriptions otimizadas.
 
-Para cada artigo, crie uma meta description que:
-- Tenha entre 140-160 caracteres
-- Inclua a palavra-chave principal
-- Tenha uma chamada para ação
-- Seja persuasiva e gere cliques
+REGRAS ABSOLUTAS:
+- Responda APENAS JSON válido, SEM markdown, SEM texto antes ou depois
+- Meta descriptions entre 140-160 caracteres
+- Inclua call-to-action
+- Campo "improvement" máximo 8 palavras
 
-Responda APENAS com um JSON válido no formato:
-[
-  {
-    "articleId": "id_do_artigo",
-    "originalValue": "descrição original ou vazio",
-    "suggestedValue": "nova meta description",
-    "improvement": "motivo da melhoria em até 10 palavras",
-    "predictedImpact": "high" ou "medium" ou "low"
-  }
-]`,
+FORMATO OBRIGATÓRIO (array JSON puro):
+[{"articleId":"ID","originalValue":"descrição atual","suggestedValue":"nova descrição","improvement":"motivo breve","predictedImpact":"high"}]`,
 
-  keywords: `Você é um especialista em SEO. Sugira palavras-chave otimizadas para os artigos abaixo.
+  keywords: `Você é um especialista em SEO. Sugira palavras-chave estratégicas.
 
-Para cada artigo, sugira 3-5 palavras-chave que:
-- Sejam relevantes ao conteúdo
-- Tenham potencial de busca
-- Incluam variações long-tail
-- Sejam naturais ao tema
+REGRAS ABSOLUTAS:
+- Responda APENAS JSON válido, SEM markdown, SEM texto antes ou depois
+- Sugira 3-5 keywords separadas por vírgula
+- Inclua variações long-tail
+- Campo "improvement" máximo 8 palavras
 
-Responda APENAS com um JSON válido no formato:
-[
-  {
-    "articleId": "id_do_artigo",
-    "originalValue": "keywords atuais ou vazio",
-    "suggestedValue": "keyword1, keyword2, keyword3, keyword4",
-    "improvement": "motivo da melhoria em até 10 palavras",
-    "predictedImpact": "high" ou "medium" ou "low"
-  }
-]`,
+FORMATO OBRIGATÓRIO (array JSON puro):
+[{"articleId":"ID","originalValue":"keywords atuais","suggestedValue":"keyword1, keyword2, keyword3","improvement":"motivo breve","predictedImpact":"high"}]`,
 
-  density: `Você é um especialista em SEO. Analise a densidade de palavras-chave dos artigos.
+  density: `Você é um especialista em SEO. Analise a densidade de palavras-chave.
 
-Para cada artigo, sugira ajustes para:
-- Densidade ideal de 0.5% a 2.5%
-- Distribuição natural no texto
-- Evitar keyword stuffing
-- Usar variações semânticas
+REGRAS ABSOLUTAS:
+- Responda APENAS JSON válido, SEM markdown, SEM texto antes ou depois
+- Identifique trechos para melhorar
+- Densidade ideal 0.5% a 2.5%
+- Campo "improvement" máximo 8 palavras
 
-Identifique trechos que podem ser melhorados e sugira reescritas.
+FORMATO OBRIGATÓRIO (array JSON puro):
+[{"articleId":"ID","originalValue":"trecho atual","suggestedValue":"trecho otimizado","improvement":"motivo breve","predictedImpact":"medium"}]`,
 
-Responda APENAS com um JSON válido no formato:
-[
-  {
-    "articleId": "id_do_artigo",
-    "originalValue": "trecho problemático identificado",
-    "suggestedValue": "sugestão de melhoria ou ajuste",
-    "improvement": "motivo da melhoria em até 10 palavras",
-    "predictedImpact": "high" ou "medium" ou "low"
-  }
-]`,
+  content: `Você é um especialista em SEO e conteúdo. Sugira expansões estruturais.
 
-  content: `Você é um especialista em SEO e conteúdo. Analise os artigos e sugira expansões.
+REGRAS ABSOLUTAS:
+- Responda APENAS JSON válido, SEM markdown, SEM texto antes ou depois
+- Sugira 2-3 novas seções H2/H3
+- Seja específico e prático
+- Campo "improvement" máximo 8 palavras
 
-Para cada artigo com conteúdo fraco, sugira:
-- Novas seções H2/H3 a adicionar
-- Tópicos para expandir
-- Melhorias de estrutura
-
-Responda APENAS com um JSON válido no formato:
-[
-  {
-    "articleId": "id_do_artigo",
-    "originalValue": "resumo do conteúdo atual",
-    "suggestedValue": "sugestões de seções: 1. [H2] Título, 2. [H2] Título, 3. [H3] Subtópico",
-    "improvement": "motivo da melhoria em até 10 palavras",
-    "predictedImpact": "high" ou "medium" ou "low"
-  }
-]`
+FORMATO OBRIGATÓRIO (array JSON puro):
+[{"articleId":"ID","originalValue":"resumo do conteúdo","suggestedValue":"[H2] Nova Seção 1, [H2] Nova Seção 2","improvement":"motivo breve","predictedImpact":"high"}]`
 };
+
+// Process a batch of articles
+async function processArticleBatch(
+  articles: ArticleInput[],
+  type: string,
+  systemPrompt: string,
+  apiKey: string
+): Promise<SuggestionOutput[]> {
+  const articlesData = articles.map((a: ArticleInput) => {
+    const data: Record<string, any> = {
+      id: a.id,
+      title: a.title
+    };
+
+    if (type === 'meta') {
+      data.meta_description = a.meta_description || '';
+      data.content_preview = (a.content || '').substring(0, 300);
+    } else if (type === 'keywords') {
+      data.current_keywords = a.keywords?.join(', ') || '';
+      data.content_preview = (a.content || '').substring(0, 500);
+    } else if (type === 'density' || type === 'content') {
+      data.keywords = a.keywords?.join(', ') || '';
+      data.content = (a.content || '').substring(0, 1500);
+    }
+
+    return data;
+  });
+
+  console.log(`[Batch] Processing ${articles.length} articles for ${type}`);
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: `Analise estes ${articles.length} artigos e gere sugestões de otimização. Responda APENAS o array JSON:\n\n${JSON.stringify(articlesData, null, 2)}`
+        }
+      ],
+      temperature: 0.3, // Lower temperature for more consistent JSON
+      max_tokens: 4000 // Per batch, not total
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('AI Gateway error:', response.status, errorText);
+    throw new Error(`AI Gateway error: ${response.status}`);
+  }
+
+  const aiResponse = await response.json();
+  const content = aiResponse.choices?.[0]?.message?.content || '';
+
+  console.log('[Batch] Raw AI response length:', content.length);
+
+  return parseAIResponse(content, articles);
+}
+
+// Robust JSON parser with multiple fallback strategies
+function parseAIResponse(content: string, articles: ArticleInput[]): SuggestionOutput[] {
+  console.log('[Parser] Starting to parse AI response...');
+  
+  // Step 1: Clean markdown code blocks
+  let cleanContent = content
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .replace(/^\s*[\r\n]+/, '') // Remove leading whitespace/newlines
+    .trim();
+
+  console.log('[Parser] Cleaned content length:', cleanContent.length);
+
+  // Step 2: Try direct JSON parse
+  try {
+    // Find JSON array in the content
+    const arrayStart = cleanContent.indexOf('[');
+    const arrayEnd = cleanContent.lastIndexOf(']');
+    
+    if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+      const jsonStr = cleanContent.substring(arrayStart, arrayEnd + 1);
+      const parsed = JSON.parse(jsonStr);
+      
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log('[Parser] Successfully parsed JSON array with', parsed.length, 'items');
+        return validateAndNormalizeSuggestions(parsed, articles);
+      }
+    }
+  } catch (e) {
+    console.warn('[Parser] Direct JSON parse failed:', (e as Error).message);
+  }
+
+  // Step 3: Try to fix common JSON issues
+  try {
+    let fixedContent = cleanContent;
+    
+    // Fix unterminated strings by finding the last complete object
+    const lastCompleteObject = fixedContent.lastIndexOf('}');
+    if (lastCompleteObject !== -1) {
+      fixedContent = fixedContent.substring(0, lastCompleteObject + 1) + ']';
+    }
+    
+    // Ensure it starts with [
+    if (!fixedContent.trim().startsWith('[')) {
+      const arrayStart = fixedContent.indexOf('[');
+      if (arrayStart !== -1) {
+        fixedContent = fixedContent.substring(arrayStart);
+      }
+    }
+    
+    const parsed = JSON.parse(fixedContent);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      console.log('[Parser] Fixed JSON parsed with', parsed.length, 'items');
+      return validateAndNormalizeSuggestions(parsed, articles);
+    }
+  } catch (e) {
+    console.warn('[Parser] Fixed JSON parse also failed:', (e as Error).message);
+  }
+
+  // Step 4: Extract individual objects using regex
+  console.log('[Parser] Attempting regex extraction...');
+  const suggestions: SuggestionOutput[] = [];
+  
+  // Match individual suggestion objects
+  const objectPattern = /\{[^{}]*"articleId"\s*:\s*"([^"]+)"[^{}]*"suggestedValue"\s*:\s*"([^"]*)"[^{}]*\}/g;
+  let match;
+  
+  while ((match = objectPattern.exec(cleanContent)) !== null) {
+    try {
+      const fullMatch = match[0];
+      // Try to parse the individual object
+      const obj = JSON.parse(fullMatch);
+      
+      if (obj.articleId && obj.suggestedValue) {
+        // Find the original article
+        const article = articles.find(a => a.id === obj.articleId);
+        
+        suggestions.push({
+          articleId: obj.articleId,
+          originalValue: obj.originalValue || article?.title || '',
+          suggestedValue: obj.suggestedValue,
+          improvement: obj.improvement || 'Otimização IA',
+          predictedImpact: obj.predictedImpact || 'medium'
+        });
+      }
+    } catch (e) {
+      // Skip this object
+    }
+  }
+
+  if (suggestions.length > 0) {
+    console.log('[Parser] Regex extraction found', suggestions.length, 'suggestions');
+    return suggestions;
+  }
+
+  console.warn('[Parser] No suggestions could be extracted from response');
+  return [];
+}
+
+// Validate and normalize suggestions
+function validateAndNormalizeSuggestions(
+  parsed: any[], 
+  articles: ArticleInput[]
+): SuggestionOutput[] {
+  return parsed
+    .filter(item => item && item.articleId && item.suggestedValue)
+    .map(item => {
+      const article = articles.find(a => a.id === item.articleId);
+      return {
+        articleId: item.articleId,
+        originalValue: item.originalValue || article?.title || '',
+        suggestedValue: item.suggestedValue,
+        improvement: item.improvement || 'Otimização IA',
+        predictedImpact: (['high', 'medium', 'low'].includes(item.predictedImpact) 
+          ? item.predictedImpact 
+          : 'medium') as 'high' | 'medium' | 'low'
+      };
+    });
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -148,91 +291,62 @@ serve(async (req) => {
       );
     }
 
-    // Prepare articles data for the prompt
-    const articlesData = articles.map((a: ArticleInput) => {
-      const data: Record<string, any> = {
-        id: a.id,
-        title: a.title
-      };
+    console.log(`[Main] Starting ${type} optimization for ${articles.length} articles`);
 
-      if (type === 'meta') {
-        data.meta_description = a.meta_description || '';
-        data.content_preview = (a.content || '').substring(0, 500);
-      } else if (type === 'keywords') {
-        data.current_keywords = a.keywords?.join(', ') || '';
-        data.content_preview = (a.content || '').substring(0, 1000);
-      } else if (type === 'density' || type === 'content') {
-        data.keywords = a.keywords?.join(', ') || '';
-        data.content = (a.content || '').substring(0, 3000);
-      }
+    // Process in smaller batches to avoid truncation
+    const BATCH_SIZE = 3;
+    const allSuggestions: SuggestionOutput[] = [];
+    let partialError = false;
 
-      return data;
-    });
-
-    console.log(`Processing ${articles.length} articles for ${type} optimization`);
-
-    // Call Lovable AI Gateway
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { 
-            role: 'user', 
-            content: `Analise os seguintes artigos e gere sugestões de otimização:\n\n${JSON.stringify(articlesData, null, 2)}`
+    for (let i = 0; i < articles.length; i += BATCH_SIZE) {
+      const batch = articles.slice(i, i + BATCH_SIZE);
+      console.log(`[Main] Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(articles.length/BATCH_SIZE)}`);
+      
+      try {
+        const batchSuggestions = await processArticleBatch(batch, type, systemPrompt, LOVABLE_API_KEY);
+        allSuggestions.push(...batchSuggestions);
+        
+        if (batchSuggestions.length === 0 && batch.length > 0) {
+          console.warn(`[Main] Batch returned no suggestions, might have parsing issues`);
+          partialError = true;
+        }
+      } catch (batchError) {
+        console.error(`[Main] Batch error:`, batchError);
+        partialError = true;
+        
+        // Check for rate limit or credits errors
+        if (batchError instanceof Error) {
+          if (batchError.message.includes('429')) {
+            return new Response(
+              JSON.stringify({ error: 'Limite de requisições excedido. Tente novamente em alguns minutos.' }),
+              { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
           }
-        ],
-        temperature: 0.7,
-        max_tokens: 4000
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Limite de requisições excedido. Tente novamente em alguns minutos.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+          if (batchError.message.includes('402')) {
+            return new Response(
+              JSON.stringify({ error: 'Créditos de IA insuficientes. Adicione créditos ao seu workspace.' }),
+              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        // Continue with other batches
       }
       
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Créditos de IA insuficientes. Adicione créditos ao seu workspace.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < articles.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-      
-      throw new Error(`AI Gateway error: ${response.status}`);
     }
 
-    const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content || '';
-
-    // Extract JSON from response
-    let suggestions: SuggestionOutput[] = [];
-    try {
-      // Try to find JSON in the response
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        suggestions = JSON.parse(jsonMatch[0]);
-      }
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', parseError);
-      console.log('Raw response:', content);
-    }
-
-    console.log(`Generated ${suggestions.length} suggestions`);
+    console.log(`[Main] Total suggestions generated: ${allSuggestions.length}`);
 
     return new Response(
-      JSON.stringify({ suggestions }),
+      JSON.stringify({ 
+        suggestions: allSuggestions,
+        partialError: partialError && allSuggestions.length > 0,
+        processed: articles.length,
+        successCount: allSuggestions.length
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
