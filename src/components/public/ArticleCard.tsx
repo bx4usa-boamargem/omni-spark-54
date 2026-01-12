@@ -9,6 +9,7 @@ interface ArticleCardProps {
   slug: string;
   blogSlug: string;
   category?: string | null;
+  tags?: string[] | null;
   publishedAt?: string | null;
   featuredImageUrl?: string | null;
   primaryColor?: string;
@@ -29,6 +30,7 @@ export const ArticleCard = ({
   slug,
   blogSlug,
   category,
+  tags,
   publishedAt,
   featuredImageUrl,
   primaryColor,
@@ -89,9 +91,23 @@ export const ArticleCard = ({
           </h2>
           
           {excerpt && (
-            <p className="text-gray-600 text-sm line-clamp-2 mb-4 flex-1">
+            <p className="text-gray-600 text-sm line-clamp-2 mb-3 flex-1">
               {excerpt}
             </p>
+          )}
+          
+          {/* Tags */}
+          {tags && tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {tags.slice(0, 3).map(tag => (
+                <span 
+                  key={tag}
+                  className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
           )}
           
           <div className="flex items-center gap-4 text-xs text-gray-500 mt-auto pt-3 border-t border-gray-200">
