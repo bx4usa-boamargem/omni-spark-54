@@ -70,6 +70,8 @@ import ClientSEO from "./pages/client/ClientSEO";
 import ClientPerformance from "./pages/client/ClientPerformance";
 import ClientGSCIntegration from "./pages/client/ClientGSCIntegration";
 import ClientArticles from "./pages/client/ClientArticles";
+import ClientQueue from "./pages/client/ClientQueue";
+import ClientReviewCenter from "./pages/client/ClientReviewCenter";
 
 const queryClient = new QueryClient();
 
@@ -141,6 +143,8 @@ const ClientRoutes = () => (
         <Route path="create" element={<ClientArticleEditor />} />
         <Route path="articles" element={<ClientArticles />} />
         <Route path="articles/:id/edit" element={<ClientArticleEditor />} />
+        <Route path="queue" element={<ClientQueue />} />
+        <Route path="review/:id" element={<ClientReviewCenter />} />
         <Route path="site" element={<ClientSite />} />
         <Route path="performance" element={<ClientPerformance />} />
         <Route path="automation" element={<ClientAutomation />} />
