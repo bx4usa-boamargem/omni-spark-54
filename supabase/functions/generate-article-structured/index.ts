@@ -83,6 +83,86 @@ interface ArticleRequest {
   auto_publish?: boolean;
 }
 
+// ============ CATEGORIA E TAGS AUTOMÁTICAS ============
+
+const ARTICLE_CATEGORIES = [
+  'SEO',
+  'Automação', 
+  'Marketing',
+  'Inteligência Artificial',
+  'Vendas',
+  'Produtividade',
+  'Tecnologia',
+  'Negócios'
+] as const;
+
+function inferCategory(theme: string, content: string, keywords: string[]): string {
+  const text = `${theme} ${content} ${keywords.join(' ')}`.toLowerCase();
+  
+  const categoryPatterns: Record<string, RegExp> = {
+    'SEO': /\b(seo|ranqueamento|google|palavras?-?chave|orgânico|serp|backlink|indexação|meta.?description|título.?seo|rank|pesquisa|busca)\b/i,
+    'Automação': /\b(automaç|automati|robô|bot|chatbot|workflow|funil|crm|integraç|zapier|n8n|processo.?automático|fluxo)\b/i,
+    'Inteligência Artificial': /\b(ia|inteligência.?artificial|gpt|modelo|machine.?learning|ai|agente|prompt|llm|openai|gemini)\b/i,
+    'Marketing': /\b(marketing|brand|marca|campanha|estratégia|posicionamento|público|audiência|conteúdo|engajamento|branding|redes.?sociais)\b/i,
+    'Vendas': /\b(venda|cliente|lead|conversão|prospecção|fechamento|objeção|proposta|orçamento|negociação|comercial)\b/i,
+    'Produtividade': /\b(produtiv|tempo|rotina|organização|gestão.?de.?tempo|eficiência|tarefa|prioridade|foco)\b/i,
+    'Tecnologia': /\b(tecnologia|software|app|aplicativo|sistema|plataforma|digital|ferramenta|dashboard|saas)\b/i,
+    'Negócios': /\b(negócio|empresa|empreend|gestão|finanç|lucro|crescimento|escala|mercado|empreendedor)\b/i
+  };
+  
+  // Count matches per category
+  const scores: Record<string, number> = {};
+  for (const [category, pattern] of Object.entries(categoryPatterns)) {
+    const matches = text.match(new RegExp(pattern, 'gi'));
+    scores[category] = matches?.length || 0;
+  }
+  
+  // Return category with most matches
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const topCategory = sorted[0][1] > 0 ? sorted[0][0] : 'Negócios';
+  console.log(`[CATEGORY] Inferred category: ${topCategory} (scores: ${JSON.stringify(scores)})`);
+  return topCategory;
+}
+
+function inferTags(theme: string, content: string, keywords: string[], category: string): string[] {
+  const text = `${theme} ${content}`.toLowerCase();
+  
+  const tagPatterns: Record<string, RegExp> = {
+    'guia': /\b(guia|passo.?a.?passo|como.?fazer|tutorial)\b/i,
+    'dicas': /\b(dicas?|truques?|segredos?|hacks?)\b/i,
+    'estratégia': /\b(estratégia|tática|planejamento|plano)\b/i,
+    'ferramentas': /\b(ferramenta|software|app|plataforma|sistema)\b/i,
+    'tendências': /\b(tendência|futuro|202[4-9]|novo|novidade)\b/i,
+    'case': /\b(case|exemplo|sucesso|resultado|estudo)\b/i,
+    'iniciantes': /\b(iniciante|básico|começar|primeiros.?passos)\b/i,
+    'avançado': /\b(avançado|profissional|expert|especialista)\b/i,
+    'grátis': /\b(grátis|gratuito|free|sem.?custo)\b/i,
+    'roi': /\b(roi|retorno|lucro|economia|custo)\b/i,
+    'produtividade': /\b(produtiv|eficiência|tempo|otimiz)\b/i,
+    'crescimento': /\b(cresc|escala|expan|aument)\b/i
+  };
+  
+  const matchedTags: string[] = [];
+  
+  // Check patterns
+  for (const [tag, pattern] of Object.entries(tagPatterns)) {
+    if (pattern.test(text) && matchedTags.length < 5) {
+      matchedTags.push(tag);
+    }
+  }
+  
+  // Add keywords as tags (up to 5 total)
+  const keywordTags = keywords
+    .slice(0, 5 - matchedTags.length)
+    .map(k => k.toLowerCase().replace(/\s+/g, '-').substring(0, 20));
+  
+  const finalTags = [...new Set([...matchedTags, ...keywordTags])].slice(0, 5);
+  console.log(`[TAGS] Inferred tags: ${finalTags.join(', ')}`);
+  return finalTags;
+}
+
+// ============ FIM CATEGORIA E TAGS ============
+
 // ============ PERSISTÊNCIA DE ARTIGO ============
 // Função obrigatória para salvar artigo na tabela 'articles'
 // CRÍTICO: Sem esta persistência, o frontend recebe artigo sem id/slug/status
@@ -92,7 +172,9 @@ async function persistArticleToDb(
   supabaseClient: any,
   blogId: string,
   articleData: ArticleData,
-  autoPublish: boolean = true
+  autoPublish: boolean = true,
+  inferredCategory?: string,
+  inferredTags?: string[]
 ): Promise<{ id: string; slug: string; status: string; title: string }> {
   console.log(`[PERSIST] Preparing to save article: "${articleData.title}" for blog ${blogId}`);
   
@@ -120,6 +202,8 @@ async function persistArticleToDb(
     content: articleData.content || '',
     excerpt: articleData.excerpt || articleData.meta_description || '',
     meta_description: articleData.meta_description || '',
+    category: inferredCategory || null,
+    tags: inferredTags || [],
     faq: articleData.faq || [],
     keywords: articleData.keywords || [],
     reading_time: readingTime,

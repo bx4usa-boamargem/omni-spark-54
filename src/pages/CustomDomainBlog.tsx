@@ -4,6 +4,7 @@ import { isBlogDomainAccess, getCurrentHostname, getBlogUrl } from "@/utils/blog
 import { SEOHead } from "@/components/public/SEOHead";
 import { BlogHeader } from "@/components/public/BlogHeader";
 import { ArticleCard } from "@/components/public/ArticleCard";
+import { CategoryFilter } from "@/components/public/CategoryFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Blog {
@@ -25,6 +26,7 @@ interface Article {
   excerpt: string | null;
   slug: string;
   category: string | null;
+  tags: string[] | null;
   published_at: string | null;
   featured_image_url: string | null;
 }
@@ -39,6 +41,7 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBlog = async () => {
@@ -111,7 +114,7 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
       // Fetch published articles
       const { data: articlesData } = await supabase
         .from("articles")
-        .select("id, title, excerpt, slug, category, published_at, featured_image_url")
+        .select("id, title, excerpt, slug, category, tags, published_at, featured_image_url")
         .eq("blog_id", blogData.id)
         .eq("status", "published")
         .order("published_at", { ascending: false });
@@ -215,23 +218,57 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
                   </p>
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {articles.map((article) => (
-                    <ArticleCard
-                      key={article.id}
-                      title={article.title}
-                      excerpt={article.excerpt}
-                      slug={article.slug}
-                      blogSlug={blog.slug}
-                      category={article.category}
-                      publishedAt={article.published_at}
-                      featuredImageUrl={article.featured_image_url}
-                      primaryColor={primaryColor}
-                      customDomain={blog.custom_domain}
-                      domainVerified={blog.domain_verified}
-                    />
-                  ))}
-                </div>
+                <>
+                  {/* Category Filter */}
+                  {(() => {
+                    const uniqueCategories = [...new Set(articles
+                      .map(a => a.category)
+                      .filter(Boolean)
+                    )] as string[];
+                    
+                    const articleCounts = articles.reduce((acc, a) => {
+                      if (a.category) {
+                        acc[a.category] = (acc[a.category] || 0) + 1;
+                      }
+                      return acc;
+                    }, {} as Record<string, number>);
+                    
+                    const filteredArticles = selectedCategory
+                      ? articles.filter(a => a.category === selectedCategory)
+                      : articles;
+                    
+                    return (
+                      <>
+                        <CategoryFilter
+                          categories={uniqueCategories}
+                          activeCategory={selectedCategory}
+                          onCategoryChange={setSelectedCategory}
+                          primaryColor={primaryColor}
+                          articleCounts={articleCounts}
+                        />
+                        
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {filteredArticles.map((article) => (
+                            <ArticleCard
+                              key={article.id}
+                              title={article.title}
+                              excerpt={article.excerpt}
+                              slug={article.slug}
+                              blogSlug={blog.slug}
+                              category={article.category}
+                              tags={article.tags}
+                              publishedAt={article.published_at}
+                              featuredImageUrl={article.featured_image_url}
+                              primaryColor={primaryColor}
+                              customDomain={blog.custom_domain}
+                              domainVerified={blog.domain_verified}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
               )}
             </div>
           </section>
