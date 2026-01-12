@@ -4,12 +4,13 @@ import { useBlog } from '@/hooks/useBlog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { streamArticle, type ArticleData, type GenerationStage } from '@/utils/streamArticle';
 import { SimpleArticleForm, type SimpleFormData } from '@/components/client/SimpleArticleForm';
+import { MiniContentCalendar } from '@/components/client/MiniContentCalendar';
 import { ArticlePreview } from '@/components/ArticlePreview';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { GenerationProgress } from '@/components/seo/GenerationProgress';
@@ -236,12 +237,16 @@ export default function ClientArticleEditor() {
     setGenerationStage('analyzing');
     setGenerationProgress(0);
 
+    // Determine if we should auto-publish based on schedule mode
+    const shouldAutoPublish = formData.scheduleMode === 'now';
+    const shouldGenerateImages = formData.generateImages;
+
     await streamArticle({
       theme: formData.theme,
       blogId: blog.id,
       generationMode: formData.generationMode,
       tone: 'friendly',
-      autoPublish: false,
+      autoPublish: shouldAutoPublish,
       onStage: (stage) => setGenerationStage(stage),
       onProgress: (percent) => setGenerationProgress(percent),
       onDelta: (text) => {
@@ -270,17 +275,53 @@ export default function ClientArticleEditor() {
           if (backendArticleId) {
             setExistingArticleId(backendArticleId);
             console.log(`[BACKEND PERSISTED] Using backend article id=${backendArticleId} - NO frontend INSERT`);
-            setPhase('editing');
-            toast.success('Artigo gerado! Gerando imagens...');
             
-            // Generate images with valid article_id for persistence
-            await generateImagesWithArticleId(result, backendArticleId);
+            // ====================================================================
+            // HANDLE SCHEDULING: If user chose to schedule, update the article
+            // ====================================================================
+            if (formData.scheduleMode === 'scheduled' && formData.scheduledDate) {
+              try {
+                // Combine date and time
+                const [hours, minutes] = (formData.scheduledTime || '09:00').split(':').map(Number);
+                const scheduledAt = new Date(formData.scheduledDate);
+                scheduledAt.setHours(hours, minutes, 0, 0);
+                
+                await supabase
+                  .from('articles')
+                  .update({
+                    status: 'scheduled',
+                    scheduled_at: scheduledAt.toISOString(),
+                    published_at: null
+                  })
+                  .eq('id', backendArticleId);
+                
+                console.log(`[SCHEDULED] Article scheduled for ${scheduledAt.toISOString()}`);
+                toast.success(`Artigo agendado para ${scheduledAt.toLocaleDateString('pt-BR')} às ${formData.scheduledTime}!`);
+              } catch (scheduleError) {
+                console.error('[SCHEDULE ERROR]', scheduleError);
+                toast.error('Erro ao agendar artigo');
+              }
+            } else {
+              toast.success(shouldAutoPublish ? 'Artigo publicado!' : 'Artigo gerado!');
+            }
+            
+            setPhase('editing');
+            
+            // Generate images only if enabled
+            if (shouldGenerateImages) {
+              toast.info('Gerando imagens...');
+              await generateImagesWithArticleId(result, backendArticleId);
+            } else {
+              console.log('[SKIP IMAGES] User disabled image generation');
+            }
           } else {
             // Fallback: Backend didn't return ID (shouldn't happen in normal flow)
             console.warn('[FALLBACK] Backend did not return article id, generating images without persistence');
             setPhase('editing');
             toast.warning('Artigo gerado, mas imagens serão salvas apenas ao publicar');
-            await generateImages(result);
+            if (shouldGenerateImages) {
+              await generateImages(result);
+            }
           }
         }
       },
@@ -1051,20 +1092,35 @@ export default function ClientArticleEditor() {
       {/* Main Content */}
       <div className="flex-1 min-h-0">
         {phase === 'form' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-            <SimpleArticleForm 
-              onGenerate={handleGenerate} 
-              isGenerating={isGenerating}
-            />
-            <Card className="h-full flex items-center justify-center bg-muted/30 border-dashed">
-              <CardContent className="text-center py-12">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-semibold text-muted-foreground">Preview do Artigo</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  O artigo aparecerá aqui enquanto é gerado
-                </p>
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-6 h-full overflow-auto">
+            {/* Mini Content Calendar - Shows scheduled/published items */}
+            {blog?.id && (
+              <MiniContentCalendar 
+                blogId={blog.id}
+                onDayClick={(date, items) => {
+                  if (items.length > 0) {
+                    toast.info(`${items.length} item(s) em ${date.toLocaleDateString('pt-BR')}`);
+                  }
+                }}
+              />
+            )}
+            
+            {/* Form and Preview Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+              <SimpleArticleForm 
+                onGenerate={handleGenerate} 
+                isGenerating={isGenerating}
+              />
+              <Card className="h-full flex items-center justify-center bg-muted/30 border-dashed">
+                <CardContent className="text-center py-12">
+                  <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="font-semibold text-muted-foreground">Preview do Artigo</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    O artigo aparecerá aqui enquanto é gerado
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
         
