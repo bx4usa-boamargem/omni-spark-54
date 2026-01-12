@@ -103,13 +103,13 @@ export function MediaSlotControl({
       const fileName = `${userId}/${folder}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("blog-assets")
+        .from("blog-branding")
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from("blog-assets")
+        .from("blog-branding")
         .getPublicUrl(fileName);
 
       // Clear background color when setting image
