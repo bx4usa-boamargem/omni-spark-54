@@ -88,30 +88,68 @@ export function useSEOOptimization() {
         message: 'Gerando sugestões com IA...' 
       });
 
-      // Call edge function to generate suggestions
-      const { data, error: fnError } = await supabase.functions.invoke('batch-seo-suggestions', {
-        body: { 
-          type, 
-          articles: filtered.map(a => ({
-            id: a.id,
-            title: a.title,
-            meta_description: a.meta_description,
-            content: a.content?.substring(0, 5000), // Limit content size
-            keywords: a.keywords
-          })),
-          blog_id: blogId,
-          user_id: userId
+      // Retry logic for robustness
+      const MAX_RETRIES = 2;
+      let retries = 0;
+      let data: any = null;
+      let fnError: any = null;
+
+      while (retries <= MAX_RETRIES) {
+        const result = await supabase.functions.invoke('batch-seo-suggestions', {
+          body: { 
+            type, 
+            articles: filtered.map(a => ({
+              id: a.id,
+              title: a.title,
+              meta_description: a.meta_description,
+              content: a.content?.substring(0, 3000), // Limit content size
+              keywords: a.keywords
+            })),
+            blog_id: blogId,
+            user_id: userId
+          }
+        });
+
+        data = result.data;
+        fnError = result.error;
+
+        // If we have suggestions, we're done
+        if (data?.suggestions && data.suggestions.length > 0) {
+          break;
         }
-      });
+
+        // If there was a partial error and we have retries left, try again
+        if (data?.partialError && retries < MAX_RETRIES) {
+          console.log(`[SEO] Retry ${retries + 1}/${MAX_RETRIES} due to partial parsing error`);
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        break;
+      }
 
       if (fnError) {
         throw new Error(fnError.message || 'Erro ao gerar sugestões');
       }
 
       if (!data?.suggestions || data.suggestions.length === 0) {
+        // Check if it was a parsing error vs genuinely no suggestions
+        if (data?.partialError) {
+          setError('A IA teve dificuldade em processar alguns artigos. Tente novamente.');
+          setPhase('idle');
+          toast.warning('Erro parcial ao processar. Tente novamente.');
+          return;
+        }
+        
         setPhase('idle');
         toast.info('Nenhuma sugestão de melhoria encontrada.');
         return;
+      }
+
+      // Show warning if there was a partial error but we still got some suggestions
+      if (data.partialError) {
+        toast.warning(`${data.successCount} sugestões geradas (algumas podem ter falhado)`);
       }
 
       const mappedSuggestions: OptimizationSuggestion[] = data.suggestions.map((s: any) => ({
@@ -136,7 +174,7 @@ export function useSEOOptimization() {
       console.error('SEO optimization error:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setPhase('idle');
-      toast.error('Erro ao analisar artigos');
+      toast.error('Erro ao analisar artigos. Tente novamente.');
     }
   }, []);
 

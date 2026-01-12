@@ -130,8 +130,20 @@ export function SEOOptimizationDrawer({
         <div className="flex flex-col h-[calc(100vh-200px)]">
           {/* Processing States */}
           {(phase === 'analyzing' || phase === 'generating' || phase === 'applying') && (
-            <div className="flex-1 flex items-center justify-center p-8">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
               <AIProgressIndicator phase={phase} progress={progress} />
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  {phase === 'analyzing' && 'Analisando qualidade dos artigos...'}
+                  {phase === 'generating' && `Gerando sugestões inteligentes...`}
+                  {phase === 'applying' && `Aplicando alterações...`}
+                </p>
+                {progress.total > 0 && (
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    {progress.current} de {progress.total} processados
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
