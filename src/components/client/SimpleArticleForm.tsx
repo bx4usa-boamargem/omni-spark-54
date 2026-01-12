@@ -4,25 +4,62 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Sparkles, Zap, Brain, Loader2, Mic, MicOff } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Sparkles, 
+  Zap, 
+  Brain, 
+  Loader2, 
+  Mic, 
+  MicOff,
+  CalendarIcon,
+  Clock,
+  Image as ImageIcon,
+  Send,
+  CalendarClock
+} from 'lucide-react';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { format, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export interface SimpleFormData {
   theme: string;
   generationMode: 'fast' | 'deep';
+  // Scheduling options
+  scheduleMode: 'now' | 'scheduled';
+  scheduledDate?: Date;
+  scheduledTime?: string;
+  generateImages: boolean;
 }
 
 interface SimpleArticleFormProps {
   onGenerate: (data: SimpleFormData) => void;
   isGenerating: boolean;
-  disabled?: boolean; // NEW: External lock for preventing double-submission
+  disabled?: boolean;
 }
+
+const TIME_OPTIONS = [
+  { value: '06:00', label: '06:00 - Madrugadores' },
+  { value: '08:00', label: '08:00 - Manhã cedo' },
+  { value: '09:00', label: '09:00 - Manhã (Padrão)' },
+  { value: '12:00', label: '12:00 - Almoço' },
+  { value: '18:00', label: '18:00 - Final do dia' },
+  { value: '21:00', label: '21:00 - Noite' },
+];
 
 export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }: SimpleArticleFormProps) {
   const [theme, setTheme] = useState('');
   const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now');
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(addDays(new Date(), 1));
+  const [scheduledTime, setScheduledTime] = useState('09:00');
+  const [generateImages, setGenerateImages] = useState(true);
+  
   const isLocked = isGenerating || disabled;
   
   const { 
@@ -61,7 +98,15 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!theme.trim()) return;
-    onGenerate({ theme: theme.trim(), generationMode });
+    
+    onGenerate({ 
+      theme: theme.trim(), 
+      generationMode,
+      scheduleMode,
+      scheduledDate: scheduleMode === 'scheduled' ? scheduledDate : undefined,
+      scheduledTime: scheduleMode === 'scheduled' ? scheduledTime : undefined,
+      generateImages
+    });
   };
 
   return (
@@ -77,7 +122,7 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6 flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5 flex-1">
           {/* Theme Input with Microphone */}
           <div className="space-y-2 flex-1">
             <div className="flex items-center justify-between">
@@ -127,7 +172,7 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
               className={cn(
-                "min-h-[160px] resize-none text-base",
+                "min-h-[120px] resize-none text-base",
                 isListening && "border-red-500 ring-2 ring-red-500/20"
               )}
               disabled={isLocked}
@@ -140,7 +185,7 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
           </div>
 
           {/* Generation Mode */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Label>Modo de Geração</Label>
             <RadioGroup
               value={generationMode}
@@ -152,12 +197,12 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
                 <RadioGroupItem value="fast" id="fast" className="peer sr-only" />
                 <Label
                   htmlFor="fast"
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
                 >
-                  <Zap className="h-5 w-5 text-yellow-500" />
+                  <Zap className="h-4 w-4 text-yellow-500" />
                   <div className="text-center">
-                    <p className="font-medium">Rápido</p>
-                    <p className="text-xs text-muted-foreground">400-1000 palavras</p>
+                    <p className="font-medium text-sm">Rápido</p>
+                    <p className="text-[10px] text-muted-foreground">400-1000 palavras</p>
                   </div>
                 </Label>
               </div>
@@ -166,23 +211,143 @@ export function SimpleArticleForm({ onGenerate, isGenerating, disabled = false }
                 <RadioGroupItem value="deep" id="deep" className="peer sr-only" />
                 <Label
                   htmlFor="deep"
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
                 >
-                  <Brain className="h-5 w-5 text-purple-500" />
+                  <Brain className="h-4 w-4 text-purple-500" />
                   <div className="text-center">
-                    <p className="font-medium">Profundo</p>
-                    <p className="text-xs text-muted-foreground">1500-3000 palavras</p>
+                    <p className="font-medium text-sm">Profundo</p>
+                    <p className="text-[10px] text-muted-foreground">1500-3000 palavras</p>
                   </div>
                 </Label>
               </div>
             </RadioGroup>
           </div>
 
+          {/* Publication Mode */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
+              Publicação
+            </Label>
+            <RadioGroup
+              value={scheduleMode}
+              onValueChange={(value) => setScheduleMode(value as 'now' | 'scheduled')}
+              className="grid grid-cols-2 gap-3"
+              disabled={isLocked}
+            >
+              <div>
+                <RadioGroupItem value="now" id="now" className="peer sr-only" />
+                <Label
+                  htmlFor="now"
+                  className="flex items-center justify-center gap-2 rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
+                >
+                  <Send className="h-4 w-4 text-green-500" />
+                  <span className="font-medium text-sm">Publicar agora</span>
+                </Label>
+              </div>
+              
+              <div>
+                <RadioGroupItem value="scheduled" id="scheduled" className="peer sr-only" />
+                <Label
+                  htmlFor="scheduled"
+                  className="flex items-center justify-center gap-2 rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-colors"
+                >
+                  <CalendarIcon className="h-4 w-4 text-blue-500" />
+                  <span className="font-medium text-sm">Agendar</span>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {/* Schedule Date/Time (only when scheduled) */}
+            {scheduleMode === 'scheduled' && (
+              <div className="grid grid-cols-2 gap-3 mt-3 p-3 rounded-lg bg-muted/50 border">
+                {/* Date Picker */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <CalendarIcon className="h-3 w-3" />
+                    Data
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-left font-normal h-9"
+                        disabled={isLocked}
+                      >
+                        {scheduledDate ? (
+                          format(scheduledDate, 'dd/MM/yyyy', { locale: ptBR })
+                        ) : (
+                          <span className="text-muted-foreground">Selecionar</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={scheduledDate}
+                        onSelect={setScheduledDate}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Time Picker */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Horário
+                  </Label>
+                  <Select
+                    value={scheduledTime}
+                    onValueChange={setScheduledTime}
+                    disabled={isLocked}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Image Generation Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+            <div className="flex items-center gap-3">
+              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <Label className="text-sm font-medium cursor-pointer" htmlFor="generate-images">
+                  Gerar imagens automaticamente
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Capa + 3 imagens contextuais
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="generate-images"
+              checked={generateImages}
+              onCheckedChange={setGenerateImages}
+              disabled={isLocked}
+            />
+          </div>
+
           {/* Submit Button */}
           <Button
             type="submit"
             size="lg"
-            className="w-full h-14 text-lg gap-3"
+            className="w-full h-12 text-base gap-3"
             disabled={!theme.trim() || isLocked}
           >
             {isGenerating ? (
