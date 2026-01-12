@@ -17,11 +17,12 @@ const corsHeaders = {
 interface ImproveRequest {
   type: 'title' | 'meta' | 'content' | 'density';
   currentValue: string;
-  keywords: string[];
+  keywords?: string[]; // Now optional - will be auto-generated if missing
   context?: string; // article content for context
   articleTitle?: string;
   user_id?: string;
   blog_id?: string;
+  article_id?: string; // Used to persist auto-generated keywords
   wordCount?: number; // current word count
   targetWordCount?: number; // target word count to reach
 }
@@ -83,11 +84,12 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { type, currentValue, keywords, context, articleTitle, user_id, blog_id, wordCount, targetWordCount }: ImproveRequest = await req.json();
+    const { type, currentValue, keywords, context, articleTitle, user_id, blog_id, article_id, wordCount, targetWordCount }: ImproveRequest = await req.json();
 
-    if (!type || !keywords || keywords.length === 0) {
+    // Only validate type - keywords will be auto-generated if missing
+    if (!type) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: type or keywords' }),
+        JSON.stringify({ error: 'Missing required field: type' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -146,7 +148,9 @@ serve(async (req) => {
     }
 
     // ========== GERAR KEYWORDS AUTOMATICAMENTE SE VAZIAS ==========
-    let finalKeywords = keywords;
+    let finalKeywords = keywords || [];
+    let keywordsWereGenerated = false;
+    
     if (finalKeywords.length === 0 || (finalKeywords.length === 1 && !finalKeywords[0])) {
       const theme = articleTitle || 'artigo';
       const autoKeywords = generateAutoKeywords(theme, {
@@ -155,7 +159,22 @@ serve(async (req) => {
         services: businessContext.services
       });
       finalKeywords = [autoKeywords.primary, ...autoKeywords.secondary];
+      keywordsWereGenerated = true;
       console.log(`[AUTO-KEYWORDS] Generated: ${finalKeywords.join(', ')}`);
+      
+      // Persist auto-generated keywords to the article
+      if (article_id) {
+        const { error: updateError } = await supabase
+          .from('articles')
+          .update({ keywords: finalKeywords })
+          .eq('id', article_id);
+        
+        if (updateError) {
+          console.warn(`[AUTO-KEYWORDS] Failed to persist to article: ${updateError.message}`);
+        } else {
+          console.log(`[AUTO-KEYWORDS] Persisted to article ${article_id}`);
+        }
+      }
     }
 
     const keywordList = finalKeywords.join(', ');
