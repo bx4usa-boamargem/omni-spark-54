@@ -41,6 +41,7 @@ interface MiniSitePreviewProps {
   bannerDescription: string;
   bannerImageUrl: string;
   bannerBackgroundColor?: string | null;
+  bannerOverlayOpacity?: number;
   ctaText: string;
   ctaUrl: string;
   brandDescription: string;
@@ -78,6 +79,7 @@ export function MiniSitePreview({
   bannerDescription,
   bannerImageUrl,
   bannerBackgroundColor,
+  bannerOverlayOpacity = 50,
   ctaText,
   ctaUrl,
   brandDescription,
@@ -268,20 +270,20 @@ export function MiniSitePreview({
           {/* Hero Section */}
           {bannerEnabled && (
             <section
-              className="py-16 px-6 text-center relative overflow-hidden"
+              className="py-10 md:py-16 px-4 md:px-6 text-center relative overflow-hidden"
               style={{
                 background: bannerImageUrl 
-                  ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${bannerImageUrl}) center/cover`
+                  ? `linear-gradient(rgba(0,0,0,${bannerOverlayOpacity / 100}), rgba(0,0,0,${bannerOverlayOpacity / 100})), url(${bannerImageUrl}) center/cover`
                   : bannerBackgroundColor
                   ? bannerBackgroundColor
                   : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
               }}
             >
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              <h1 className="text-2xl md:text-4xl font-bold text-white mb-3 md:mb-4 leading-tight">
                 {bannerTitle || companyName || "Bem-vindo"}
               </h1>
               {bannerDescription && (
-                <p className="text-white/90 max-w-lg mx-auto mb-6">
+                <p className="text-white/90 text-sm md:text-base max-w-lg mx-auto mb-4 md:mb-6 leading-relaxed">
                   {bannerDescription}
                 </p>
               )}

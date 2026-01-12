@@ -35,6 +35,7 @@ interface MiniSiteEditorProps {
   bannerDescription: string;
   bannerImageUrl: string;
   bannerBackgroundColor?: string | null;
+  bannerOverlayOpacity?: number;
   ctaText: string;
   ctaUrl: string;
   
@@ -69,6 +70,7 @@ interface MiniSiteEditorProps {
   onBannerDescriptionChange: (value: string) => void;
   onBannerImageUrlChange: (value: string | null) => void;
   onBannerBackgroundColorChange?: (value: string | null) => void;
+  onBannerOverlayOpacityChange?: (value: number) => void;
   onCtaTextChange: (value: string) => void;
   onCtaUrlChange: (value: string) => void;
   onBrandDescriptionChange: (value: string) => void;
@@ -99,6 +101,7 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
     bannerDescription,
     bannerImageUrl,
     bannerBackgroundColor,
+    bannerOverlayOpacity,
     ctaText,
     ctaUrl,
     brandDescription,
@@ -125,6 +128,7 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
     onBannerDescriptionChange,
     onBannerImageUrlChange,
     onBannerBackgroundColorChange,
+    onBannerOverlayOpacityChange,
     onCtaTextChange,
     onCtaUrlChange,
     onBrandDescriptionChange,
@@ -240,6 +244,7 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
               bannerDescription={bannerDescription}
               bannerImageUrl={bannerImageUrl}
               bannerBackgroundColor={bannerBackgroundColor}
+              bannerOverlayOpacity={bannerOverlayOpacity}
               ctaText={ctaText}
               ctaUrl={ctaUrl}
               userId={userId}
@@ -248,6 +253,7 @@ export function MiniSiteEditor(props: MiniSiteEditorProps) {
               onBannerDescriptionChange={onBannerDescriptionChange}
               onBannerImageUrlChange={onBannerImageUrlChange}
               onBannerBackgroundColorChange={onBannerBackgroundColorChange}
+              onBannerOverlayOpacityChange={onBannerOverlayOpacityChange}
               onCtaTextChange={onCtaTextChange}
               onCtaUrlChange={onCtaUrlChange}
             />

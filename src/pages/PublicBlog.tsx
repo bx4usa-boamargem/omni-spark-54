@@ -61,6 +61,7 @@ interface Blog {
   header_cta_text: string | null;
   header_cta_url: string | null;
   show_categories_footer: boolean | null;
+  banner_overlay_opacity: number | null;
 }
 
 interface Article {
@@ -239,33 +240,38 @@ const PublicBlog = () => {
       {/* Hero Section - Two modes based on banner_enabled */}
       {blog.banner_enabled ? (
         // Hero with full gradient (banner enabled)
-        <section
-          className="py-16 md:py-24 relative overflow-hidden"
-          style={{
-            background: blog.banner_image_url 
-              ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${blog.banner_image_url}) center/cover`
-              : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-          }}
-        >
-          <div className="container mx-auto px-4 text-center relative z-10">
-            <h1 className="font-heading text-4xl md:text-5xl font-bold text-white mb-4">
-              {blog.banner_title || blog.name}
-            </h1>
-            {blog.banner_description && (
-              <p className="text-white/90 text-lg md:text-xl max-w-2xl mx-auto mb-6">
-                {blog.banner_description}
-              </p>
-            )}
-            {blog.cta_text && blog.cta_url && (
-              <Button
-                onClick={() => handleCtaClick(blog.cta_url, blog.cta_type)}
-                className="bg-white text-gray-900 hover:bg-gray-100 px-8 py-3"
-              >
-                {blog.cta_text}
-              </Button>
-            )}
-          </div>
-        </section>
+        (() => {
+          const overlayOpacity = ((blog as any).banner_overlay_opacity ?? 50) / 100;
+          return (
+            <section
+              className="py-12 md:py-24 px-4 relative overflow-hidden"
+              style={{
+                background: blog.banner_image_url 
+                  ? `linear-gradient(rgba(0,0,0,${overlayOpacity}), rgba(0,0,0,${overlayOpacity})), url(${blog.banner_image_url}) center/cover`
+                  : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+              }}
+            >
+              <div className="container mx-auto px-4 text-center relative z-10">
+                <h1 className="font-heading text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-3 md:mb-4 leading-tight">
+                  {blog.banner_title || blog.name}
+                </h1>
+                {blog.banner_description && (
+                  <p className="text-white/90 text-sm md:text-lg lg:text-xl max-w-2xl mx-auto mb-4 md:mb-6 leading-relaxed">
+                    {blog.banner_description}
+                  </p>
+                )}
+                {blog.cta_text && blog.cta_url && (
+                  <Button
+                    onClick={() => handleCtaClick(blog.cta_url, blog.cta_type)}
+                    className="bg-white text-gray-900 hover:bg-gray-100 px-6 md:px-8 py-2.5 md:py-3 text-sm md:text-base"
+                  >
+                    {blog.cta_text}
+                  </Button>
+                )}
+              </div>
+            </section>
+          );
+        })()
       ) : (
         // Simple hero with light gradient (banner disabled)
         <section 

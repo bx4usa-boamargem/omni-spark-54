@@ -21,6 +21,8 @@ import { ArticleSidebar } from "@/components/editor/ArticleSidebar";
 import { SocialSharePanel } from "@/components/social/SocialSharePanel";
 import { ImproveArticleDialog } from "@/components/editor/ImproveArticleDialog";
 import { PublishWithTranslationDialog } from "@/components/editor/PublishWithTranslationDialog";
+import { KeywordDensityChecker } from "@/components/editor/KeywordDensityChecker";
+import { KeywordPositionGuide } from "@/components/editor/KeywordPositionGuide";
 import { streamArticle } from "@/utils/streamArticle";
 import { getArticleUrl } from "@/utils/blogUrl";
 import { useToast } from "@/hooks/use-toast";
@@ -1410,6 +1412,20 @@ export default function EditArticle() {
                   onAddSuggestedKeyword={addSuggestedKeyword}
                   isLoadingSuggestions={isLoadingSuggestions}
                 />
+
+                {/* Keyword SEO Tools */}
+                {keywords.length > 0 && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <KeywordDensityChecker
+                      content={article?.content || ""}
+                      keywords={keywords}
+                    />
+                    <KeywordPositionGuide
+                      content={article?.content || ""}
+                      keywords={keywords}
+                    />
+                  </div>
+                )}
 
                 {/* Internal Links */}
                 {article && (

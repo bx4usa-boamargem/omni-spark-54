@@ -1048,6 +1048,7 @@ export type Database = {
           banner_image_url: string | null
           banner_link_url: string | null
           banner_mobile_image_url: string | null
+          banner_overlay_opacity: number | null
           banner_title: string | null
           brand_description: string | null
           brand_display_mode: string | null
@@ -1105,6 +1106,7 @@ export type Database = {
           banner_image_url?: string | null
           banner_link_url?: string | null
           banner_mobile_image_url?: string | null
+          banner_overlay_opacity?: number | null
           banner_title?: string | null
           brand_description?: string | null
           brand_display_mode?: string | null
@@ -1162,6 +1164,7 @@ export type Database = {
           banner_image_url?: string | null
           banner_link_url?: string | null
           banner_mobile_image_url?: string | null
+          banner_overlay_opacity?: number | null
           banner_title?: string | null
           brand_description?: string | null
           brand_display_mode?: string | null
