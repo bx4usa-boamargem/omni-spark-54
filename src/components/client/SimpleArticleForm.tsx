@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Sparkles, Zap, Brain, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, Brain, Loader2, Mic, MicOff } from 'lucide-react';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export interface SimpleFormData {
   theme: string;
@@ -19,6 +22,39 @@ interface SimpleArticleFormProps {
 export function SimpleArticleForm({ onGenerate, isGenerating }: SimpleArticleFormProps) {
   const [theme, setTheme] = useState('');
   const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
+  
+  const { 
+    isListening, 
+    transcript, 
+    isSupported, 
+    error: speechError,
+    startListening, 
+    stopListening,
+    resetTranscript
+  } = useSpeechRecognition();
+
+  // Update theme when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setTheme(prev => prev ? `${prev} ${transcript}` : transcript);
+      resetTranscript();
+    }
+  }, [transcript, resetTranscript]);
+
+  // Show speech error
+  useEffect(() => {
+    if (speechError) {
+      toast.error(speechError);
+    }
+  }, [speechError]);
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,25 +70,70 @@ export function SimpleArticleForm({ onGenerate, isGenerating }: SimpleArticleFor
           Novo Artigo
         </CardTitle>
         <CardDescription>
-          Digite o tema e a IA criará um artigo completo para você
+          Digite ou fale o tema e a IA criará um artigo completo para você
         </CardDescription>
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6 flex-1">
-          {/* Theme Input */}
+          {/* Theme Input with Microphone */}
           <div className="space-y-2 flex-1">
-            <Label htmlFor="theme">Tema do Artigo</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="theme">Tema do Artigo</Label>
+              {isSupported && (
+                <Button 
+                  type="button"
+                  variant={isListening ? "destructive" : "ghost"}
+                  size="sm"
+                  onClick={toggleListening}
+                  disabled={isGenerating}
+                  className={cn(
+                    "gap-2 transition-all",
+                    isListening && "animate-pulse"
+                  )}
+                >
+                  {isListening ? (
+                    <>
+                      <MicOff className="h-4 w-4" />
+                      Parar
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4" />
+                      Falar
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            
+            {/* Recording Indicator */}
+            {isListening && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                  Gravando... Fale o tema do seu artigo
+                </span>
+              </div>
+            )}
+            
             <Textarea
               id="theme"
-              placeholder='Ex: "Dicas para manter a casa limpa no verão" ou "Como escolher o melhor serviço de dedetização"'
+              placeholder={isListening 
+                ? 'Fale agora... 🎤' 
+                : 'Ex: "Dicas para manter a casa limpa no verão" ou "Como escolher o melhor serviço de dedetização"'}
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
-              className="min-h-[160px] resize-none text-base"
+              className={cn(
+                "min-h-[160px] resize-none text-base",
+                isListening && "border-red-500 ring-2 ring-red-500/20"
+              )}
               disabled={isGenerating}
             />
             <p className="text-xs text-muted-foreground">
-              Seja específico sobre o tema do seu negócio. Pense no que seus clientes perguntam.
+              {isSupported 
+                ? 'Digite ou use o microfone 🎤 para ditar o tema do seu artigo.'
+                : 'Seja específico sobre o tema do seu negócio. Pense no que seus clientes perguntam.'}
             </p>
           </div>
 
