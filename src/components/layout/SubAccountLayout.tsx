@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, PenSquare, Globe, Zap, Building2, User, Menu, LogOut, BarChart3, Search, FileText, Inbox } from 'lucide-react';
+import { Home, PenSquare, Globe, Zap, Building2, User, Menu, LogOut, BarChart3, Search, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
@@ -22,7 +22,6 @@ const navItems: NavItem[] = [
   { icon: Home, label: 'Início', path: '/client/dashboard' },
   { icon: PenSquare, label: 'Criar Artigo', path: '/client/create' },
   { icon: FileText, label: 'Meus Artigos', path: '/client/articles' },
-  { icon: Inbox, label: 'Fila de Produção', path: '/client/queue' },
   { icon: Globe, label: 'Meu Mini-Site', path: '/client/site' },
   { icon: BarChart3, label: 'Desempenho', path: '/client/performance' },
   { icon: Zap, label: 'Automação', path: '/client/automation' },
