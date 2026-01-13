@@ -15,10 +15,10 @@ export function ConversionFunnel({
   publishedArticles
 }: ConversionFunnelProps) {
   const steps = [
-    { label: 'Oportunidades', value: totalOpportunities, color: 'bg-gray-400' },
-    { label: 'Alto Score (90%+)', value: highScoreOpportunities, color: 'bg-yellow-500' },
-    { label: 'Convertidas em Artigos', value: convertedToArticles, color: 'bg-blue-500' },
-    { label: 'Publicadas', value: publishedArticles, color: 'bg-green-500' }
+    { label: '📡 Oportunidades Detectadas', value: totalOpportunities, color: 'bg-slate-400' },
+    { label: '⭐ Alto Potencial (90%+)', value: highScoreOpportunities, color: 'bg-yellow-500' },
+    { label: '📝 Transformadas em Conteúdo', value: convertedToArticles, color: 'bg-blue-500' },
+    { label: '✅ Publicadas', value: publishedArticles, color: 'bg-green-500' }
   ];
 
   const maxValue = Math.max(...steps.map(s => s.value), 1);
@@ -27,8 +27,11 @@ export function ConversionFunnel({
     <Card className="bg-white dark:bg-white/5 border-slate-200 dark:border-white/10">
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
-          🏆 Funil de Conversão
+          🛠️ Funil de Execução Editorial
         </CardTitle>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Acompanhe o progresso das oportunidades até a publicação
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {steps.map((step, index) => {

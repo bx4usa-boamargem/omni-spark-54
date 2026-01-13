@@ -1,11 +1,12 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Target, FileCheck, Percent, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { Target, FileCheck, Crosshair, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MetricsSummaryCardsProps {
   highScoreOpportunities: number;
   convertedArticles: number;
-  conversionRate: number;
+  radarUtilizationRate: number;
   estimatedROI: number;
   previousHighScore?: number;
   previousConverted?: number;
@@ -15,7 +16,7 @@ interface MetricsSummaryCardsProps {
 export function MetricsSummaryCards({
   highScoreOpportunities,
   convertedArticles,
-  conversionRate,
+  radarUtilizationRate,
   estimatedROI,
   previousHighScore = 0,
   previousConverted = 0,
@@ -57,12 +58,13 @@ export function MetricsSummaryCards({
       bgColor: 'bg-blue-500/10'
     },
     {
-      icon: Percent,
-      label: 'Taxa de Conversão',
-      value: `${conversionRate.toFixed(0)}%`,
+      icon: Crosshair,
+      label: 'Aproveitamento do Radar',
+      value: `${radarUtilizationRate.toFixed(0)}%`,
       delta: null,
-      color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-500/10'
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-500/10',
+      tooltip: 'Este indicador mostra o percentual das oportunidades detectadas pelo sistema que já foram transformadas em artigos reais.\n\nEle mede o quanto você está executando o plano editorial sugerido pela IA — não o resultado no mercado.'
     },
     {
       icon: DollarSign,
@@ -75,39 +77,58 @@ export function MetricsSummaryCards({
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map((card) => (
-        <Card key={card.label} className="bg-white dark:bg-white/5 border-slate-200 dark:border-white/10">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className={cn('p-2 rounded-lg', card.bgColor)}>
-                <card.icon className={cn('h-5 w-5', card.color)} />
-              </div>
-              {card.delta !== null && (
-                <div className={cn(
-                  'flex items-center gap-1 text-xs font-medium',
-                  card.delta >= 0 ? 'text-green-600' : 'text-red-600'
-                )}>
-                  {card.delta >= 0 ? (
-                    <TrendingUp className="h-3 w-3" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" />
+    <TooltipProvider>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((card) => {
+          const cardContent = (
+            <Card key={card.label} className="bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 cursor-default">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className={cn('p-2 rounded-lg', card.bgColor)}>
+                    <card.icon className={cn('h-5 w-5', card.color)} />
+                  </div>
+                  {card.delta !== null && (
+                    <div className={cn(
+                      'flex items-center gap-1 text-xs font-medium',
+                      card.delta >= 0 ? 'text-green-600' : 'text-red-600'
+                    )}>
+                      {card.delta >= 0 ? (
+                        <TrendingUp className="h-3 w-3" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3" />
+                      )}
+                      {Math.abs(card.delta).toFixed(0)}%
+                    </div>
                   )}
-                  {Math.abs(card.delta).toFixed(0)}%
                 </div>
-              )}
-            </div>
-            <div className="mt-4">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {card.value}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {card.label}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+                <div className="mt-4">
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {card.value}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {card.label}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+
+          if (card.tooltip) {
+            return (
+              <Tooltip key={card.label}>
+                <TooltipTrigger asChild>
+                  {cardContent}
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs whitespace-pre-line text-sm">
+                  {card.tooltip}
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+
+          return cardContent;
+        })}
+      </div>
+    </TooltipProvider>
   );
 }
