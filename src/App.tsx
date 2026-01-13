@@ -143,22 +143,38 @@ const ClientRoutes = () => (
     <SubAccountLayout>
       <Routes>
         <Route path="dashboard" element={<ClientDashboard />} />
-        <Route path="posts" element={<ClientPosts />} />
-        <Route path="create" element={<ClientArticleEditor />} />
+        
+        {/* Resultados & ROI */}
+        <Route path="results" element={<ClientConsultantMetrics />} />
+        
+        {/* Radar de Oportunidades (antigo Estratégia) */}
+        <Route path="radar" element={<ClientStrategy />} />
+        
+        {/* Conteúdo */}
         <Route path="articles" element={<ClientArticles />} />
+        <Route path="portal" element={<ClientSite />} />
+        <Route path="create" element={<ClientArticleEditor />} />
         <Route path="articles/:id/edit" element={<ClientArticleEditor />} />
-        <Route path="queue" element={<Navigate to="/client/automation?tab=queue" replace />} />
         <Route path="review/:id" element={<ClientReviewCenter />} />
-        <Route path="site" element={<ClientSite />} />
-        <Route path="performance" element={<ClientPerformance />} />
+        
+        {/* Operação */}
         <Route path="automation" element={<ClientAutomation />} />
         <Route path="company" element={<ClientCompany />} />
         <Route path="account" element={<ClientAccount />} />
-        <Route path="seo" element={<ClientSEO />} />
-        <Route path="strategy" element={<ClientStrategy />} />
-        <Route path="consultant" element={<ClientConsultantMetrics />} />
-        <Route path="notifications" element={<ClientNotificationSettings />} />
+        
+        {/* Integrações */}
         <Route path="integrations/gsc" element={<ClientGSCIntegration />} />
+        
+        {/* Legacy redirects para compatibilidade */}
+        <Route path="posts" element={<Navigate to="/client/articles" replace />} />
+        <Route path="site" element={<Navigate to="/client/portal" replace />} />
+        <Route path="strategy" element={<Navigate to="/client/radar" replace />} />
+        <Route path="consultant" element={<Navigate to="/client/results" replace />} />
+        <Route path="performance" element={<Navigate to="/client/results?tab=performance" replace />} />
+        <Route path="seo" element={<Navigate to="/client/results" replace />} />
+        <Route path="notifications" element={<Navigate to="/client/account" replace />} />
+        <Route path="queue" element={<Navigate to="/client/automation?tab=queue" replace />} />
+        
         <Route path="*" element={<Navigate to="/client/dashboard" replace />} />
       </Routes>
     </SubAccountLayout>
