@@ -773,6 +773,7 @@ export type Database = {
           share_count: number | null
           slug: string
           social_share_count: Json | null
+          source_payload: Json | null
           status: string | null
           tags: string[] | null
           target_persona_id: string | null
@@ -811,6 +812,7 @@ export type Database = {
           share_count?: number | null
           slug: string
           social_share_count?: Json | null
+          source_payload?: Json | null
           status?: string | null
           tags?: string[] | null
           target_persona_id?: string | null
@@ -849,6 +851,7 @@ export type Database = {
           share_count?: number | null
           slug?: string
           social_share_count?: Json | null
+          source_payload?: Json | null
           status?: string | null
           tags?: string[] | null
           target_persona_id?: string | null
