@@ -104,7 +104,7 @@ export default function ClientConsultantMetrics() {
     const convertedToArticles = opportunities.filter(o => o.status === 'converted').length;
     const publishedArticles = articles.filter(a => a.status === 'published').length;
     
-    const conversionRate = totalOpportunities > 0 
+    const radarUtilizationRate = totalOpportunities > 0 
       ? (convertedToArticles / totalOpportunities) * 100 
       : 0;
     
@@ -130,7 +130,7 @@ export default function ClientConsultantMetrics() {
       lowScoreOpportunities,
       convertedToArticles,
       publishedArticles,
-      conversionRate,
+      radarUtilizationRate,
       totalViews,
       totalShares,
       estimatedROI
