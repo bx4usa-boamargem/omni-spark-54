@@ -112,8 +112,6 @@ export function ContentIdeaCard({
 
     return !!adminRole;
   };
-  const navigate = useNavigate();
-  const [creating, setCreating] = useState(false);
   
   const angleConf = angleConfig[angle] || angleConfig.educational;
   const goalConf = goalConfig[goal] || goalConfig.lead;
@@ -139,9 +137,27 @@ export function ContentIdeaCard({
   const handleCreateArticle = async () => {
     if (creating) return;
     setCreating(true);
-    toast.info('Criando artigo a partir da ideia...');
     
     try {
+      // Validar permissão do usuário para o blog
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Usuário não autenticado');
+        setCreating(false);
+        return;
+      }
+
+      console.log('[ContentIdeaCard] Creating article', { title, blogId, opportunityId, userId: user.id });
+
+      const hasPermission = await validateBlogPermission(user.id);
+      if (!hasPermission) {
+        toast.error('Você não tem permissão para criar artigos neste blog');
+        setCreating(false);
+        return;
+      }
+
+      toast.info('Criando artigo a partir da ideia...');
+
       // Se temos opportunityId, usar conversão direta via edge function
       if (opportunityId) {
         const { data, error } = await supabase.functions.invoke(
