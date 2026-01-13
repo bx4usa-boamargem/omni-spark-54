@@ -17,25 +17,17 @@ import {
   PenLine,
   ChevronDown,
   ChevronUp,
-  RotateCcw
+  RotateCcw,
+  Radar
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { toast } from "sonner";
-
 
 interface ContentCalendarTabProps {
   blogId: string;
-}
-
-interface ScheduledArticle {
-  id: string;
-  status: string;
-  scheduled_for: string | null;
-  suggested_theme: string;
 }
 
 interface Article {
@@ -46,20 +38,19 @@ interface Article {
   scheduled_at: string | null;
   created_at: string;
   generation_source: string | null;
+  opportunity_id: string | null;
+  funnel_stage: string | null;
 }
 
 export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [queueItems, setQueueItems] = useState<ScheduledArticle[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
-  const [unscheduledItems, setUnscheduledItems] = useState<ScheduledArticle[]>([]);
-  const [showUnscheduled, setShowUnscheduled] = useState(true);
   const [showDrafts, setShowDrafts] = useState(true);
   const [showPublished, setShowPublished] = useState(true);
 
-  // Filter states
-  const allFilters = ["published", "scheduled", "draft", "pending"];
+  // Filter states - only real article statuses
+  const allFilters = ["published", "scheduled", "draft"];
   const [activeFilters, setActiveFilters] = useState<string[]>(allFilters);
   const hasInactiveFilters = activeFilters.length < allFilters.length;
 
@@ -84,37 +75,19 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
     return publishDate >= sevenDaysAgo;
   });
 
-  // Filter articles and queue items without date
+  // Articles without scheduled date (excluding drafts shown separately)
   const unscheduledArticles = articles.filter(a => 
-    !a.published_at && !a.scheduled_at && a.status !== "draft"
+    !a.published_at && !a.scheduled_at && a.status !== "draft" && a.status !== "published"
   );
-  const allUnscheduledContent = [
-    ...unscheduledItems.map(item => ({ type: "queue" as const, ...item })),
-    ...unscheduledArticles.map(article => ({ type: "article" as const, ...article }))
-  ];
 
   useEffect(() => {
     async function fetchData() {
       if (!blogId) return;
 
-      // Fetch queue items (scheduled)
-      const { data: queueData } = await supabase
-        .from("article_queue")
-        .select("*")
-        .eq("blog_id", blogId)
-        .order("scheduled_for", { ascending: true });
-
-      if (queueData) {
-        const scheduled = queueData.filter((item) => item.scheduled_for);
-        const unscheduled = queueData.filter((item) => !item.scheduled_for);
-        setQueueItems(scheduled as ScheduledArticle[]);
-        setUnscheduledItems(unscheduled as ScheduledArticle[]);
-      }
-
-      // Fetch all articles with generation_source
+      // Fetch ALL articles - single source of truth
       const { data: articlesData } = await supabase
         .from("articles")
-        .select("id, title, status, published_at, scheduled_at, created_at, generation_source")
+        .select("id, title, status, published_at, scheduled_at, created_at, generation_source, opportunity_id, funnel_stage")
         .eq("blog_id", blogId)
         .order("created_at", { ascending: false });
 
@@ -124,6 +97,23 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
     }
 
     fetchData();
+
+    // Realtime subscription for articles only
+    const channel = supabase
+      .channel('calendar-articles')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'articles',
+        filter: `blog_id=eq.${blogId}`,
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [blogId]);
 
   const monthStart = startOfMonth(currentMonth);
@@ -132,15 +122,8 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
   const startDayOfWeek = monthStart.getDay();
   const emptyDays = Array(startDayOfWeek).fill(null);
 
-  const getItemsForDay = (day: Date) => {
-    const scheduled = queueItems.filter((item) => {
-      if (!item.scheduled_for) return false;
-      // Check if pending filter is active
-      if (!activeFilters.includes("pending") && (item.status === "pending" || item.status === "generating")) return false;
-      return isSameDay(new Date(item.scheduled_for), day);
-    });
-
-    const dayArticles = articles.filter((article) => {
+  const getItemsForDay = (day: Date): Article[] => {
+    return articles.filter((article) => {
       // Check if status filter is active
       if (!activeFilters.includes(article.status)) return false;
       
@@ -156,31 +139,32 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
       }
       return false;
     });
-
-    return { scheduled, articles: dayArticles };
   };
 
   const getStatusStyles = (status: string) => {
     switch (status) {
-      case "pending":
-        return "bg-warning/20 text-warning-foreground border-warning/30";
-      case "generating":
-        return "bg-primary/20 text-primary border-primary/30";
       case "scheduled":
         return "bg-blue-500/20 text-blue-600 border-blue-500/30";
       case "published":
         return "bg-success/20 text-success border-success/30";
       case "draft":
         return "bg-muted text-muted-foreground border-border";
-      case "failed":
-        return "bg-destructive/20 text-destructive border-destructive/30";
+      case "archived":
+        return "bg-gray-500/20 text-gray-600 border-gray-500/30";
       default:
         return "bg-muted text-muted-foreground";
     }
   };
 
-  const getSourceIcon = (source: string | null) => {
-    switch (source) {
+  const getSourceIcon = (article: Article) => {
+    // Priority: opportunity_id (Radar) > funnel_stage > generation_source
+    if (article.opportunity_id) {
+      return <Radar className="h-3 w-3 text-purple-500" />;
+    }
+    if (article.funnel_stage) {
+      return <Target className="h-3 w-3 text-orange-500" />;
+    }
+    switch (article.generation_source) {
       case "ai_suggestion":
         return <Sparkles className="h-3 w-3 text-primary" />;
       case "sales_funnel":
@@ -197,6 +181,31 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
       default:
         return <FileEdit className="h-3 w-3 text-muted-foreground" />;
     }
+  };
+
+  const getOriginBadge = (article: Article) => {
+    if (article.opportunity_id) {
+      return (
+        <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30 text-[9px] px-1.5">
+          📡 Radar
+        </Badge>
+      );
+    }
+    if (article.funnel_stage || article.generation_source === 'sales_funnel') {
+      return (
+        <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/30 text-[9px] px-1.5">
+          🎯 Funil
+        </Badge>
+      );
+    }
+    if (article.generation_source === 'automation') {
+      return (
+        <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/30 text-[9px] px-1.5">
+          ⚡ Auto
+        </Badge>
+      );
+    }
+    return null;
   };
 
   const getArticleTime = (article: Article) => {
@@ -264,18 +273,6 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
               Agendado
             </button>
             <button
-              onClick={() => toggleFilter("pending")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all",
-                activeFilters.includes("pending")
-                  ? "bg-warning/20 border-warning/50 text-warning"
-                  : "bg-muted/30 border-dashed border-muted-foreground/30 text-muted-foreground opacity-50"
-              )}
-            >
-              <div className="w-2 h-2 rounded-full bg-warning" />
-              Pendente
-            </button>
-            <button
               onClick={() => toggleFilter("draft")}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all",
@@ -306,14 +303,8 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
               <div key={`empty-${i}`} className="min-h-[120px] p-1" />
             ))}
             {days.map((day) => {
-              const { scheduled, articles: dayArticles } = getItemsForDay(day);
+              const dayArticles = getItemsForDay(day);
               const isToday = isSameDay(day, new Date());
-              const allItems = [...dayArticles, ...scheduled.map(s => ({ 
-                id: s.id, 
-                title: s.suggested_theme, 
-                status: s.status,
-                isQueue: true 
-              }))];
 
               return (
                 <div
@@ -337,7 +328,7 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
                     </span>
                   </div>
 
-                  {/* Articles */}
+                  {/* Articles - All clickable and open editor */}
                   <div className="flex-1 space-y-1.5 overflow-hidden">
                     {dayArticles.slice(0, 3).map((article) => (
                       <div
@@ -354,43 +345,26 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
                             <Clock className="h-2.5 w-2.5" />
                             {getArticleTime(article)}
                           </span>
-                          {getSourceIcon(article.generation_source)}
+                          {getSourceIcon(article)}
                           {article.status === "published" && <Check className="h-3 w-3 text-success ml-auto" />}
                         </div>
                         {/* Title */}
                         <p className="text-xs font-medium line-clamp-2 leading-tight">
                           {article.title}
                         </p>
-                      </div>
-                    ))}
-                    
-                    {/* Scheduled queue items */}
-                    {scheduled.slice(0, Math.max(0, 3 - dayArticles.length)).map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => toast.info("Este tema ainda precisa ser gerado. Clique em 'Gerar' na fila.")}
-                        className={cn(
-                          "p-2 rounded-lg border cursor-pointer hover:opacity-80 transition-opacity",
-                          getStatusStyles(item.status)
+                        {/* Origin Badge */}
+                        {getOriginBadge(article) && (
+                          <div className="mt-1">
+                            {getOriginBadge(article)}
+                          </div>
                         )}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="flex items-center gap-1 text-[10px] opacity-70">
-                            <Clock className="h-2.5 w-2.5" />
-                            {item.scheduled_for ? format(new Date(item.scheduled_for), "HH:mm") : "--:--"}
-                          </span>
-                          <Sparkles className="h-3 w-3 text-primary" />
-                        </div>
-                        <p className="text-xs font-medium line-clamp-2 leading-tight">
-                          {item.suggested_theme}
-                        </p>
                       </div>
                     ))}
 
                     {/* More items indicator */}
-                    {allItems.length > 3 && (
+                    {dayArticles.length > 3 && (
                       <span className="text-[10px] text-muted-foreground pl-1">
-                        +{allItems.length - 3} mais
+                        +{dayArticles.length - 3} mais
                       </span>
                     )}
                   </div>
@@ -442,7 +416,10 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
                           Criado em {format(new Date(draft.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </span>
                       </div>
-                      {getSourceIcon(draft.generation_source)}
+                      <div className="flex items-center gap-2">
+                        {getOriginBadge(draft)}
+                        {getSourceIcon(draft)}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -494,7 +471,8 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {getSourceIcon(article.generation_source)}
+                        {getOriginBadge(article)}
+                        {getSourceIcon(article)}
                         <Check className="h-4 w-4 text-success" />
                       </div>
                     </div>
@@ -506,76 +484,43 @@ export function ContentCalendarTab({ blogId }: ContentCalendarTabProps) {
         </Card>
       </Collapsible>
 
-      {/* Unscheduled Items Footer */}
-      <Collapsible open={showUnscheduled} onOpenChange={setShowUnscheduled}>
+      {/* Unscheduled Articles */}
+      {unscheduledArticles.length > 0 && (
         <Card>
-          <CollapsibleTrigger asChild>
-            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Conteúdos sem data</span>
-                {allUnscheduledContent.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {allUnscheduledContent.length}
-                  </Badge>
-                )}
-              </div>
-              {showUnscheduled ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">Conteúdos sem data</span>
+              <Badge variant="secondary" className="text-xs">
+                {unscheduledArticles.length}
+              </Badge>
             </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="px-4 pb-4">
-              {allUnscheduledContent.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum conteúdo pendente de agendamento
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {allUnscheduledContent.map((item) => (
-                    item.type === "queue" ? (
-                      <div
-                        key={`queue-${item.id}`}
-                        onClick={() => toast.info("Agende este conteúdo para gerar automaticamente.")}
-                        className={cn(
-                          "p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer flex items-center gap-2",
-                          getStatusStyles(item.status)
-                        )}
-                      >
-                        <Sparkles className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-sm flex-1">{item.suggested_theme}</span>
-                        <Badge variant="outline" className="text-[10px]">Na fila</Badge>
-                      </div>
-                    ) : (
-                      <div
-                        key={`article-${item.id}`}
-                        onClick={() => navigate(`/app/articles/${item.id}/edit`)}
-                        className="p-3 rounded-lg border bg-muted/30 hover:bg-muted cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{item.title}</p>
-                            <span className="text-xs text-muted-foreground">
-                              Criado em {format(new Date(item.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {getSourceIcon(item.generation_source)}
-                            <Badge variant="outline" className="text-[10px]">{item.status}</Badge>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  ))}
+          </div>
+          <div className="p-4 space-y-2">
+            {unscheduledArticles.map((article) => (
+              <div
+                key={article.id}
+                onClick={() => navigate(`/app/articles/${article.id}/edit`)}
+                className="p-3 rounded-lg border bg-muted/30 hover:bg-muted cursor-pointer transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{article.title}</p>
+                    <span className="text-xs text-muted-foreground">
+                      Criado em {format(new Date(article.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getOriginBadge(article)}
+                    {getSourceIcon(article)}
+                    <Badge variant="outline" className="text-[10px]">{article.status}</Badge>
+                  </div>
                 </div>
-              )}
-            </div>
-          </CollapsibleContent>
+              </div>
+            ))}
+          </div>
         </Card>
-      </Collapsible>
+      )}
     </div>
   );
 }

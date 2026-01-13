@@ -50,7 +50,10 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  Radar,
+  Target,
+  Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -66,6 +69,9 @@ interface Article {
   created_at: string;
   published_at: string | null;
   featured_image_url: string | null;
+  generation_source: string | null;
+  opportunity_id: string | null;
+  funnel_stage: string | null;
 }
 
 interface StatusCounts {
@@ -108,7 +114,7 @@ export default function ClientArticles() {
     try {
       const { data, error } = await supabase
         .from('articles')
-        .select('id, title, slug, status, created_at, published_at, featured_image_url')
+        .select('id, title, slug, status, created_at, published_at, featured_image_url, generation_source, opportunity_id, funnel_stage')
         .eq('blog_id', blog.id)
         .order('created_at', { ascending: false });
 
@@ -386,6 +392,34 @@ export default function ClientArticles() {
     }
   };
 
+  const getOriginBadge = (article: Article) => {
+    if (article.opportunity_id) {
+      return (
+        <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30 text-[10px] px-1.5 gap-1">
+          <Radar className="h-3 w-3" />
+          Radar
+        </Badge>
+      );
+    }
+    if (article.funnel_stage || article.generation_source === 'sales_funnel') {
+      return (
+        <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/30 text-[10px] px-1.5 gap-1">
+          <Target className="h-3 w-3" />
+          Funil
+        </Badge>
+      );
+    }
+    if (article.generation_source === 'automation') {
+      return (
+        <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/30 text-[10px] px-1.5 gap-1">
+          <Zap className="h-3 w-3" />
+          Auto
+        </Badge>
+      );
+    }
+    return null;
+  };
+
   const duplicateCount = Array.from(duplicates.values()).reduce((acc, group) => acc + group.length - 1, 0);
 
   if (loading) {
@@ -551,7 +585,10 @@ export default function ClientArticles() {
               />
               
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-text-main truncate">{article.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-text-main truncate">{article.title}</h3>
+                  {getOriginBadge(article)}
+                </div>
                 {!article.featured_image_url && (
                   <span className="text-xs text-amber-500">Sem imagem de capa</span>
                 )}
