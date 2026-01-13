@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreStars } from './ScoreStars';
-import { FileText, ExternalLink } from 'lucide-react';
+import { FileText, ExternalLink, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Opportunity {
   id: string;
@@ -22,6 +25,7 @@ export function TopOpportunitiesTable({
   maxItems = 5 
 }: TopOpportunitiesTableProps) {
   const navigate = useNavigate();
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   // Filter unconverted, sort by score, take top N
   const topOpportunities = opportunities
@@ -29,15 +33,30 @@ export function TopOpportunitiesTable({
     .sort((a, b) => (b.relevance_score || 0) - (a.relevance_score || 0))
     .slice(0, maxItems);
 
-  const handleCreateArticle = (opportunity: Opportunity) => {
-    // Navigate to article creation with pre-filled data
-    navigate('/client/create', {
-      state: {
-        opportunityId: opportunity.id,
-        title: opportunity.suggested_title,
-        keywords: opportunity.suggested_keywords
+  const handleCreateArticle = async (opportunity: Opportunity) => {
+    if (convertingId) return; // Prevent double-click
+    
+    setConvertingId(opportunity.id);
+    toast.info('Criando artigo a partir da oportunidade...');
+    
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'convert-opportunity-to-article',
+        { body: { opportunityId: opportunity.id } }
+      );
+      
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Erro na conversão');
       }
-    });
+      
+      toast.success('Artigo criado com sucesso!');
+      navigate(`/client/articles/${data.articleId}/edit`);
+    } catch (err) {
+      console.error('[TopOpportunities] Convert error:', err);
+      toast.error('Erro ao criar artigo. Tente novamente.');
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   if (topOpportunities.length === 0) {
@@ -98,9 +117,19 @@ export function TopOpportunitiesTable({
                 size="sm" 
                 className="shrink-0 gap-2"
                 onClick={() => handleCreateArticle(opportunity)}
+                disabled={convertingId === opportunity.id}
               >
-                <ExternalLink className="h-4 w-4" />
-                Criar Artigo
+                {convertingId === opportunity.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-4 w-4" />
+                    Criar Artigo
+                  </>
+                )}
               </Button>
             </div>
           </div>
