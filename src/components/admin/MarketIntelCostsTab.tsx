@@ -43,12 +43,17 @@ export function MarketIntelCostsTab({ startDate, endDate }: MarketIntelCostsTabP
   const fetchData = async () => {
     setLoading(true);
     
-    // Fetch AI usage logs
+    // Fetch AI usage logs with proper timezone handling
+    const startISO = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0).toISOString();
+    const endISO = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString();
+    
+    console.log('[MarketIntelCostsTab] Fetching logs from', startISO, 'to', endISO);
+    
     const { data: logsData, error: logsError } = await supabase
       .from('ai_usage_logs')
       .select('*')
-      .gte('created_at', format(startDate, 'yyyy-MM-dd'))
-      .lte('created_at', format(endDate, 'yyyy-MM-dd') + 'T23:59:59')
+      .gte('created_at', startISO)
+      .lte('created_at', endISO)
       .order('created_at', { ascending: false });
     
     if (logsError) {
@@ -153,16 +158,21 @@ export function MarketIntelCostsTab({ startDate, endDate }: MarketIntelCostsTabP
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
-          <Globe className="h-5 w-5 text-blue-600" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
+            <Globe className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Custos Perplexity / Market Intel</h2>
+            <p className="text-sm text-muted-foreground">
+              Monitoramento de uso da API de inteligência de mercado
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold">Custos Perplexity / Market Intel</h2>
-          <p className="text-sm text-muted-foreground">
-            Monitoramento de uso da API de inteligência de mercado
-          </p>
-        </div>
+        <Badge variant="outline" className="text-xs">
+          {format(startDate, 'dd/MM/yyyy', { locale: ptBR })} - {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}
+        </Badge>
       </div>
       
       {/* Summary Cards */}

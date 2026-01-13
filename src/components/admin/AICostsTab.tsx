@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { Cpu, Sparkles, Palette, Server } from "lucide-react";
+import { Cpu, Sparkles, Palette, Server, Globe, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AIProviderCard } from "./AIProviderCard";
 import { TextVsImageChart } from "./TextVsImageChart";
 import { ArticleCostBreakdown } from "./ArticleCostBreakdown";
@@ -43,6 +45,41 @@ interface AICostsTabProps {
 }
 
 export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previousPeriodCost = 0 }: AICostsTabProps) {
+  // Perplexity/Market Intel costs from ai_usage_logs
+  const [perplexityData, setPerplexityData] = useState<{
+    totalCost: number;
+    totalCalls: number;
+    successfulCalls: number;
+    loading: boolean;
+  }>({ totalCost: 0, totalCalls: 0, successfulCalls: 0, loading: true });
+
+  useEffect(() => {
+    const fetchPerplexityCosts = async () => {
+      const startISO = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0).toISOString();
+      const endISO = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString();
+      
+      const { data, error } = await supabase
+        .from('ai_usage_logs')
+        .select('cost_usd, success')
+        .gte('created_at', startISO)
+        .lte('created_at', endISO);
+
+      if (error) {
+        console.error('Error fetching Perplexity costs:', error);
+        setPerplexityData(prev => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const totalCost = (data || []).reduce((sum, log) => sum + (log.cost_usd || 0), 0);
+      const totalCalls = (data || []).length;
+      const successfulCalls = (data || []).filter(l => l.success !== false).length;
+      
+      setPerplexityData({ totalCost, totalCalls, successfulCalls, loading: false });
+    };
+
+    fetchPerplexityCosts();
+  }, [startDate, endDate]);
+
   // Aggregate data by provider
   const providerData = useMemo(() => {
     const providers: Record<string, {
@@ -54,6 +91,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       nativeAI: { totalCost: 0, totalCalls: 0, totalTokens: 0, totalImages: 0 },
       openai: { totalCost: 0, totalCalls: 0, totalTokens: 0, totalImages: 0 },
       huggingface: { totalCost: 0, totalCalls: 0, totalTokens: 0, totalImages: 0 },
+      perplexity: { totalCost: perplexityData.totalCost, totalCalls: perplexityData.totalCalls, totalTokens: 0, totalImages: 0 },
       outros: { totalCost: 0, totalCalls: 0, totalTokens: 0, totalImages: 0 },
     };
 
@@ -76,7 +114,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     });
 
     return providers;
-  }, [logs]);
+  }, [logs, perplexityData]);
 
   // Text vs Image costs
   const textVsImageData = useMemo(() => {
@@ -205,8 +243,43 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [logs]);
 
+  // Calculate total cost across all providers
+  const totalAllProviders = providerData.nativeAI.totalCost + 
+    providerData.openai.totalCost + 
+    providerData.huggingface.totalCost + 
+    providerData.perplexity.totalCost + 
+    providerData.outros.totalCost;
+
   return (
     <div className="space-y-6">
+      {/* Unified Summary Card */}
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Custo Total de IA (Todos os Provedores)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-baseline gap-4">
+            <span className="text-3xl font-bold text-primary">
+              ${totalAllProviders.toFixed(4)}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {providerData.nativeAI.totalCalls + providerData.openai.totalCalls + 
+               providerData.huggingface.totalCalls + providerData.perplexity.totalCalls + 
+               providerData.outros.totalCalls} chamadas totais
+            </span>
+          </div>
+          {perplexityData.loading && (
+            <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Carregando dados Perplexity...
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* AI Recommendation Cards */}
       {modelPricing.length > 0 && (
         <AIRecommendationCards 
@@ -217,7 +290,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       )}
 
       {/* Provider Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <AIProviderCard
           providerName="google"
           providerLabel="IA Nativa (Google)"
@@ -247,6 +320,16 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
           totalImages={providerData.huggingface.totalImages}
           icon={<Palette className="h-4 w-4" />}
           color="hsl(38, 92%, 50%)"
+        />
+        <AIProviderCard
+          providerName="perplexity"
+          providerLabel="Perplexity (Market Intel)"
+          totalCost={providerData.perplexity.totalCost}
+          totalCalls={providerData.perplexity.totalCalls}
+          totalTokens={0}
+          totalImages={0}
+          icon={<Globe className="h-4 w-4" />}
+          color="hsl(199, 89%, 48%)"
         />
         <AIProviderCard
           providerName="outros"
