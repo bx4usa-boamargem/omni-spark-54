@@ -12,6 +12,23 @@ interface NotificationRequest {
   title: string;
   score: number;
   keywords: string[];
+  commercialAlignment?: string;
+}
+
+function formatWhatsAppMessage(title: string, score: number, keywords: string[]): string {
+  const keywordsList = keywords.slice(0, 3).join(', ');
+  return encodeURIComponent(
+    `🎯 *Nova Oportunidade de Conteúdo*\n\n` +
+    `📝 ${title}\n` +
+    `📊 Relevância: ${score}%\n` +
+    `🔑 Keywords: ${keywordsList}\n\n` +
+    `Acesse o painel para mais detalhes.`
+  );
+}
+
+function formatPhoneNumber(phone: string): string {
+  // Remove all non-numeric characters
+  return phone.replace(/\D/g, '');
 }
 
 serve(async (req) => {
@@ -53,9 +70,23 @@ serve(async (req) => {
     const notificationMessage = `Nova oportunidade de artigo com ${score}% de relevância: "${title}"`;
 
     for (const setting of settings) {
-      // Check if score meets minimum threshold
+      // Check if user only wants high score notifications
+      const threshold = setting.high_score_threshold || setting.min_relevance_score || 70;
+      if (setting.notify_high_score_only && score < threshold) {
+        console.log(`Score ${score} below high-score threshold ${threshold} for user ${setting.user_id}`);
+        continue;
+      }
+
+      // Check standard threshold
       if (score < setting.min_relevance_score) {
         console.log(`Score ${score} below threshold ${setting.min_relevance_score} for user ${setting.user_id}`);
+        continue;
+      }
+
+      // Check if user prefers digest (non-immediate notifications)
+      if (setting.notification_frequency && setting.notification_frequency !== 'immediate') {
+        console.log(`User ${setting.user_id} prefers ${setting.notification_frequency} digest, skipping immediate notification`);
+        // The digest function will handle these users
         continue;
       }
 
@@ -106,7 +137,7 @@ serve(async (req) => {
                 score: String(score),
                 title,
                 keywords: keywords.join(', '),
-                opportunityUrl: `${SUPABASE_URL?.replace('.supabase.co', '.lovable.app')}/articles?tab=opportunities`,
+                opportunityUrl: `${SUPABASE_URL?.replace('.supabase.co', '.lovable.app')}/client/consultant`,
               },
               blogId,
               userId: setting.user_id,
@@ -132,6 +163,32 @@ serve(async (req) => {
           }
         } catch (emailError) {
           console.error('Error sending email notification:', emailError);
+        }
+      }
+
+      // Send WhatsApp notification if enabled
+      if (setting.notify_whatsapp && setting.whatsapp_number) {
+        try {
+          const formattedPhone = formatPhoneNumber(setting.whatsapp_number);
+          const whatsappMessage = formatWhatsAppMessage(title, score, keywords);
+          const whatsappUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${whatsappMessage}`;
+
+          // Log WhatsApp notification with the URL (user clicks to send)
+          await supabase
+            .from('opportunity_notification_history')
+            .insert({
+              opportunity_id: opportunityId,
+              blog_id: blogId,
+              user_id: setting.user_id,
+              notification_type: 'whatsapp',
+              title: `🎯 Oportunidade ${score}%`,
+              message: whatsappUrl,
+            });
+
+          console.log(`WhatsApp notification prepared for ${formattedPhone}`);
+          notifiedCount++;
+        } catch (whatsappError) {
+          console.error('Error preparing WhatsApp notification:', whatsappError);
         }
       }
     }
