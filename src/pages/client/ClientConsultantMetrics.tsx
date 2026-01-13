@@ -2,14 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBlog } from '@/hooks/useBlog';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Loader2, BarChart3, RefreshCw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2, TrendingUp, RefreshCw, BarChart3, Search, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
-import { MetricsSummaryCards } from '@/components/consultant/MetricsSummaryCards';
-import { ConversionFunnel } from '@/components/consultant/ConversionFunnel';
-import { ROICalculator } from '@/components/consultant/ROICalculator';
-import { TopOpportunitiesTable } from '@/components/consultant/TopOpportunitiesTable';
-import { OpportunityEvolutionChart } from '@/components/consultant/OpportunityEvolutionChart';
 import { cn } from '@/lib/utils';
+import { MetricsTab } from '@/components/consultant/tabs/MetricsTab';
+import { SearchPerformanceTab } from '@/components/consultant/tabs/SearchPerformanceTab';
+import { ROIRealTab } from '@/components/consultant/tabs/ROIRealTab';
 
 type Period = '7d' | '30d' | '90d';
 
@@ -38,6 +37,7 @@ export default function ClientConsultantMetrics() {
   const [period, setPeriod] = useState<Period>('30d');
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
+  const [activeTab, setActiveTab] = useState('metrics');
 
   const getPeriodDays = (p: Period): number => {
     switch (p) {
@@ -180,11 +180,11 @@ export default function ClientConsultantMetrics() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-3 text-gray-800 dark:text-white">
-            <BarChart3 className="h-7 w-7 text-primary" />
-            Métricas do Consultor Comercial
+            <TrendingUp className="h-7 w-7 text-primary" />
+            Resultados & ROI
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Acompanhe oportunidades, conversões e ROI estimado
+            Acompanhe oportunidades, conversões e o valor real gerado
           </p>
         </div>
         
@@ -218,36 +218,40 @@ export default function ClientConsultantMetrics() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <MetricsSummaryCards
-        highScoreOpportunities={metrics.highScoreOpportunities}
-        convertedArticles={metrics.convertedToArticles}
-        conversionRate={metrics.conversionRate}
-        estimatedROI={metrics.estimatedROI}
-      />
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+          <TabsTrigger value="metrics" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Métricas</span>
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="flex items-center gap-2">
+            <Search className="h-4 w-4" />
+            <span className="hidden sm:inline">Performance de Busca</span>
+          </TabsTrigger>
+          <TabsTrigger value="roi" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            <span className="hidden sm:inline">ROI Real</span>
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Evolution Chart */}
-      <OpportunityEvolutionChart data={evolutionData} />
+        <TabsContent value="metrics" className="space-y-6">
+          <MetricsTab 
+            metrics={metrics}
+            evolutionData={evolutionData}
+            opportunities={opportunities}
+            blogId={blog?.id}
+          />
+        </TabsContent>
 
-      {/* Funnel and ROI */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ConversionFunnel
-          totalOpportunities={metrics.totalOpportunities}
-          highScoreOpportunities={metrics.highScoreOpportunities}
-          convertedToArticles={metrics.convertedToArticles}
-          publishedArticles={metrics.publishedArticles}
-        />
-        
-        <ROICalculator
-          totalViews={metrics.totalViews}
-          totalShares={metrics.totalShares}
-          publishedArticles={metrics.publishedArticles}
-          highScoreOpportunities={metrics.highScoreOpportunities}
-        />
-      </div>
+        <TabsContent value="performance" className="space-y-6">
+          <SearchPerformanceTab blogId={blog?.id} period={period} />
+        </TabsContent>
 
-      {/* Top Opportunities */}
-      <TopOpportunitiesTable opportunities={opportunities} blogId={blog?.id} />
+        <TabsContent value="roi" className="space-y-6">
+          <ROIRealTab blogId={blog?.id} period={period} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

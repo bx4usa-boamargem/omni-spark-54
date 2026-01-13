@@ -1,6 +1,18 @@
 import { ReactNode, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Calendar, Globe, Zap, Building2, User, Menu, LogOut, BarChart3, Search, Compass } from 'lucide-react';
+import { 
+  Home, 
+  Globe, 
+  Zap, 
+  Building2, 
+  User, 
+  Menu, 
+  LogOut, 
+  Search, 
+  Compass, 
+  TrendingUp,
+  FileText
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
@@ -18,15 +30,40 @@ interface NavItem {
   path: string;
 }
 
-const navItems: NavItem[] = [
-  { icon: Home, label: 'Início', path: '/client/dashboard' },
-  { icon: Calendar, label: 'Posts', path: '/client/posts' },
-  { icon: Globe, label: 'Meu Mini-Site', path: '/client/site' },
-  { icon: BarChart3, label: 'Consultor Comercial', path: '/client/consultant' },
-  { icon: Zap, label: 'Automação', path: '/client/automation' },
-  { icon: Compass, label: 'Estratégia', path: '/client/strategy' },
-  { icon: Building2, label: 'Minha Empresa', path: '/client/company' },
-  { icon: User, label: 'Minha Conta', path: '/client/account' },
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+// Nova estrutura organizada em blocos semânticos
+const navSections: NavSection[] = [
+  {
+    label: 'RESULTADOS',
+    items: [
+      { icon: TrendingUp, label: 'Resultados & ROI', path: '/client/results' },
+    ]
+  },
+  {
+    label: 'INTELIGÊNCIA',
+    items: [
+      { icon: Compass, label: 'Radar de Oportunidades', path: '/client/radar' },
+    ]
+  },
+  {
+    label: 'CONTEÚDO',
+    items: [
+      { icon: FileText, label: 'Artigos', path: '/client/articles' },
+      { icon: Globe, label: 'Portal Público', path: '/client/portal' },
+    ]
+  },
+  {
+    label: 'OPERAÇÃO',
+    items: [
+      { icon: Zap, label: 'Automação', path: '/client/automation' },
+      { icon: Building2, label: 'Minha Empresa', path: '/client/company' },
+      { icon: User, label: 'Minha Conta', path: '/client/account' },
+    ]
+  },
 ];
 
 const integrationItems: NavItem[] = [
@@ -74,6 +111,14 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
     );
   };
 
+  const SectionLabel = ({ label }: { label: string }) => (
+    <div className="px-4 pt-4 pb-2">
+      <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
+        {label}
+      </span>
+    </div>
+  );
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -82,23 +127,34 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
-        {navItems.map((item) => (
-          <NavButton key={item.path} item={item} />
-        ))}
-      </nav>
-
-      {/* Integrações Section */}
-      <div className="px-4 pb-2 border-t border-slate-200 dark:border-white/10 pt-4">
-        <span className="px-4 text-xs text-gray-500 uppercase tracking-wider font-medium">
-          Integrações
-        </span>
-        <div className="mt-2 space-y-1">
-          {integrationItems.map((item) => (
-            <NavButton key={item.path} item={item} />
-          ))}
+      <nav className="flex-1 overflow-y-auto scrollbar-hide">
+        {/* Home - sempre primeiro */}
+        <div className="p-4 pb-0">
+          <NavButton item={{ icon: Home, label: 'Início', path: '/client/dashboard' }} />
         </div>
-      </div>
+
+        {/* Seções organizadas */}
+        {navSections.map((section) => (
+          <div key={section.label}>
+            <SectionLabel label={section.label} />
+            <div className="px-4 space-y-1">
+              {section.items.map((item) => (
+                <NavButton key={item.path} item={item} />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Integrações */}
+        <div>
+          <SectionLabel label="INTEGRAÇÕES" />
+          <div className="px-4 space-y-1">
+            {integrationItems.map((item) => (
+              <NavButton key={item.path} item={item} />
+            ))}
+          </div>
+        </div>
+      </nav>
 
       {/* Theme Toggle */}
       <div className="px-4 py-2 border-t border-slate-200 dark:border-white/10">
