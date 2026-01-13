@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { streamArticle, type ArticleData, type GenerationStage } from '@/utils/streamArticle';
 import { SimpleArticleForm, type SimpleFormData } from '@/components/client/SimpleArticleForm';
-import { MiniContentCalendar } from '@/components/client/MiniContentCalendar';
 import { ArticlePreview } from '@/components/ArticlePreview';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { GenerationProgress } from '@/components/seo/GenerationProgress';
@@ -1095,6 +1094,29 @@ export default function ClientArticleEditor() {
               )}
             </Button>
             
+            {/* Generate Images Button - Show when no featured image */}
+            {!featuredImage && content && content.length > 100 && existingArticleId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGenerateMissingImages(existingArticleId, title, content)}
+                disabled={isGeneratingImages}
+                className="gap-2 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+              >
+                {isGeneratingImages ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="h-4 w-4" />
+                    Gerar Imagens
+                  </>
+                )}
+              </Button>
+            )}
+            
             <Button
               variant="outline"
               size="sm"
@@ -1128,35 +1150,20 @@ export default function ClientArticleEditor() {
       {/* Main Content */}
       <div className="flex-1 min-h-0">
         {phase === 'form' && (
-          <div className="flex flex-col gap-6 h-full overflow-auto">
-            {/* Mini Content Calendar - Shows scheduled/published items */}
-            {blog?.id && (
-              <MiniContentCalendar 
-                blogId={blog.id}
-                onDayClick={(date, items) => {
-                  if (items.length > 0) {
-                    toast.info(`${items.length} item(s) em ${date.toLocaleDateString('pt-BR')}`);
-                  }
-                }}
-              />
-            )}
-            
-            {/* Form and Preview Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
-              <SimpleArticleForm 
-                onGenerate={handleGenerate} 
-                isGenerating={isGenerating}
-              />
-              <Card className="h-full flex items-center justify-center bg-muted/30 border-dashed">
-                <CardContent className="text-center py-12">
-                  <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="font-semibold text-muted-foreground">Preview do Artigo</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    O artigo aparecerá aqui enquanto é gerado
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full min-h-0">
+            <SimpleArticleForm 
+              onGenerate={handleGenerate} 
+              isGenerating={isGenerating}
+            />
+            <Card className="h-full flex items-center justify-center bg-muted/30 border-dashed">
+              <CardContent className="text-center py-12">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-muted-foreground">Preview do Artigo</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  O artigo aparecerá aqui enquanto é gerado
+                </p>
+              </CardContent>
+            </Card>
           </div>
         )}
         
