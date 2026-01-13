@@ -1542,22 +1542,24 @@ Cada prompt deve mostrar cenários REAIS de trabalho, não escritórios corporat
     const editorialContract = await import('../_shared/editorialContract.ts');
     const { ensureCTA, ensureCompanyCTA, hasValidCTA } = editorialContract;
     
-    // Buscar dados da empresa para CTA personalizado
-    let companyInfo: { name: string; city?: string; whatsapp?: string } | null = null;
+    // Buscar dados da empresa para CTA personalizado (incluindo nicho e serviços)
+    let companyInfo: { name: string; city?: string; whatsapp?: string; niche?: string; services?: string } | null = null;
     if (blog_id) {
       const { data: profile } = await supabase
         .from('business_profile')
-        .select('company_name, country, whatsapp')
+        .select('company_name, city, country, whatsapp, niche, services')
         .eq('blog_id', blog_id)
         .maybeSingle();
       
       if (profile?.company_name) {
         companyInfo = {
           name: profile.company_name,
-          city: profile.country || undefined,
-          whatsapp: (profile as { whatsapp?: string }).whatsapp || undefined
+          city: profile.city || profile.country || undefined,
+          whatsapp: (profile as { whatsapp?: string }).whatsapp || undefined,
+          niche: (profile as { niche?: string }).niche || undefined,
+          services: (profile as { services?: string }).services || undefined
         };
-        console.log(`[CTA] Using company info: ${companyInfo.name}${companyInfo.city ? ` em ${companyInfo.city}` : ''}`);
+        console.log(`[CTA] Using company info: ${companyInfo.name}${companyInfo.city ? ` em ${companyInfo.city}` : ''} (nicho: ${companyInfo.niche || 'não especificado'})`);
       }
     }
     

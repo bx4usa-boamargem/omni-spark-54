@@ -207,7 +207,7 @@ Retorne APENAS o JSON, sem explicações.`;
       }
     });
 
-    // 4. Garantir CTA obrigatório do contrato editorial
+    // 4. Garantir CTA obrigatório do contrato editorial (com detecção de nicho)
     const editorialContract = await import('../_shared/editorialContract.ts');
     const { hasValidCTA, ensureCTA, ensureCompanyCTA } = editorialContract;
     
@@ -217,16 +217,18 @@ Retorne APENAS o JSON, sem explicações.`;
         const companyInfo = {
           name: businessProfile.company_name,
           city: businessProfile.country,
-          whatsapp: businessProfile.whatsapp
+          whatsapp: businessProfile.whatsapp,
+          niche: businessProfile.niche,  // Incluir nicho para detecção automática
+          services: undefined            // Services não vem no businessProfile padrão
         };
         improvedContent = ensureCompanyCTA(improvedContent, companyInfo);
         
         improvements.push({
           type: 'cta',
-          description: `CTA obrigatório aplicado com nome da empresa: ${businessProfile.company_name}`,
+          description: `CTA obrigatório aplicado para: ${businessProfile.company_name} (nicho: ${businessProfile.niche || 'geral'})`,
         });
         
-        console.log(`[IMPROVE] CTA com empresa "${businessProfile.company_name}" aplicado`);
+        console.log(`[IMPROVE] CTA com empresa "${businessProfile.company_name}" e nicho "${businessProfile.niche || 'geral'}" aplicado`);
       } else {
         // Aplicar CTA genérico
         improvedContent = ensureCTA(improvedContent);
