@@ -6,6 +6,7 @@ interface MetricItem {
   value: string | number;
   delta?: number;
   icon: React.ReactNode;
+  colorClass: string;
 }
 
 interface SearchConsoleMetricsBarProps {
@@ -59,23 +60,27 @@ export function SearchConsoleMetricsBar({
       label: 'Cliques',
       value: formatNumber(clicks),
       delta: clicksDelta,
-      icon: <MousePointerClick className="h-4 w-4" />
+      icon: <MousePointerClick className="h-4 w-4" />,
+      colorClass: 'text-orange-500'
     },
     {
       label: 'Impressões',
       value: formatNumber(impressions),
       delta: impressionsDelta,
-      icon: <Eye className="h-4 w-4" />
+      icon: <Eye className="h-4 w-4" />,
+      colorClass: 'text-primary'
     },
     {
       label: 'CTR Médio',
       value: `${ctr.toFixed(2)}%`,
-      icon: <TrendingUp className="h-4 w-4" />
+      icon: <TrendingUp className="h-4 w-4" />,
+      colorClass: 'text-primary'
     },
     {
       label: 'Posição Média',
       value: position > 0 ? position.toFixed(1) : '-',
-      icon: <Target className="h-4 w-4" />
+      icon: <Target className="h-4 w-4" />,
+      colorClass: 'text-orange-500'
     }
   ];
 
@@ -102,13 +107,13 @@ export function SearchConsoleMetricsBar({
             )}
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-muted-foreground">{metric.icon}</span>
+              <span className={metric.colorClass}>{metric.icon}</span>
               <span className="text-xs text-muted-foreground uppercase tracking-wide">
                 {metric.label}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-foreground">
+              <span className={cn("text-3xl font-bold", metric.colorClass)}>
                 {metric.value}
               </span>
               {metric.delta !== undefined && (

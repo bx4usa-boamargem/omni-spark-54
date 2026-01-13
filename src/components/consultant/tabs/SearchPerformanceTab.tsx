@@ -141,21 +141,44 @@ export function SearchPerformanceTab({ blogId, period }: SearchPerformanceTabPro
   const getAggregatedChartData = () => {
     if (chartGranularity === 'daily') return historicalData;
     
-    const weeklyData: { [key: string]: { impressions: number; clicks: number; count: number } } = {};
+    if (chartGranularity === 'weekly') {
+      const weeklyData: { [key: string]: { impressions: number; clicks: number; count: number } } = {};
+      
+      historicalData.forEach((item, index) => {
+        const weekIndex = Math.floor(index / 7);
+        const key = `Sem ${weekIndex + 1}`;
+        
+        if (!weeklyData[key]) {
+          weeklyData[key] = { impressions: 0, clicks: 0, count: 0 };
+        }
+        weeklyData[key].impressions += item.impressions;
+        weeklyData[key].clicks += item.clicks;
+        weeklyData[key].count++;
+      });
+
+      return Object.entries(weeklyData).map(([date, data]) => ({
+        date,
+        impressions: data.impressions,
+        clicks: data.clicks
+      }));
+    }
+
+    // Monthly aggregation
+    const monthlyData: { [key: string]: { impressions: number; clicks: number; count: number } } = {};
     
     historicalData.forEach((item, index) => {
-      const weekIndex = Math.floor(index / 7);
-      const key = `Sem ${weekIndex + 1}`;
+      const monthIndex = Math.floor(index / 30);
+      const key = `Mês ${monthIndex + 1}`;
       
-      if (!weeklyData[key]) {
-        weeklyData[key] = { impressions: 0, clicks: 0, count: 0 };
+      if (!monthlyData[key]) {
+        monthlyData[key] = { impressions: 0, clicks: 0, count: 0 };
       }
-      weeklyData[key].impressions += item.impressions;
-      weeklyData[key].clicks += item.clicks;
-      weeklyData[key].count++;
+      monthlyData[key].impressions += item.impressions;
+      monthlyData[key].clicks += item.clicks;
+      monthlyData[key].count++;
     });
 
-    return Object.entries(weeklyData).map(([date, data]) => ({
+    return Object.entries(monthlyData).map(([date, data]) => ({
       date,
       impressions: data.impressions,
       clicks: data.clicks
@@ -213,6 +236,7 @@ export function SearchPerformanceTab({ blogId, period }: SearchPerformanceTabPro
             <SelectContent>
               <SelectItem value="daily">Diário</SelectItem>
               <SelectItem value="weekly">Semanal</SelectItem>
+              <SelectItem value="monthly">Mensal</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -266,20 +290,20 @@ export function SearchPerformanceTab({ blogId, period }: SearchPerformanceTabPro
                   type="monotone" 
                   dataKey="clicks" 
                   name="Cliques"
-                  stroke="#3b82f6"
+                  stroke="#FF6600"
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: '#3b82f6' }}
+                  activeDot={{ r: 4, fill: '#FF6600' }}
                 />
                 <Line 
                   yAxisId="right"
                   type="monotone" 
                   dataKey="impressions" 
                   name="Impressões"
-                  stroke="#ec4899"
+                  stroke="#4D148C"
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: '#ec4899' }}
+                  activeDot={{ r: 4, fill: '#4D148C' }}
                 />
               </LineChart>
             </ResponsiveContainer>
