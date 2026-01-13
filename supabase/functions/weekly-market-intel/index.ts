@@ -395,7 +395,79 @@ Return only valid JSON, no markdown.`;
       }
     });
 
-    console.log(`Market intel generated successfully for blog ${blogId}, week ${weekOf}`);
+    // Convert high-score content ideas to opportunities and notify
+    const highScoreOpportunities: string[] = [];
+    for (const idea of intelPackage.content_ideas) {
+      // Calculate a relevance score based on goal and angle
+      let score = 75; // Base score
+      if (idea.goal === "lead") score += 10;
+      if (idea.goal === "conversion") score += 15;
+      if (idea.angle === "authority") score += 5;
+      if (idea.sources && idea.sources.length > 0) score += 5;
+      score = Math.min(score, 100);
+
+      // Create opportunity record
+      const { data: opportunity, error: oppError } = await supabase
+        .from("article_opportunities")
+        .insert({
+          blog_id: blogId,
+          suggested_title: idea.title,
+          suggested_keywords: idea.keywords,
+          suggested_outline: { angle: idea.angle, goal: idea.goal },
+          relevance_score: score,
+          source_urls: idea.sources,
+          origin: "market_intel",
+          trend_source: provider,
+          why_now: idea.why_now,
+          goal: idea.goal,
+          intel_week_id: savedIntel.id,
+          relevance_factors: {
+            angle: idea.angle,
+            goal: idea.goal,
+            has_sources: idea.sources && idea.sources.length > 0
+          }
+        })
+        .select()
+        .single();
+
+      if (oppError) {
+        console.error("Failed to create opportunity:", oppError);
+        continue;
+      }
+
+      // If high score (>=80), trigger notification
+      if (score >= 80 && opportunity) {
+        highScoreOpportunities.push(opportunity.id);
+        
+        try {
+          const notifyResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-opportunity-notification`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              opportunityId: opportunity.id,
+              blogId,
+              title: idea.title,
+              score,
+              keywords: idea.keywords,
+              commercialAlignment: idea.goal
+            }),
+          });
+
+          if (!notifyResponse.ok) {
+            console.error("Failed to send notification:", await notifyResponse.text());
+          } else {
+            console.log(`Notification sent for high-score opportunity: ${idea.title} (${score}%)`);
+          }
+        } catch (notifyError) {
+          console.error("Error sending notification:", notifyError);
+        }
+      }
+    }
+
+    console.log(`Market intel generated successfully for blog ${blogId}, week ${weekOf}. High-score opportunities: ${highScoreOpportunities.length}`);
 
     return new Response(
       JSON.stringify({
@@ -403,6 +475,8 @@ Return only valid JSON, no markdown.`;
         id: savedIntel.id,
         week_of: weekOf,
         source: provider,
+        opportunities_created: intelPackage.content_ideas.length,
+        high_score_notified: highScoreOpportunities.length,
         ...intelPackage
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
