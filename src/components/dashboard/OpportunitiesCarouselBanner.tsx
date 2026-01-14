@@ -31,6 +31,17 @@ export function OpportunitiesCarouselBanner({ blogId, className }: Opportunities
   const { checkLimit } = usePlanLimits();
   const [isCreating, setIsCreating] = React.useState<string | null>(null);
 
+  // IMPORTANT: All hooks must be called before any conditional returns
+  const autoplayPlugin = React.useMemo(
+    () =>
+      Autoplay({
+        delay: 5000,
+        stopOnInteraction: true,
+        stopOnMouseEnter: true,
+      }),
+    []
+  );
+
   const handleCreateArticle = useCallback(async (opportunity: RadarOpportunity) => {
     setIsCreating(opportunity.id);
 
@@ -89,16 +100,6 @@ export function OpportunitiesCarouselBanner({ blogId, className }: Opportunities
       </Card>
     );
   }
-
-  const autoplayPlugin = React.useMemo(
-    () =>
-      Autoplay({
-        delay: 5000,
-        stopOnInteraction: true,
-        stopOnMouseEnter: true,
-      }),
-    []
-  );
 
   return (
     <Card className={cn(
