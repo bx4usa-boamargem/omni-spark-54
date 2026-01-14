@@ -1,8 +1,9 @@
 import { useMemo, useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { Cpu, Sparkles, Palette, Server, Globe, Loader2 } from "lucide-react";
+import { Cpu, Sparkles, Palette, Server, Globe, Loader2, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AIProviderCard } from "./AIProviderCard";
 import { TextVsImageChart } from "./TextVsImageChart";
 import { ArticleCostBreakdown } from "./ArticleCostBreakdown";
@@ -36,6 +37,11 @@ interface ModelPricing {
   is_active: boolean;
 }
 
+interface Blog {
+  id: string;
+  name: string;
+}
+
 interface AICostsTabProps {
   logs: ConsumptionLog[];
   startDate: Date;
@@ -45,6 +51,11 @@ interface AICostsTabProps {
 }
 
 export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previousPeriodCost = 0 }: AICostsTabProps) {
+  // Blog filter state
+  const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null);
+  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [blogsLoading, setBlogsLoading] = useState(true);
+
   // Perplexity/Market Intel costs from ai_usage_logs
   const [perplexityData, setPerplexityData] = useState<{
     totalCost: number;
@@ -53,16 +64,41 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     loading: boolean;
   }>({ totalCost: 0, totalCalls: 0, successfulCalls: 0, loading: true });
 
+  // Fetch blogs list
+  useEffect(() => {
+    const fetchBlogs = async () => {
+      const { data, error } = await supabase
+        .from('blogs')
+        .select('id, name')
+        .order('name');
+      
+      if (!error && data) {
+        setBlogs(data);
+      }
+      setBlogsLoading(false);
+    };
+    fetchBlogs();
+  }, []);
+
+  // Fetch Perplexity costs (filtered by blog if selected)
   useEffect(() => {
     const fetchPerplexityCosts = async () => {
+      setPerplexityData(prev => ({ ...prev, loading: true }));
       const startISO = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0).toISOString();
       const endISO = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString();
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('ai_usage_logs')
-        .select('cost_usd, success')
+        .select('cost_usd, success, blog_id')
         .gte('created_at', startISO)
         .lte('created_at', endISO);
+      
+      // Filter by blog if selected
+      if (selectedBlogId) {
+        query = query.eq('blog_id', selectedBlogId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching Perplexity costs:', error);
@@ -78,7 +114,13 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     };
 
     fetchPerplexityCosts();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedBlogId]);
+
+  // Filter logs by selected blog
+  const filteredLogs = useMemo(() => {
+    if (!selectedBlogId) return logs;
+    return logs.filter(log => log.blog_id === selectedBlogId);
+  }, [logs, selectedBlogId]);
 
   // Aggregate data by provider
   const providerData = useMemo(() => {
@@ -95,7 +137,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       outros: { totalCost: 0, totalCalls: 0, totalTokens: 0, totalImages: 0 },
     };
 
-    logs.forEach((log) => {
+    filteredLogs.forEach((log) => {
       const model = log.model_used || "";
       let provider = "outros";
       
@@ -114,7 +156,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     });
 
     return providers;
-  }, [logs, perplexityData]);
+  }, [filteredLogs, perplexityData]);
 
   // Text vs Image costs
   const textVsImageData = useMemo(() => {
@@ -123,7 +165,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     let textCalls = 0;
     let imageCalls = 0;
 
-    logs.forEach((log) => {
+    filteredLogs.forEach((log) => {
       if (log.action_type === "image_generation") {
         imageCost += log.estimated_cost_usd;
         imageCalls += 1;
@@ -134,7 +176,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     });
 
     return { textCost, imageCost, textCalls, imageCalls };
-  }, [logs]);
+  }, [filteredLogs]);
 
   // Article cost breakdown
   const articleBreakdown = useMemo(() => {
@@ -143,8 +185,9 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     let totalImageCost = 0;
     let totalSeoCost = 0;
     let totalImages = 0;
+    let perplexityCost = perplexityData.totalCost;
 
-    logs.forEach((log) => {
+    filteredLogs.forEach((log) => {
       if (log.action_type === "article_generation") {
         totalArticles += 1;
         totalArticleCost += log.estimated_cost_usd;
@@ -161,9 +204,10 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       totalArticleCost,
       totalImageCost,
       totalSeoCost,
+      perplexityCost,
       avgImagesPerArticle: totalArticles > 0 ? totalImages / totalArticles : 0,
     };
-  }, [logs]);
+  }, [filteredLogs, perplexityData]);
 
   // Image model comparison
   const imageModels = useMemo(() => {
@@ -174,7 +218,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       label: string;
     }> = {};
 
-    logs.forEach((log) => {
+    filteredLogs.forEach((log) => {
       if (log.action_type === "image_generation" && log.model_used) {
         const model = log.model_used;
         if (!modelData[model]) {
@@ -207,7 +251,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       imagesGenerated: data.imagesGenerated,
       totalCost: data.totalCost,
     }));
-  }, [logs]);
+  }, [filteredLogs]);
 
   // Timeline data by provider
   const timelineData = useMemo(() => {
@@ -218,7 +262,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
       outros: number;
     }> = {};
 
-    logs.forEach((log) => {
+    filteredLogs.forEach((log) => {
       const date = format(parseISO(log.created_at), "yyyy-MM-dd");
       if (!dailyData[date]) {
         dailyData[date] = { nativeAI: 0, openai: 0, huggingface: 0, outros: 0 };
@@ -241,7 +285,7 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     return Object.entries(dailyData)
       .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [logs]);
+  }, [filteredLogs]);
 
   // Calculate total cost across all providers
   const totalAllProviders = providerData.nativeAI.totalCost + 
@@ -250,14 +294,51 @@ export function AICostsTab({ logs, startDate, endDate, modelPricing = [], previo
     providerData.perplexity.totalCost + 
     providerData.outros.totalCost;
 
+  const selectedBlogName = blogs.find(b => b.id === selectedBlogId)?.name;
+
   return (
     <div className="space-y-6">
+      {/* Blog Filter */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            Filtrar por Subconta
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4">
+            <Select 
+              value={selectedBlogId || "all"} 
+              onValueChange={(v) => setSelectedBlogId(v === "all" ? null : v)}
+            >
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder={blogsLoading ? "Carregando..." : "Todas as subcontas"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">🌐 Todas as subcontas</SelectItem>
+                {blogs.map(blog => (
+                  <SelectItem key={blog.id} value={blog.id}>
+                    {blog.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedBlogId && (
+              <span className="text-sm text-muted-foreground">
+                Exibindo custos apenas de: <span className="font-medium text-foreground">{selectedBlogName}</span>
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Unified Summary Card */}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
-            Custo Total de IA (Todos os Provedores)
+            Custo Total de IA {selectedBlogId ? `(${selectedBlogName})` : "(Todos os Provedores)"}
           </CardTitle>
         </CardHeader>
         <CardContent>
