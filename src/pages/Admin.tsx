@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, DollarSign, Users, Cpu, ImageIcon, FileText, Loader2, Shield, BarChart3, Settings2, Save, Plus, Trash2, Sparkles, Database, Bell, TrendingUp, Download, Gift, LayoutDashboard, UserPlus, Users2, Stethoscope, Building2, Target, LineChart, Globe } from "lucide-react";
+import { ArrowLeft, DollarSign, Users, Cpu, ImageIcon, FileText, Loader2, Shield, BarChart3, Settings2, Save, Plus, Trash2, Sparkles, Database, Bell, TrendingUp, Download, Gift, LayoutDashboard, UserPlus, Users2, Stethoscope, Building2, Target, LineChart, Globe, Bot } from "lucide-react";
 import { SectionHelper } from "@/components/blog-editor/SectionHelper";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,6 +32,7 @@ import { GoalsManagementTab } from "@/components/admin/GoalsManagementTab";
 import { LandingConversionTab } from "@/components/admin/LandingConversionTab";
 import { MarketIntelCostsTab } from "@/components/admin/MarketIntelCostsTab";
 import { CostProjectionCard } from "@/components/admin/CostProjectionCard";
+import { BrandAgentsTab } from "@/components/admin/BrandAgentsTab";
 import { SubaccountCostsTable } from "@/components/admin/SubaccountCostsTable";
 import { MissingCostsAlert } from "@/components/admin/MissingCostsAlert";
 import { QuickPeriodFilters } from "@/components/admin/QuickPeriodFilters";
@@ -607,6 +608,10 @@ export default function Admin() {
               <Globe className="h-4 w-4" />
               Perplexity
             </TabsTrigger>
+            <TabsTrigger value="agents" className="gap-2">
+              <Bot className="h-4 w-4" />
+              Agentes IA
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -1063,6 +1068,10 @@ export default function Admin() {
               startDate={new Date(startDate)}
               endDate={new Date(endDate)}
             />
+          </TabsContent>
+
+          <TabsContent value="agents">
+            <BrandAgentsTab />
           </TabsContent>
         </Tabs>
       </main>

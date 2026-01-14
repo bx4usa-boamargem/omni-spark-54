@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/client/ThemeToggle';
 import { AvatarUploadDialog } from '@/components/profile/AvatarUploadDialog';
 import { CustomDomainSettings } from '@/components/settings/CustomDomainSettings';
 import { LinkClickStats } from '@/components/dashboard/LinkClickStats';
+import { PublicBlogLink } from '@/components/dashboard/PublicBlogLink';
 
 interface TeamMember {
   id: string;
@@ -220,6 +221,18 @@ export default function ClientAccount() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Link Público de Aquisição */}
+      {blog && (
+        <PublicBlogLink blog={{
+          id: blog.id,
+          slug: blog.slug,
+          name: blog.name,
+          custom_domain: blog.custom_domain,
+          domain_verified: blog.domain_verified,
+          platform_subdomain: blog.platform_subdomain
+        }} />
+      )}
 
       {/* Link Stats */}
       {blog?.id && <LinkClickStats blogId={blog.id} />}

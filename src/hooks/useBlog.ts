@@ -17,6 +17,7 @@ interface Blog {
   custom_domain: string | null;
   domain_verified: boolean | null;
   domain_verification_token: string | null;
+  platform_subdomain: string | null;
   cta_type: string | null;
   cta_text: string | null;
   cta_url: string | null;
