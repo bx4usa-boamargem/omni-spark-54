@@ -464,11 +464,7 @@ export default function ClientArticles() {
           </p>
         </div>
         <Button 
-          onClick={() => {
-            if (!blog) return;
-            const quickUrl = `/client/create?quick=true&theme=${encodeURIComponent('Novo artigo')}&mode=fast&images=1`;
-            navigate(quickUrl);
-          }}
+          onClick={() => navigate('/client/create')}
           className="gap-2 client-btn-primary"
         >
           <Plus className="h-4 w-4" />
