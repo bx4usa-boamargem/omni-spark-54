@@ -230,11 +230,7 @@ export default function ClientDashboard() {
                 : 'Ative a automação para publicar artigos automaticamente.'}
             </p>
             <Button 
-              onClick={() => {
-                if (!blog) return;
-                const quickUrl = `/client/create?quick=true&theme=${encodeURIComponent('Novo artigo')}&mode=fast&images=1`;
-                navigate(quickUrl);
-              }}
+              onClick={() => navigate('/client/create')}
               className="client-btn-primary text-lg px-8 py-6 gap-2"
             >
               <FileText className="h-5 w-5" />
@@ -428,11 +424,7 @@ export default function ClientDashboard() {
           <div className="text-center py-8">
             <p className="text-gray-500 dark:text-gray-400 mb-4">Nenhum artigo publicado ainda.</p>
             <Button 
-              onClick={() => {
-                if (!blog) return;
-                const quickUrl = `/client/create?quick=true&theme=${encodeURIComponent('Primeiro artigo')}&mode=fast&images=1`;
-                navigate(quickUrl);
-              }}
+              onClick={() => navigate('/client/create')}
               className="client-btn-primary"
             >
               Criar Primeiro Artigo
