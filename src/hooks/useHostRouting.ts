@@ -12,7 +12,7 @@ interface UseHostRoutingResult {
 
 /**
  * Hook that determines if the current hostname should serve:
- * - 'landing': Public marketing site (omniseen.app, www.omniseen.app)
+ * - 'landing': Public marketing site (omniseen.app, www.omniseen.app, blogs.omniseen.app)
  * - 'platform': Authenticated app (app.omniseen.app or localhost)
  * - 'blog': Platform subdomain blogs ({slug}.omniseen.app) or verified custom domain blogs
  */
@@ -28,7 +28,7 @@ export function useHostRouting(): UseHostRoutingResult {
       
       console.log('[useHostRouting] Checking hostname:', hostname);
       
-      // Development hosts - platform mode
+      // 1. Development hosts → platform mode
       const devHosts = ['localhost', '127.0.0.1', '0.0.0.0'];
       if (devHosts.some(h => hostname.includes(h))) {
         console.log('[useHostRouting] Development host detected -> platform mode');
@@ -37,7 +37,7 @@ export function useHostRouting(): UseHostRoutingResult {
         return;
       }
       
-      // Lovable preview - platform mode
+      // 2. Lovable preview → platform mode
       if (hostname.includes('lovable.app') || hostname.includes('lovableproject.com')) {
         console.log('[useHostRouting] Lovable preview detected -> platform mode');
         setMode('platform');
@@ -45,7 +45,7 @@ export function useHostRouting(): UseHostRoutingResult {
         return;
       }
       
-      // OMNISEEN root domain = Landing Page (public marketing site)
+      // 3. Root domain (omniseen.app, www.omniseen.app) → landing mode
       if (hostname === 'omniseen.app' || hostname === 'www.omniseen.app') {
         console.log('[useHostRouting] Root domain detected -> landing mode');
         setMode('landing');
@@ -53,7 +53,7 @@ export function useHostRouting(): UseHostRoutingResult {
         return;
       }
       
-      // OMNISEEN app subdomain = Platform (authenticated dashboard)
+      // 4. App subdomain (app.omniseen.app) → platform mode
       if (hostname === 'app.omniseen.app') {
         console.log('[useHostRouting] App subdomain detected -> platform mode');
         setMode('platform');
@@ -61,13 +61,21 @@ export function useHostRouting(): UseHostRoutingResult {
         return;
       }
       
-      // Check for platform subdomains ({slug}.omniseen.app)
+      // 5. Blogs host (blogs.omniseen.app) → landing mode (technical redirect)
+      if (hostname === 'blogs.omniseen.app') {
+        console.log('[useHostRouting] Blogs host detected -> landing mode (redirect)');
+        setMode('landing');
+        setLoading(false);
+        return;
+      }
+      
+      // 6. Platform subdomain ({slug}.omniseen.app) → blog mode
       const platformSubdomainMatch = hostname.match(/^([a-z0-9-]+)\.omniseen\.app$/i);
       if (platformSubdomainMatch) {
         const slug = platformSubdomainMatch[1];
         console.log('[useHostRouting] Platform subdomain detected:', slug);
         
-        // Verify blog exists with this slug or platform_subdomain
+        // Buscar blog onde platform_subdomain = slug OU slug = slug
         try {
           const { data, error } = await supabase
             .from('blogs')
@@ -77,26 +85,32 @@ export function useHostRouting(): UseHostRoutingResult {
           
           if (error) {
             console.error('[useHostRouting] Error checking blog:', error);
-            setMode('landing');
+            setMode('blog');
+            setBlogId(null);
+            setBlogSlug(null);
           } else if (data) {
             console.log('[useHostRouting] Blog found for subdomain:', data.id);
             setMode('blog');
             setBlogId(data.id);
             setBlogSlug(data.slug);
           } else {
-            console.log('[useHostRouting] No blog found for subdomain, fallback to landing');
-            setMode('landing');
+            console.log('[useHostRouting] No blog found for subdomain:', slug);
+            setMode('blog');
+            setBlogId(null);
+            setBlogSlug(null);
           }
         } catch (err) {
           console.error('[useHostRouting] Error in subdomain check:', err);
-          setMode('landing');
+          setMode('blog');
+          setBlogId(null);
+          setBlogSlug(null);
         }
         
         setLoading(false);
         return;
       }
       
-      // For any other hostname, check if it's a verified blog custom domain
+      // 7. Custom domain → blog mode (if verified)
       try {
         console.log('[useHostRouting] Checking custom domain:', hostname);
         const { data, error } = await supabase

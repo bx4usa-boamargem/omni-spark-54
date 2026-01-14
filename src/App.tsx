@@ -192,6 +192,15 @@ const AppRoutes = () => {
 
   // Blog mode - for verified custom domain blogs OR platform subdomain blogs
   if (mode === 'blog') {
+    // Blog not found - show 404 page
+    if (!blogId) {
+      return (
+        <Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      );
+    }
+    
     return (
       <Routes>
         <Route path="/" element={<CustomDomainBlog blogId={blogId} blogSlug={blogSlug} />} />
