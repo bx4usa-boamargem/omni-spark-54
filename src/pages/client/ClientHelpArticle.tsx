@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ChevronLeft, Clock, Rocket, TrendingUp, Compass, FileText, Zap, Plug } from 'lucide-react';
+import { Loader2, ChevronLeft, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface HelpArticle {
@@ -32,7 +32,7 @@ const calculateReadingTime = (content: string): number => {
   return Math.max(1, Math.ceil(words / wordsPerMinute));
 };
 
-// Format content with headers, lists, and special blocks
+// Format content with headers, lists, special blocks, and GIFs
 const formatContent = (content: string) => {
   if (!content) return [];
 
@@ -68,6 +68,32 @@ const formatContent = (content: string) => {
 
   lines.forEach((line) => {
     const trimmed = line.trim();
+
+    // GIF inline syntax: ![gif:filename.gif]
+    if (trimmed.match(/^!\[gif:(.*?)\]$/)) {
+      flushList();
+      const gifMatch = trimmed.match(/^!\[gif:(.*?)\]$/);
+      if (gifMatch) {
+        const gifUrl = gifMatch[1];
+        // Support both relative paths and full URLs
+        const fullUrl = gifUrl.startsWith('http') ? gifUrl : `/gifs/${gifUrl}`;
+        elements.push(
+          <div key={key++} className="my-6 rounded-xl overflow-hidden border shadow-sm bg-muted/30">
+            <img 
+              src={fullUrl}
+              alt="Tutorial animado"
+              className="w-full h-auto"
+              loading="lazy"
+            />
+            <div className="bg-muted/50 px-4 py-2 text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+              <span>📹</span>
+              <span>Demonstração visual da funcionalidade</span>
+            </div>
+          </div>
+        );
+      }
+      return;
+    }
 
     // H2 Headers
     if (trimmed.startsWith('## ')) {
@@ -124,6 +150,28 @@ const formatContent = (content: string) => {
           "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500"
         )}>
           <p className="text-sm" dangerouslySetInnerHTML={{ __html: parseBold(trimmed) }} />
+        </div>
+      );
+      return;
+    }
+
+    // Table rows (simple markdown tables)
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      flushList();
+      // Skip separator rows
+      if (trimmed.includes('---')) return;
+      
+      const cells = trimmed.split('|').filter(c => c.trim()).map(c => c.trim());
+      const isHeader = elements.length === 0 || !elements[elements.length - 1]?.props?.className?.includes('table');
+      
+      elements.push(
+        <div key={key++} className={cn(
+          "grid gap-2 py-2 px-3 text-sm border-b",
+          isHeader ? "font-semibold bg-muted/50" : ""
+        )} style={{ gridTemplateColumns: `repeat(${cells.length}, 1fr)` }}>
+          {cells.map((cell, i) => (
+            <span key={i} dangerouslySetInnerHTML={{ __html: parseBold(cell) }} />
+          ))}
         </div>
       );
       return;
@@ -230,7 +278,7 @@ export default function ClientHelpArticle() {
 
       {/* Header Image/GIF */}
       {article.header_gif_url && (
-        <div className="rounded-xl overflow-hidden border">
+        <div className="rounded-xl overflow-hidden border shadow-sm">
           <img
             src={article.header_gif_url}
             alt={article.title}
@@ -241,7 +289,7 @@ export default function ClientHelpArticle() {
 
       {/* Article Header */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {info && (
             <Badge className={cn(info.bgColor, info.color, "border-0")}>
               {info.label}

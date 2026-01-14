@@ -51,11 +51,11 @@ export default function ClientAccount() {
       setLoading(true);
 
       try {
-        // Fetch profile
+        // Fetch profile - using user_id column (not id)
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .maybeSingle();
 
         if (profileData) {

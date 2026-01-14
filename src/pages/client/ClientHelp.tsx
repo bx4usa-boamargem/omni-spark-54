@@ -2,9 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, ChevronRight, Home, TrendingUp, Compass, Activity, FileText, Globe, Zap, Building2, User, Plug, MapPin, Rocket, HelpCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Loader2, Search, ChevronRight, Rocket, TrendingUp, Compass, FileText, Zap, Plug, HelpCircle, Mic, MicOff, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface HelpCategory {
   id: string;
@@ -16,6 +21,14 @@ interface HelpCategory {
   bgColor: string;
   gradient: string;
   articleCount?: number;
+}
+
+interface HelpFaq {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  helpful_count: number;
 }
 
 const categories: HelpCategory[] = [
@@ -81,12 +94,47 @@ const categories: HelpCategory[] = [
   },
 ];
 
+const faqCategoryMap: Record<string, { label: string; icon: string }> = {
+  'conta': { label: 'Conta & Acesso', icon: '👤' },
+  'conteudo': { label: 'Conteúdo', icon: '📝' },
+  'radar': { label: 'Radar & SEO', icon: '📡' },
+  'pagamentos': { label: 'Pagamentos', icon: '💳' },
+  'tecnico': { label: 'Técnico', icon: '⚙️' },
+};
+
 export default function ClientHelp() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [articleCounts, setArticleCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [faqs, setFaqs] = useState<HelpFaq[]>([]);
+  const [loadingFaqs, setLoadingFaqs] = useState(true);
+
+  // Voice recognition
+  const { 
+    isListening, 
+    transcript, 
+    isSupported: voiceSupported, 
+    startListening, 
+    stopListening,
+    resetTranscript 
+  } = useSpeechRecognition();
+
+  // Update search query when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setSearchQuery(transcript);
+    }
+  }, [transcript]);
+
+  // Auto-search when voice stops
+  useEffect(() => {
+    if (!isListening && transcript) {
+      handleSearch(new Event('submit') as any);
+      resetTranscript();
+    }
+  }, [isListening]);
 
   useEffect(() => {
     if (!user) {
@@ -95,6 +143,7 @@ export default function ClientHelp() {
     }
     
     fetchArticleCounts();
+    fetchFaqs();
   }, [user]);
 
   const fetchArticleCounts = async () => {
@@ -119,6 +168,24 @@ export default function ClientHelp() {
     }
   };
 
+  const fetchFaqs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('help_faqs')
+        .select('*')
+        .eq('is_published', true)
+        .eq('language', 'pt-BR')
+        .order('order_index', { ascending: true });
+
+      if (error) throw error;
+      setFaqs(data || []);
+    } catch (error) {
+      console.error('Error fetching FAQs:', error);
+    } finally {
+      setLoadingFaqs(false);
+    }
+  };
+
   const handleCategoryClick = (categoryId: string) => {
     navigate(`/client/help/category/${categoryId}`);
   };
@@ -128,6 +195,41 @@ export default function ClientHelp() {
     if (searchQuery.trim()) {
       navigate(`/client/help/search?q=${encodeURIComponent(searchQuery)}`);
     }
+  };
+
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      resetTranscript();
+      startListening();
+    }
+  };
+
+  const markFaqHelpful = async (faqId: string) => {
+    try {
+      const currentFaq = faqs.find(f => f.id === faqId);
+      if (!currentFaq) return;
+      
+      // Direct update
+      await supabase
+        .from('help_faqs')
+        .update({ helpful_count: currentFaq.helpful_count + 1 })
+        .eq('id', faqId);
+      
+      // Update local state
+      setFaqs(prev => prev.map(f => 
+        f.id === faqId ? { ...f, helpful_count: f.helpful_count + 1 } : f
+      ));
+      
+      toast.success('Obrigado pelo feedback!');
+    } catch (error) {
+      console.error('Error marking FAQ helpful:', error);
+    }
+  };
+
+  const getFaqsByCategory = (category: string) => {
+    return faqs.filter(f => f.category === category);
   };
 
   if (loading) {
@@ -151,17 +253,47 @@ export default function ClientHelp() {
         </p>
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar with Voice */}
       <form onSubmit={handleSearch} className="max-w-xl mx-auto">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar artigos de ajuda..."
-            className="pl-12 h-12 text-base rounded-xl border-2 focus:border-primary"
-          />
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isListening ? "Ouvindo..." : "Buscar artigos de ajuda..."}
+              className={cn(
+                "pl-12 h-12 text-base rounded-xl border-2 focus:border-primary",
+                isListening && "border-red-500 animate-pulse"
+              )}
+            />
+          </div>
+          
+          {/* Voice Search Button */}
+          {voiceSupported && (
+            <Button
+              type="button"
+              variant={isListening ? "destructive" : "outline"}
+              size="icon"
+              className={cn(
+                "h-12 w-12 rounded-xl shrink-0",
+                isListening && "animate-pulse"
+              )}
+              onClick={handleVoiceToggle}
+            >
+              {isListening ? (
+                <MicOff className="h-5 w-5" />
+              ) : (
+                <Mic className="h-5 w-5" />
+              )}
+            </Button>
+          )}
         </div>
+        {isListening && (
+          <p className="text-center text-sm text-red-500 mt-2 animate-pulse">
+            🎤 Fale sua pergunta...
+          </p>
+        )}
       </form>
 
       {/* Categories Grid */}
@@ -221,6 +353,86 @@ export default function ClientHelp() {
             </div>
           );
         })}
+      </div>
+
+      {/* Interactive FAQ Section */}
+      <div className="mt-12 space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Perguntas Frequentes</h2>
+          <p className="text-muted-foreground">Respostas rápidas para as dúvidas mais comuns</p>
+        </div>
+
+        {loadingFaqs ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : faqs.length > 0 ? (
+          <Tabs defaultValue="conta" className="w-full">
+            <TabsList className="flex flex-wrap gap-1 h-auto p-1 bg-muted/50 justify-start overflow-x-auto">
+              {Object.entries(faqCategoryMap).map(([key, { label, icon }]) => (
+                <TabsTrigger 
+                  key={key} 
+                  value={key}
+                  className="text-sm px-3 py-2 whitespace-nowrap"
+                >
+                  <span className="mr-1.5">{icon}</span>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            
+            {Object.keys(faqCategoryMap).map((category) => {
+              const categoryFaqs = getFaqsByCategory(category);
+              
+              return (
+                <TabsContent key={category} value={category} className="mt-4">
+                  {categoryFaqs.length > 0 ? (
+                    <Accordion type="single" collapsible className="w-full space-y-2">
+                      {categoryFaqs.map((faq) => (
+                        <AccordionItem 
+                          key={faq.id} 
+                          value={faq.id}
+                          className="border rounded-lg px-4 bg-card"
+                        >
+                          <AccordionTrigger className="text-left hover:no-underline py-4">
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                              <HelpCircle className="h-4 w-4 text-primary shrink-0" />
+                              {faq.question}
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-4">
+                            <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                              {faq.answer}
+                            </p>
+                            <div className="flex items-center gap-2 pt-2 border-t">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary"
+                                onClick={() => markFaqHelpful(faq.id)}
+                              >
+                                <ThumbsUp className="h-3.5 w-3.5" />
+                                Útil {faq.helpful_count > 0 && `(${faq.helpful_count})`}
+                              </Button>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhuma pergunta nesta categoria ainda.
+                    </div>
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            Carregando perguntas frequentes...
+          </div>
+        )}
       </div>
 
       {/* Quick Help */}
