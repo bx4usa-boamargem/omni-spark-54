@@ -426,26 +426,29 @@ export default function Admin() {
                   </SelectContent>
                 </Select>
               </div>
-              {period === "custom" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Data inicial</Label>
-                    <Input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Data final</Label>
-                    <Input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
+              {/* Campos de data SEMPRE visíveis */}
+              <div className="space-y-2">
+                <Label>Data inicial</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPeriod("custom");
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data final</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPeriod("custom");
+                  }}
+                />
+              </div>
               <Button onClick={fetchConsumptionData}>Atualizar</Button>
             </div>
           </CardContent>
