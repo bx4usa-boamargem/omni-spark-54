@@ -228,6 +228,26 @@ export default function ClientSite() {
         </div>
       </div>
 
+      {/* Public URL Banner */}
+      <div className="px-4 py-3 bg-primary/5 border-b flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <Globe className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium">Seu blog está disponível em:</span>
+          <a 
+            href={getBlogUrlSafe()} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm text-primary font-mono hover:underline"
+          >
+            {getBlogUrlSafe()}
+          </a>
+        </div>
+        <Button onClick={copyBlogUrl} variant="ghost" size="sm" className="gap-1">
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? 'Copiado!' : 'Copiar'}
+        </Button>
+      </div>
+
       {/* Split View */}
       <div className="flex flex-1 overflow-hidden">
         {/* Editor - Left (Light Theme Forced) */}

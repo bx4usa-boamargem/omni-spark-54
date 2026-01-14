@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Loader2, Save, CheckCircle2, MessageCircle } from 'lucide-react';
+import { Building2, Loader2, Save, CheckCircle2, MessageCircle, Globe, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { BusinessEconomicsSection } from '@/components/company/BusinessEconomicsSection';
 
@@ -23,6 +23,16 @@ const BUSINESS_TYPES = [
   { value: 'consultoria', label: 'Consultoria' },
   { value: 'outro', label: 'Outro' },
 ];
+
+// Validate blog slug: only lowercase letters, numbers, and hyphens
+const validateBlogSlug = (slug: string): { valid: boolean; error?: string } => {
+  if (!slug) return { valid: true };
+  if (slug.length < 3) return { valid: false, error: 'Mínimo 3 caracteres' };
+  if (slug.length > 30) return { valid: false, error: 'Máximo 30 caracteres' };
+  if (!/^[a-z0-9-]+$/.test(slug)) return { valid: false, error: 'Apenas letras minúsculas, números e hífen' };
+  if (slug.startsWith('-') || slug.endsWith('-')) return { valid: false, error: 'Não pode começar ou terminar com hífen' };
+  return { valid: true };
+};
 
 export default function ClientCompany() {
   const { blog } = useBlog();
@@ -41,6 +51,11 @@ export default function ClientCompany() {
   const [targetAudience, setTargetAudience] = useState('');
   const [differentiator, setDifferentiator] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  
+  // Blog slug state
+  const [blogSlug, setBlogSlug] = useState('');
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [checkingSlug, setCheckingSlug] = useState(false);
 
   useEffect(() => {
     if (!blog?.id) return;
@@ -49,6 +64,7 @@ export default function ClientCompany() {
       setLoading(true);
 
       try {
+        // Fetch business profile
         const { data: profile } = await supabase
           .from('business_profile')
           .select('*')
@@ -69,9 +85,24 @@ export default function ClientCompany() {
           }
         }
 
-        // Also check blog name
+        // Load blog name and slug
         if (blog.name) {
           setCompanyName(blog.name);
+        }
+        
+        // Load platform_subdomain (blog slug)
+        const { data: blogData } = await supabase
+          .from('blogs')
+          .select('platform_subdomain, slug')
+          .eq('id', blog.id)
+          .single();
+          
+        if (blogData) {
+          // Use platform_subdomain if set, otherwise use slug as fallback
+          const currentSlug = blogData.platform_subdomain || blogData.slug || '';
+          // Clean any domain suffix that might still exist
+          const cleanSlug = currentSlug.replace('.omniseen.app', '').replace('https://', '');
+          setBlogSlug(cleanSlug);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -83,13 +114,67 @@ export default function ClientCompany() {
     fetchProfile();
   }, [blog?.id, blog?.name]);
 
+  // Handle blog slug change with validation
+  const handleBlogSlugChange = (value: string) => {
+    // Auto-lowercase and clean
+    const cleanValue = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setBlogSlug(cleanValue);
+    
+    const validation = validateBlogSlug(cleanValue);
+    if (!validation.valid) {
+      setSlugError(validation.error || null);
+    } else {
+      setSlugError(null);
+    }
+  };
+
+  // Check slug uniqueness
+  const checkSlugUniqueness = async (slug: string): Promise<boolean> => {
+    if (!slug || !blog?.id) return true;
+    
+    setCheckingSlug(true);
+    try {
+      const { data: existing } = await supabase
+        .from('blogs')
+        .select('id')
+        .eq('platform_subdomain', slug)
+        .neq('id', blog.id)
+        .maybeSingle();
+      
+      if (existing) {
+        setSlugError('Este endereço já está em uso');
+        return false;
+      }
+      return true;
+    } finally {
+      setCheckingSlug(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!blog?.id) return;
+    
+    // Validate blog slug before saving
+    if (blogSlug) {
+      const validation = validateBlogSlug(blogSlug);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Endereço do blog inválido');
+        return;
+      }
+      
+      // Check uniqueness
+      const isUnique = await checkSlugUniqueness(blogSlug);
+      if (!isUnique) {
+        toast.error('Este endereço já está em uso');
+        return;
+      }
+    }
+    
     setSaving(true);
     setSaved(false);
 
     try {
-      // Update business profile with whatsapp - use direct SQL approach for new columns
+      // Update business profile with whatsapp
       const profileData = {
         blog_id: blog.id,
         company_name: companyName,
@@ -118,10 +203,13 @@ export default function ClientCompany() {
           .eq('blog_id', blog.id);
       }
 
-      // Update blog name
+      // Update blog name and platform_subdomain
       const { error: blogError } = await supabase
         .from('blogs')
-        .update({ name: companyName })
+        .update({ 
+          name: companyName,
+          platform_subdomain: blogSlug || null
+        })
         .eq('id', blog.id);
 
       if (blogError) throw blogError;
@@ -180,6 +268,50 @@ export default function ClientCompany() {
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
             />
+          </div>
+
+          {/* Blog Slug / URL */}
+          <div className="space-y-2">
+            <Label htmlFor="blogSlug">Endereço do seu Blog</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="blogSlug"
+                placeholder="ex: clickone"
+                value={blogSlug}
+                onChange={(e) => handleBlogSlugChange(e.target.value)}
+                className={`font-mono ${slugError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+              />
+              {checkingSlug && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            
+            {slugError ? (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {slugError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Apenas letras minúsculas, números e hífen. Mín: 3, Máx: 30 caracteres.
+              </p>
+            )}
+            
+            {/* Preview URL */}
+            {blogSlug && !slugError && (
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-sm font-medium text-primary flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Seu blog ficará em:
+                </p>
+                <a 
+                  href={`https://${blogSlug}.omniseen.app`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline font-mono"
+                >
+                  https://{blogSlug}.omniseen.app
+                </a>
+              </div>
+            )}
           </div>
 
           {/* City - NEW FIELD */}
