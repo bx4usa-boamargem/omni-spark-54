@@ -2948,6 +2948,48 @@ export type Database = {
         }
         Relationships: []
       }
+      help_faqs: {
+        Row: {
+          answer: string
+          category: string
+          created_at: string | null
+          helpful_count: number | null
+          id: string
+          is_featured: boolean | null
+          is_published: boolean | null
+          language: string | null
+          order_index: number | null
+          question: string
+          updated_at: string | null
+        }
+        Insert: {
+          answer: string
+          category: string
+          created_at?: string | null
+          helpful_count?: number | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          language?: string | null
+          order_index?: number | null
+          question: string
+          updated_at?: string | null
+        }
+        Update: {
+          answer?: string
+          category?: string
+          created_at?: string | null
+          helpful_count?: number | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          language?: string | null
+          order_index?: number | null
+          question?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       keyword_analyses: {
         Row: {
           analyzed_at: string

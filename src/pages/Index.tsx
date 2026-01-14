@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { OmniseenLogoHeader } from "@/components/ui/OmniseenLogoHeader";
 import { TrackingScripts } from "@/components/analytics/TrackingScripts";
-import { FloatingSupportChat } from "@/components/support/FloatingSupportChat";
+import { SalesAssistantChat } from "@/components/landing/SalesAssistantChat";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { ProblemSection } from "@/components/landing/ProblemSection";
 import { SolutionSection } from "@/components/landing/SolutionSection";
@@ -216,7 +216,8 @@ export default function Index() {
       </footer>
 
       {/* AI Support Chat */}
-      <FloatingSupportChat />
+      {/* Sales AI Chat for Lead Conversion */}
+      <SalesAssistantChat />
     </div>
   );
 }
