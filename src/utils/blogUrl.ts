@@ -23,15 +23,31 @@ export function isProductionEnvironment(): boolean {
  * Get the base URL for a blog
  * Priority: 1. Custom domain (if verified), 2. Platform subdomain, 3. Fallback path
  */
+/**
+ * Normalize subdomain: remove any .omniseen.app suffix or https:// prefix
+ */
+function normalizeSubdomain(subdomain: string | null | undefined): string | null {
+  if (!subdomain) return null;
+  return subdomain
+    .replace('https://', '')
+    .replace('http://', '')
+    .replace('.omniseen.app', '')
+    .replace(/\/$/, ''); // Remove trailing slash
+}
+
 export function getBlogUrl(blog: BlogWithDomain): string {
   // Priority 1: Verified custom domain
   if (blog.custom_domain && blog.domain_verified) {
-    return `https://${blog.custom_domain}`;
+    const cleanDomain = blog.custom_domain
+      .replace('https://', '')
+      .replace('http://', '')
+      .replace(/\/$/, '');
+    return `https://${cleanDomain}`;
   }
   
   // Priority 2: Platform subdomain (only in production)
   if (isProductionEnvironment()) {
-    const subdomain = blog.platform_subdomain || blog.slug;
+    const subdomain = normalizeSubdomain(blog.platform_subdomain) || blog.slug;
     return `https://${subdomain}.omniseen.app`;
   }
   
@@ -50,12 +66,16 @@ export function getBlogUrl(blog: BlogWithDomain): string {
 export function getArticleUrl(blog: BlogWithDomain, articleSlug: string): string {
   // Priority 1: Verified custom domain
   if (blog.custom_domain && blog.domain_verified) {
-    return `https://${blog.custom_domain}/${articleSlug}`;
+    const cleanDomain = blog.custom_domain
+      .replace('https://', '')
+      .replace('http://', '')
+      .replace(/\/$/, '');
+    return `https://${cleanDomain}/${articleSlug}`;
   }
   
   // Priority 2: Platform subdomain (only in production)
   if (isProductionEnvironment()) {
-    const subdomain = blog.platform_subdomain || blog.slug;
+    const subdomain = normalizeSubdomain(blog.platform_subdomain) || blog.slug;
     return `https://${subdomain}.omniseen.app/${articleSlug}`;
   }
   

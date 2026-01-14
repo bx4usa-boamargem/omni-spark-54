@@ -1262,6 +1262,7 @@ export type Database = {
           onboarding_completed: boolean | null
           platform_subdomain: string | null
           primary_color: string | null
+          public_blog_enabled: boolean | null
           script_body: string | null
           script_footer: string | null
           script_head: string | null
@@ -1320,6 +1321,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           platform_subdomain?: string | null
           primary_color?: string | null
+          public_blog_enabled?: boolean | null
           script_body?: string | null
           script_footer?: string | null
           script_head?: string | null
@@ -1378,6 +1380,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           platform_subdomain?: string | null
           primary_color?: string | null
+          public_blog_enabled?: boolean | null
           script_body?: string | null
           script_footer?: string | null
           script_head?: string | null
