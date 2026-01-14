@@ -533,8 +533,8 @@ export default function Admin() {
         />
 
         {/* Tabs */}
-        <Tabs defaultValue={initialTab} className="space-y-4">
-          <TabsList className="flex-wrap">
+        <Tabs defaultValue={initialTab} className="space-y-6">
+          <TabsList className="flex flex-wrap gap-1 h-auto bg-muted/50 p-2 overflow-x-auto max-w-full">
             <TabsTrigger value="overview" className="gap-2">
               <LayoutDashboard className="h-4 w-4" />
               Visão Geral
