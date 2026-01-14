@@ -1434,12 +1434,16 @@ export type Database = {
         Row: {
           agent_avatar_url: string | null
           agent_name: string | null
+          agent_stripe_subscription_id: string | null
+          agent_subscription_started_at: string | null
+          agent_subscription_status: string | null
           blog_id: string
           conversion_goals: string[] | null
           created_at: string | null
           id: string
           is_enabled: boolean | null
           max_tokens_per_day: number | null
+          monthly_price_usd: number | null
           personality_traits: string[] | null
           proactive_delay_seconds: number | null
           tokens_reset_at: string | null
@@ -1452,12 +1456,16 @@ export type Database = {
         Insert: {
           agent_avatar_url?: string | null
           agent_name?: string | null
+          agent_stripe_subscription_id?: string | null
+          agent_subscription_started_at?: string | null
+          agent_subscription_status?: string | null
           blog_id: string
           conversion_goals?: string[] | null
           created_at?: string | null
           id?: string
           is_enabled?: boolean | null
           max_tokens_per_day?: number | null
+          monthly_price_usd?: number | null
           personality_traits?: string[] | null
           proactive_delay_seconds?: number | null
           tokens_reset_at?: string | null
@@ -1470,12 +1478,16 @@ export type Database = {
         Update: {
           agent_avatar_url?: string | null
           agent_name?: string | null
+          agent_stripe_subscription_id?: string | null
+          agent_subscription_started_at?: string | null
+          agent_subscription_status?: string | null
           blog_id?: string
           conversion_goals?: string[] | null
           created_at?: string | null
           id?: string
           is_enabled?: boolean | null
           max_tokens_per_day?: number | null
+          monthly_price_usd?: number | null
           personality_traits?: string[] | null
           proactive_delay_seconds?: number | null
           tokens_reset_at?: string | null
@@ -1627,6 +1639,50 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "brand_agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_agent_usage_monthly: {
+        Row: {
+          blog_id: string | null
+          created_at: string | null
+          id: string
+          month: string
+          total_conversations: number | null
+          total_cost_usd: number | null
+          total_leads_captured: number | null
+          total_messages: number | null
+          total_tokens_used: number | null
+        }
+        Insert: {
+          blog_id?: string | null
+          created_at?: string | null
+          id?: string
+          month: string
+          total_conversations?: number | null
+          total_cost_usd?: number | null
+          total_leads_captured?: number | null
+          total_messages?: number | null
+          total_tokens_used?: number | null
+        }
+        Update: {
+          blog_id?: string | null
+          created_at?: string | null
+          id?: string
+          month?: string
+          total_conversations?: number | null
+          total_cost_usd?: number | null
+          total_leads_captured?: number | null
+          total_messages?: number | null
+          total_tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_agent_usage_monthly_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
             referencedColumns: ["id"]
           },
         ]
