@@ -233,12 +233,12 @@ export const CustomDomainSettings = ({ blogId }: CustomDomainSettingsProps) => {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Valor:</span>
                     <div className="flex items-center gap-2">
-                      <code className="bg-muted px-2 py-0.5 rounded">cname.lovable.app</code>
+                      <code className="bg-muted px-2 py-0.5 rounded">cname.omniseen.app</code>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={() => copyToClipboard("cname.lovable.app")}
+                        onClick={() => copyToClipboard("cname.omniseen.app")}
                       >
                         <Copy className="h-3 w-3" />
                       </Button>

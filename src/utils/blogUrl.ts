@@ -74,9 +74,9 @@ export function getCanonicalBlogUrl(blog: BlogWithDomain): string {
     return `https://${cleanDomain}`;
   }
   
-  // Priority 2: ALWAYS use canonical format blog.omniseen.app/{slug}
+  // Priority 2: ALWAYS use canonical subdomain format {slug}.omniseen.app
   const slug = normalizeSubdomain(blog.platform_subdomain) || blog.slug;
-  return `https://blog.omniseen.app/${slug}`;
+  return `https://${slug}.omniseen.app`;
 }
 
 /**
