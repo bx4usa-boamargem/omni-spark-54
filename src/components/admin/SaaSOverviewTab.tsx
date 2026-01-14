@@ -170,7 +170,7 @@ export function SaaSOverviewTab() {
   const mrrProgress = (metrics.mrr / MRR_TARGET) * 100;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-4">
       {/* MRR Target Progress */}
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
         <CardHeader>
