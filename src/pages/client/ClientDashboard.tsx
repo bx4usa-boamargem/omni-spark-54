@@ -25,7 +25,7 @@ import { GenerationHistoryCard } from '@/components/dashboard/GenerationHistoryC
 import { OpportunitiesCarouselBanner } from '@/components/dashboard/OpportunitiesCarouselBanner';
 import { TerritoryMetricsDashboard } from '@/components/dashboard/TerritoryMetricsDashboard';
 import { ClientSetupChecklist } from '@/components/dashboard/ClientSetupChecklist';
-import { PublicBlogLink } from '@/components/dashboard/PublicBlogLink';
+
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -354,10 +354,6 @@ export default function ClientDashboard() {
         />
       )}
 
-      {/* Public Blog Link - ALWAYS VISIBLE (Golden Rule) */}
-      {blog && (
-        <PublicBlogLink blog={blog} />
-      )}
 
       {/* Opportunities Carousel Banner */}
       {blog?.id && (

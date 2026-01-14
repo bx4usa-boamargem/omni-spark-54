@@ -78,6 +78,18 @@ serve(async (req) => {
       );
     }
 
+    // Check subscription status - agent must have active subscription
+    const subscriptionStatus = agentConfig.agent_subscription_status || 'inactive';
+    if (subscriptionStatus !== 'active' && subscriptionStatus !== 'trial') {
+      return new Response(
+        JSON.stringify({ 
+          error: "Agent subscription inactive",
+          message: "Este agente não está ativo. Entre em contato com o administrador para ativação."
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // 2. Check daily token limit (reset if needed)
     const today = new Date().toISOString().split('T')[0];
     const resetDate = agentConfig.tokens_reset_at ? new Date(agentConfig.tokens_reset_at).toISOString().split('T')[0] : null;
