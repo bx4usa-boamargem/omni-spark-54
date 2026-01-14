@@ -76,6 +76,10 @@ import ClientConsultantMetrics from "./pages/client/ClientConsultantMetrics";
 import ClientNotificationSettings from "./pages/client/ClientNotificationSettings";
 import ClientPosts from "./pages/client/ClientPosts";
 import ClientTerritoryAnalytics from "./pages/client/ClientTerritoryAnalytics";
+import ClientHelp from "./pages/client/ClientHelp";
+import ClientHelpCategory from "./pages/client/ClientHelpCategory";
+import ClientHelpArticle from "./pages/client/ClientHelpArticle";
+import ClientHelpSearch from "./pages/client/ClientHelpSearch";
 
 const queryClient = new QueryClient();
 
@@ -167,6 +171,12 @@ const ClientRoutes = () => (
         
         {/* Integrações */}
         <Route path="integrations/gsc" element={<ClientGSCIntegration />} />
+        
+        {/* Ajuda */}
+        <Route path="help" element={<ClientHelp />} />
+        <Route path="help/category/:category" element={<ClientHelpCategory />} />
+        <Route path="help/search" element={<ClientHelpSearch />} />
+        <Route path="help/:slug" element={<ClientHelpArticle />} />
         
         {/* Legacy redirects para compatibilidade */}
         <Route path="posts" element={<Navigate to="/client/articles" replace />} />

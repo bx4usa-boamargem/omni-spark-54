@@ -23,9 +23,69 @@ interface Message {
   content: string;
 }
 
-// Contextual quick questions based on route
+// Contextual quick questions based on route (updated for /client/* routes)
 const getContextualQuestions = (pathname: string, t: (key: string) => string) => {
-  const baseQuestions = {
+  // New /client/* routes
+  const clientQuestions: Record<string, string[]> = {
+    '/client/dashboard': [
+      'Como usar o Radar de Oportunidades?',
+      'Como ativar a automação?',
+      'Onde vejo meus resultados?',
+    ],
+    '/client/results': [
+      'O que significa Aproveitamento do Radar?',
+      'Como interpretar o ROI?',
+      'Como conectar o Google Search Console?',
+    ],
+    '/client/radar': [
+      'Como criar artigo a partir do Radar?',
+      'O que significa o score de relevância?',
+      'Com que frequência o Radar atualiza?',
+    ],
+    '/client/seo': [
+      'Como melhorar meu score de SEO?',
+      'O que são as otimizações sugeridas?',
+      'Como corrigir meta descriptions?',
+    ],
+    '/client/articles': [
+      'Como publicar um artigo?',
+      'Como agendar publicação?',
+      'Como regenerar imagens?',
+    ],
+    '/client/portal': [
+      'Como personalizar meu blog?',
+      'Como adicionar meu logo?',
+      'Como mudar as cores?',
+    ],
+    '/client/automation': [
+      'Como funciona a automação?',
+      'O que é o Autopilot de Funil?',
+      'Como ver a fila de produção?',
+    ],
+    '/client/territories': [
+      'O que são territórios?',
+      'Como adicionar uma região?',
+      'Como funciona a análise por região?',
+    ],
+    '/client/company': [
+      'O que devo preencher no perfil?',
+      'Como configurar a economia do negócio?',
+      'Como mudar o slug do blog?',
+    ],
+    '/client/account': [
+      'Como convidar minha equipe?',
+      'Como conectar meu domínio?',
+      'Como mudar minha foto?',
+    ],
+    '/client/help': [
+      'Como começar na plataforma?',
+      'Quais são as funcionalidades principais?',
+      'Como falar com suporte humano?',
+    ],
+  };
+
+  // Legacy /app/* routes
+  const legacyQuestions: Record<string, string[]> = {
     '/app/dashboard': [
       t('supportChat.questions.howToCreateArticle'),
       t('supportChat.questions.howToUseAutomation'),
@@ -36,35 +96,27 @@ const getContextualQuestions = (pathname: string, t: (key: string) => string) =>
       t('supportChat.questions.howToPublish'),
       t('supportChat.questions.howToSchedule'),
     ],
-    '/app/keywords': [
-      t('supportChat.questions.howToSearchKeywords'),
-      t('supportChat.questions.whatAreClusters'),
-      t('supportChat.questions.howToImportKeywords'),
-    ],
-    '/app/analytics': [
-      t('supportChat.questions.howToReadMetrics'),
-      t('supportChat.questions.howToExportData'),
-      t('supportChat.questions.whatIsGSC'),
-    ],
-    '/app/settings': [
-      t('supportChat.questions.howToConnectDomain'),
-      t('supportChat.questions.howToManageTeam'),
-      t('supportChat.questions.howToChangeTemplate'),
-    ],
   };
 
-  // Find matching route
-  for (const [route, questions] of Object.entries(baseQuestions)) {
+  // Check /client/* routes first
+  for (const [route, questions] of Object.entries(clientQuestions)) {
     if (pathname.startsWith(route)) {
       return questions;
     }
   }
 
-  // Default questions for logged-in users
+  // Check legacy /app/* routes
+  for (const [route, questions] of Object.entries(legacyQuestions)) {
+    if (pathname.startsWith(route)) {
+      return questions;
+    }
+  }
+
+  // Default questions
   return [
-    t('supportChat.questions.howToCreateArticle'),
-    t('supportChat.questions.whatAreThePlans'),
-    t('supportChat.questions.howToGetHelp'),
+    'Como criar meu primeiro artigo?',
+    'O que é o Radar de Oportunidades?',
+    'Como ver meus resultados?',
   ];
 };
 

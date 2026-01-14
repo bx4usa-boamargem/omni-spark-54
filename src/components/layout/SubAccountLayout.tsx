@@ -14,8 +14,10 @@ import {
   FileText,
   Activity,
   Shield,
-  MapPin
+  MapPin,
+  HelpCircle
 } from 'lucide-react';
+import { FloatingSupportChat } from '@/components/support/FloatingSupportChat';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
@@ -68,6 +70,7 @@ const navSections: NavSection[] = [
       { icon: MapPin, label: 'Territórios', path: '/client/territories' },
       { icon: Building2, label: 'Minha Empresa', path: '/client/company' },
       { icon: User, label: 'Minha Conta', path: '/client/account' },
+      { icon: HelpCircle, label: 'Ajuda', path: '/client/help' },
     ]
   },
 ];
@@ -245,6 +248,9 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
           </div>
         </div>
       </main>
+
+      {/* Floating AI Support Chat */}
+      <FloatingSupportChat />
     </div>
   );
 }
