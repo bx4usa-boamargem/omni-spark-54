@@ -268,12 +268,12 @@ export function DomainTab({
                       <div>
                         <span className="text-muted-foreground">Valor:</span>
                         <div className="flex items-center gap-1">
-                          <p className="font-mono truncate">cname.lovableproject.com</p>
+                          <p className="font-mono truncate">cname.omniseen.app</p>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-5 w-5"
-                            onClick={() => copyToClipboard("cname.lovableproject.com")}
+                            onClick={() => copyToClipboard("cname.omniseen.app")}
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
