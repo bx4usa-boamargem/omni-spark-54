@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, TrendingUp, Target, Loader2, Info, Radar } from "lucide-react";
+import { Zap, TrendingUp, Target, Loader2, Info, Radar, Shield, Clock, CheckCircle2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 
 interface FunnelAutopilotSettingsProps {
   blogId: string;
@@ -58,6 +59,9 @@ export function FunnelAutopilotSettings({ blogId }: FunnelAutopilotSettingsProps
         autopilot_top: data.autopilot_top || 1,
         autopilot_middle: data.autopilot_middle || 1,
         autopilot_bottom: data.autopilot_bottom || 1,
+        auto_publish_enabled: data.auto_publish_enabled ?? true,
+        publish_delay_hours: data.publish_delay_hours || 24,
+        quality_gate_enabled: data.quality_gate_enabled ?? true,
       });
     }
     
@@ -75,6 +79,9 @@ export function FunnelAutopilotSettings({ blogId }: FunnelAutopilotSettingsProps
         autopilot_top: config.autopilot_top,
         autopilot_middle: config.autopilot_middle,
         autopilot_bottom: config.autopilot_bottom,
+        auto_publish_enabled: config.auto_publish_enabled,
+        publish_delay_hours: config.publish_delay_hours,
+        quality_gate_enabled: config.quality_gate_enabled,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'blog_id' });
 
@@ -204,14 +211,74 @@ export function FunnelAutopilotSettings({ blogId }: FunnelAutopilotSettingsProps
               </div>
             </div>
 
+            {/* Quality Gate Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3">
+                <Shield className="h-5 w-5 text-purple-500" />
+                <div>
+                  <Label className="font-medium">Quality Gate</Label>
+                  <p className="text-xs text-muted-foreground">Valida qualidade, SEO e compliance antes de publicar</p>
+                </div>
+              </div>
+              <Switch
+                checked={config.quality_gate_enabled}
+                onCheckedChange={(checked) => setConfig({ ...config, quality_gate_enabled: checked })}
+              />
+            </div>
+
+            {/* Auto-Publish Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                <div>
+                  <Label className="font-medium">Publicação Automática</Label>
+                  <p className="text-xs text-muted-foreground">Publica automaticamente após aprovação no Quality Gate</p>
+                </div>
+              </div>
+              <Switch
+                checked={config.auto_publish_enabled}
+                onCheckedChange={(checked) => setConfig({ ...config, auto_publish_enabled: checked })}
+              />
+            </div>
+
+            {/* Delay Slider - Only show if auto-publish is enabled */}
+            {config.auto_publish_enabled && (
+              <div className="space-y-3 p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-5 w-5 text-orange-500" />
+                  <div>
+                    <Label className="font-medium">Delay antes de publicar</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Aguarda {config.publish_delay_hours}h após aprovação para publicar
+                    </p>
+                  </div>
+                </div>
+                <Slider
+                  value={[config.publish_delay_hours]}
+                  onValueChange={([value]) => setConfig({ ...config, publish_delay_hours: value })}
+                  min={1}
+                  max={72}
+                  step={1}
+                  className="mt-2"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1h</span>
+                  <span className="font-medium text-foreground">{config.publish_delay_hours}h</span>
+                  <span>72h</span>
+                </div>
+              </div>
+            )}
+
             {/* Info alert */}
             <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
               <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <AlertDescription className="text-blue-800 dark:text-blue-200 text-sm">
-                <strong>{totalDaily} artigo{totalDaily !== 1 ? 's' : ''}/dia</strong> será{totalDaily !== 1 ? 'ão' : ''} criado{totalDaily !== 1 ? 's' : ''} automaticamente como <strong>rascunho</strong>.
-                <span className="block mt-1 text-xs opacity-80">
-                  Você receberá uma notificação para revisar antes de publicar.
-                </span>
+                <strong>{totalDaily} artigo{totalDaily !== 1 ? 's' : ''}/dia</strong> será{totalDaily !== 1 ? 'ão' : ''} criado{totalDaily !== 1 ? 's' : ''} automaticamente
+                {config.auto_publish_enabled ? (
+                  <span> e publicado{totalDaily !== 1 ? 's' : ''} após {config.publish_delay_hours}h de delay.</span>
+                ) : (
+                  <span> como <strong>rascunho</strong> para revisão manual.</span>
+                )}
               </AlertDescription>
             </Alert>
 
