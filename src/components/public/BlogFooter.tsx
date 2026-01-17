@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, Phone, Mail, Globe, MessageCircle, Instagram, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getContactHref, getContactDisplayLabel } from "@/lib/contactLinks";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface Category {
   id: string;
@@ -39,6 +40,10 @@ interface BlogFooterProps {
   footerText?: string | null;
   customDomain?: string | null;
   domainVerified?: boolean | null;
+  // WhatsApp context for global template
+  companyName?: string;
+  service?: string;
+  city?: string;
   // New props for parity with editor
   contactButtons?: ContactButton[];
   showCategoriesFooter?: boolean;
@@ -75,19 +80,30 @@ export function BlogFooter({
   footerText,
   customDomain,
   domainVerified,
+  companyName,
+  service,
+  city,
   contactButtons = [],
   showCategoriesFooter = true,
   brandDisplayMode = 'text',
 }: BlogFooterProps) {
   const { t } = useTranslation();
   const blogPath = getBlogPath({ slug: blogSlug, custom_domain: customDomain, domain_verified: domainVerified });
+  const { buildLink } = useGlobalWhatsApp();
 
   const handleCtaClick = () => {
     if (!ctaUrl) return;
     
     if (ctaType === "whatsapp") {
-      const cleanNumber = ctaUrl.replace(/\D/g, "");
-      window.open(`https://wa.me/${cleanNumber}`, "_blank");
+      // Use global WhatsApp template
+      const whatsappLink = buildLink({
+        phone: ctaUrl,
+        companyName: companyName || blogName,
+        service: service || 'nossos serviços',
+        city: city || '',
+        articleTitle: 'o blog'
+      });
+      window.open(whatsappLink, "_blank");
     } else {
       window.open(ctaUrl, "_blank");
     }

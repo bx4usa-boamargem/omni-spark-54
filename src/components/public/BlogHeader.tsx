@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface Category {
   id: string;
@@ -33,6 +34,10 @@ interface BlogHeaderProps {
   ctaText?: string | null;
   ctaUrl?: string | null;
   ctaType?: string | null;
+  // WhatsApp context for global template
+  companyName?: string;
+  service?: string;
+  city?: string;
   // New props for parity with editor
   showSearch?: boolean;
   headerCtaText?: string | null;
@@ -53,6 +58,9 @@ export const BlogHeader = ({
   ctaText,
   ctaUrl,
   ctaType,
+  companyName,
+  service,
+  city,
   showSearch = true,
   headerCtaText,
   headerCtaUrl,
@@ -62,6 +70,7 @@ export const BlogHeader = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const blogPath = getBlogPath({ slug: blogSlug, custom_domain: customDomain, domain_verified: domainVerified });
+  const { buildLink } = useGlobalWhatsApp();
 
   useEffect(() => {
     if (blogId) {
@@ -95,8 +104,15 @@ export const BlogHeader = ({
     if (!effectiveCtaUrl) return;
     
     if (ctaType === "whatsapp") {
-      const cleanNumber = effectiveCtaUrl.replace(/\D/g, "");
-      window.open(`https://wa.me/${cleanNumber}`, "_blank");
+      // Use global WhatsApp template
+      const whatsappLink = buildLink({
+        phone: effectiveCtaUrl,
+        companyName: companyName || blogName,
+        service: service || 'nossos serviços',
+        city: city || '',
+        articleTitle: 'o blog'
+      });
+      window.open(whatsappLink, "_blank");
     } else {
       window.open(effectiveCtaUrl, "_blank");
     }

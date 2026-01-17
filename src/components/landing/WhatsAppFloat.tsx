@@ -1,23 +1,31 @@
 import { useTranslation } from "react-i18next";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface WhatsAppFloatProps {
   phoneNumber?: string;
-  message?: string;
+  companyName?: string;
+  service?: string;
   className?: string;
 }
 
 export function WhatsAppFloat({ 
-  phoneNumber = "5511999999999", // Replace with actual number
-  message,
+  phoneNumber = "5511999999999",
+  companyName = "OMNISEEN",
+  service = "automação de conteúdo",
   className 
 }: WhatsAppFloatProps) {
   const { t } = useTranslation();
+  const { buildLink } = useGlobalWhatsApp();
   
-  const defaultMessage = t('landing.whatsapp.message', 'Hi! I want to know more about OMNISEEN');
-  const encodedMessage = encodeURIComponent(message || defaultMessage);
-  const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+  const whatsappUrl = buildLink({
+    phone: phoneNumber,
+    companyName,
+    service,
+    city: 'Brasil',
+    articleTitle: 'Landing Page'
+  });
 
   return (
     <a

@@ -1,16 +1,34 @@
 import { MessageCircle } from "lucide-react";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface WhatsAppFloatButtonProps {
   phoneNumber: string;
+  companyName?: string;
+  service?: string;
+  city?: string;
+  articleTitle?: string;
+  /** @deprecated Use o sistema global de templates */
   message?: string;
 }
 
 export function WhatsAppFloatButton({ 
-  phoneNumber, 
-  message = "Olá! Vi seu blog e gostaria de saber mais." 
+  phoneNumber,
+  companyName,
+  service,
+  city,
+  articleTitle
 }: WhatsAppFloatButtonProps) {
-  const cleanNumber = phoneNumber.replace(/\D/g, '');
-  const encodedMessage = encodeURIComponent(message);
+  const { buildLink } = useGlobalWhatsApp();
+  
+  const href = buildLink({
+    phone: phoneNumber,
+    companyName,
+    service,
+    city,
+    articleTitle
+  });
+  
+  if (href === '#') return null;
   
   return (
     <div className="fixed bottom-6 right-6 z-50 group">
@@ -19,7 +37,7 @@ export function WhatsAppFloatButton({
         <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-30" />
         
         <a
-          href={`https://wa.me/${cleanNumber}?text=${encodedMessage}`}
+          href={href}
           target="_blank"
           rel="noopener noreferrer"
           className="relative flex items-center gap-2 bg-green-500 hover:bg-green-600 

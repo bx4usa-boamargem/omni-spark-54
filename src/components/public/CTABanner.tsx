@@ -1,5 +1,6 @@
 import { ExternalLink, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface CTABannerProps {
   title?: string | null;
@@ -9,6 +10,11 @@ interface CTABannerProps {
   ctaType?: string | null;
   primaryColor?: string;
   secondaryColor?: string;
+  // WhatsApp context for global template
+  companyName?: string;
+  service?: string;
+  city?: string;
+  articleTitle?: string;
 }
 
 export const CTABanner = ({
@@ -19,14 +25,26 @@ export const CTABanner = ({
   ctaType,
   primaryColor,
   secondaryColor,
+  companyName,
+  service,
+  city,
+  articleTitle,
 }: CTABannerProps) => {
+  const { buildLink } = useGlobalWhatsApp();
+  
   if (!title && !description) return null;
 
   const getCtaHref = () => {
     if (!ctaUrl) return "#";
     if (ctaType === "whatsapp") {
-      const phone = ctaUrl.replace(/\D/g, "");
-      return `https://wa.me/${phone}`;
+      // Use global WhatsApp template
+      return buildLink({
+        phone: ctaUrl,
+        companyName: companyName || 'nossa empresa',
+        service: service || 'nossos serviços',
+        city: city || '',
+        articleTitle: articleTitle || 'o conteúdo'
+      });
     }
     return ctaUrl;
   };
