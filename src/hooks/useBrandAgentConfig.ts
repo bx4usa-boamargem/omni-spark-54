@@ -13,6 +13,9 @@ interface BrandAgentConfig {
 interface BusinessProfile {
   company_name: string | null;
   logo_url: string | null;
+  niche: string | null;
+  city: string | null;
+  services: string | null;
 }
 
 interface UseBrandAgentConfigResult {
@@ -48,7 +51,7 @@ export function useBrandAgentConfig(blogId: string | null): UseBrandAgentConfigR
             .maybeSingle(),
           supabase
             .from('business_profile')
-            .select('company_name')
+            .select('company_name, niche, city, services')
             .eq('blog_id', blogId)
             .maybeSingle(),
         ]);
@@ -63,9 +66,13 @@ export function useBrandAgentConfig(blogId: string | null): UseBrandAgentConfigR
         if (profileResult.error && profileResult.error.code !== 'PGRST116') {
           console.error('Error fetching business profile:', profileResult.error);
         } else {
-          setBusinessProfile(profileResult.data ? {
-            company_name: profileResult.data.company_name,
+          const data = profileResult.data as Record<string, unknown> | null;
+          setBusinessProfile(data ? {
+            company_name: (data.company_name as string) || null,
             logo_url: null,
+            niche: (data.niche as string) || null,
+            city: (data.city as string) || null,
+            services: (data.services as string) || null,
           } : null);
         }
       } catch (err) {

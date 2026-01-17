@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useBlog } from '@/hooks/useBlog';
+import { useGlobalWhatsApp } from '@/hooks/useGlobalWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ const validateBlogSlug = (slug: string): { valid: boolean; error?: string } => {
 
 export default function ClientCompany() {
   const { blog } = useBlog();
+  const { previewMessage } = useGlobalWhatsApp();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -434,21 +436,24 @@ export default function ClientCompany() {
               Apenas números, com código do país e DDD. Ex: 5511999999999
             </p>
             
-            {/* WhatsApp Link Preview */}
+            {/* WhatsApp Link Preview - Uses Global Template */}
             {whatsapp && whatsapp.length >= 10 && (
-              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 space-y-2">
                 <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
                   <MessageCircle className="h-4 w-4" />
-                  Link do WhatsApp:
+                  Preview da mensagem automática:
                 </p>
-                <a 
-                  href={`https://wa.me/${whatsapp}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-green-600 hover:underline"
-                >
-                  wa.me/{whatsapp}
-                </a>
+                <p className="text-sm text-muted-foreground italic">
+                  "{previewMessage({ 
+                    phone: whatsapp, 
+                    companyName: companyName || undefined, 
+                    service: services || undefined, 
+                    city: city || undefined 
+                  })}"
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  💡 A mensagem é gerada automaticamente pelo sistema da OmniSeen
+                </p>
               </div>
             )}
           </div>

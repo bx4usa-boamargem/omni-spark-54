@@ -1,5 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  buildWhatsAppLinkSync, 
+  getGlobalWhatsAppConfig, 
+  cleanPhoneNumber,
+  type WhatsAppContext,
+  type GlobalCommConfig
+} from "../_shared/whatsappBuilder.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,33 +33,24 @@ function formatWhatsAppMessage(title: string, score: number, keywords: string[],
   const keywordsList = keywords.slice(0, 3).join(', ');
   const locationLine = territory ? `📍 ${territory}\n` : '';
   
-  return encodeURIComponent(
-    `🎯 *Nova Oportunidade de Conteúdo*\n\n` +
+  return `🎯 *Nova Oportunidade de Conteúdo*\n\n` +
     locationLine +
     `📝 ${title}\n` +
     `📊 Relevância: ${score}%\n` +
     `🔑 Keywords: ${keywordsList}\n\n` +
-    `Acesse o painel para mais detalhes.`
-  );
+    `Acesse o painel para mais detalhes.`;
 }
 
 function formatHighScoreWhatsAppMessage(title: string, score: number, keywords: string[], territory?: string): string {
   const keywordsList = keywords.slice(0, 3).join(', ');
   const locationLine = territory ? `📍 ${territory}\n` : '';
   
-  return encodeURIComponent(
-    `🔥 *OPORTUNIDADE URGENTE - Score ${score}%*\n\n` +
+  return `🔥 *OPORTUNIDADE URGENTE - Score ${score}%*\n\n` +
     locationLine +
     `📝 "${title}"\n\n` +
     `⚡ Alta demanda detectada${territory ? ' na sua região' : ''}!\n` +
     `🔑 ${keywordsList}\n\n` +
-    `Crie o artigo agora para capturar esse tráfego.`
-  );
-}
-
-function formatPhoneNumber(phone: string): string {
-  // Remove all non-numeric characters
-  return phone.replace(/\D/g, '');
+    `Crie o artigo agora para capturar esse tráfego.`;
 }
 
 function formatTerritoryName(territory?: { country: string; state?: string; city?: string }): string {
@@ -239,14 +237,18 @@ serve(async (req) => {
       // Send WhatsApp notification if enabled (always for high score)
       if ((setting.notify_whatsapp && setting.whatsapp_number) || (isUrgentHighScore && setting.whatsapp_number)) {
         try {
-          const formattedPhone = formatPhoneNumber(setting.whatsapp_number);
+          const formattedPhone = cleanPhoneNumber(setting.whatsapp_number);
           
-          // Use urgent message format for high score
+          // Fetch global WhatsApp config for consistent messaging
+          const globalConfig = await getGlobalWhatsAppConfig(supabase);
+          
+          // Use urgent message format for high score, otherwise use global template
           const whatsappMessage = isUrgentHighScore
             ? formatHighScoreWhatsAppMessage(title, score, keywords, territoryName)
             : formatWhatsAppMessage(title, score, keywords, territoryName);
           
-          const whatsappUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${whatsappMessage}`;
+          // Build WhatsApp URL using shared builder
+          const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(whatsappMessage)}`;
 
           // Log WhatsApp notification with the URL (user clicks to send)
           await supabase

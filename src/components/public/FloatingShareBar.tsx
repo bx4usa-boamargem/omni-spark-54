@@ -75,7 +75,7 @@ export const FloatingShareBar = ({
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
       twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
       linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-      whatsapp: `https://wa.me/?text=${encodedText}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(`📰 ${title}\n\nLeia o artigo completo:\n${url}`)}`,
     };
 
     if (platform === "copy") {

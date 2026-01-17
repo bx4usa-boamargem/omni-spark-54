@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useBlog } from '@/hooks/useBlog';
+import { useGlobalWhatsApp } from '@/hooks/useGlobalWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ interface Conversation {
 
 export default function ClientLeads() {
   const { blog } = useBlog();
+  const { buildLink: buildWhatsAppLink } = useGlobalWhatsApp();
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -442,7 +444,11 @@ export default function ClientLeads() {
             <div className="pt-4 border-t">
               <Button asChild className="w-full gap-2">
                 <a 
-                  href={`https://wa.me/${selectedLead.whatsapp}`} 
+                  href={buildWhatsAppLink({
+                    phone: selectedLead.whatsapp,
+                    companyName: selectedLead.name || undefined,
+                    service: 'acompanhamento de lead',
+                  })} 
                   target="_blank" 
                   rel="noopener noreferrer"
                 >
