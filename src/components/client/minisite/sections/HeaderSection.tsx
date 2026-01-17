@@ -69,7 +69,7 @@ export function HeaderSection({
         </div>
         
         <p className="text-xs text-gray-500">
-          💡 Para WhatsApp, use: https://wa.me/5511999999999
+          💡 O link WhatsApp é gerado automaticamente a partir do número cadastrado em "Minha Empresa"
         </p>
       </div>
     </div>

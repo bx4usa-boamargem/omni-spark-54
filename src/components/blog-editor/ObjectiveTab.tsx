@@ -14,12 +14,13 @@ import {
   Sparkles,
   Loader2
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ImageUpload } from "@/components/onboarding/ImageUpload";
 import { SectionHelper } from "./SectionHelper";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 
 interface ObjectiveTabProps {
   ctaType: string;
@@ -80,16 +81,13 @@ export function ObjectiveTab({
   const [bannerPrompt, setBannerPrompt] = useState("");
   const [generatingBanner, setGeneratingBanner] = useState(false);
 
-  // Generate WhatsApp link automatically
-  const whatsappLink = useMemo(() => {
-    if (ctaType !== "whatsapp" || !ctaUrl) return "";
-    const cleanNumber = ctaUrl.replace(/\D/g, "");
-    if (!cleanNumber) return "";
-    const encodedMessage = whatsappMessage ? encodeURIComponent(whatsappMessage) : "";
-    return encodedMessage 
-      ? `https://wa.me/${cleanNumber}?text=${encodedMessage}`
-      : `https://wa.me/${cleanNumber}`;
-  }, [ctaType, ctaUrl, whatsappMessage]);
+  // Use global WhatsApp configuration from parent account
+  const { buildLink: buildWhatsAppLink, previewMessage } = useGlobalWhatsApp();
+
+  // Generate WhatsApp link using global template
+  const whatsappLink = ctaType === "whatsapp" && ctaUrl 
+    ? buildWhatsAppLink({ phone: ctaUrl })
+    : "";
 
   const handleCopyLink = async () => {
     if (!whatsappLink) return;

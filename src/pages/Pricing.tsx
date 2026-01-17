@@ -132,8 +132,10 @@ export default function Pricing() {
 
   const handleSelectPlan = async (planId: string) => {
     if (planId === 'business') {
-      // Open contact for business plan
-      window.open('https://wa.me/5511999999999?text=Quero%20saber%20mais%20sobre%20o%20plano%20Business', '_blank');
+      // Open contact for business plan - uses OmniSeen official WhatsApp
+      const omniseenWhatsApp = import.meta.env.VITE_OMNISEEN_WHATSAPP || '5511999999999';
+      const businessMessage = encodeURIComponent('Olá! Tenho interesse no plano Business da OmniSeen. Podem me apresentar?');
+      window.open(`https://wa.me/${omniseenWhatsApp}?text=${businessMessage}`, '_blank');
       return;
     }
 

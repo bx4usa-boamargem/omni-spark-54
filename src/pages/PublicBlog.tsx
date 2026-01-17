@@ -11,10 +11,10 @@ import { CategoryFilter } from "@/components/public/CategoryFilter";
 import { WhatsAppFloatButton } from "@/components/public/WhatsAppFloatButton";
 import { BrandSalesAgentWidget } from "@/components/public/BrandSalesAgentWidget";
 import { useBrandAgentConfig } from "@/hooks/useBrandAgentConfig";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { getBlogUrl } from "@/utils/blogUrl";
-
 interface Category {
   id: string;
   name: string;
@@ -91,6 +91,9 @@ const PublicBlog = () => {
   
   // Brand Sales Agent
   const { agentConfig, businessProfile } = useBrandAgentConfig(blog?.id || null);
+  
+  // Global WhatsApp configuration (inherited from parent account)
+  const { buildLink: buildWhatsAppLink } = useGlobalWhatsApp();
 
   useEffect(() => {
     const fetchBlogAndArticles = async () => {
@@ -163,8 +166,14 @@ const PublicBlog = () => {
     if (!url) return;
     
     if (type === "whatsapp") {
-      const cleanNumber = url.replace(/\D/g, "");
-      window.open(`https://wa.me/${cleanNumber}`, "_blank");
+      // Use global WhatsApp template from parent account
+      const whatsappUrl = buildWhatsAppLink({
+        phone: url,
+        companyName: blog?.name || undefined,
+        service: businessProfile?.services || businessProfile?.niche || undefined,
+        city: blog?.city || businessProfile?.city || undefined,
+      });
+      window.open(whatsappUrl, "_blank");
     } else {
       window.open(url, "_blank");
     }
