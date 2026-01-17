@@ -175,6 +175,10 @@ export function sanitizeContactValue(type: string, value: string): string {
 /**
  * Generates the official href link for each contact type.
  * NEVER returns raw values - always returns properly formatted links.
+ * 
+ * NOTE: For WhatsApp buttons, this returns a simple wa.me link.
+ * For contextual WhatsApp links (with article title, service, etc.),
+ * use buildWhatsAppLink from @/lib/whatsappBuilder instead.
  */
 export function getContactHref(btn: ContactButtonData): string {
   const cleanValue = sanitizeContactValue(btn.button_type, btn.value);
@@ -183,7 +187,7 @@ export function getContactHref(btn: ContactButtonData): string {
   
   switch (btn.button_type) {
     case 'whatsapp':
-      // Official WhatsApp API format: api.whatsapp.com/send
+      // Simple WhatsApp link - for contextual links use whatsappBuilder
       const waText = btn.whatsapp_message 
         ? `&text=${encodeURIComponent(btn.whatsapp_message)}`
         : '';

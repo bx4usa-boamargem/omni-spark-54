@@ -1,6 +1,9 @@
 // Contrato Editorial Obrigatório - CTA Padrão por Nicho
 // Este arquivo define o CTA obrigatório que DEVE estar em TODOS os artigos
 // CTAs são personalizados por nicho da empresa - NUNCA genéricos sobre "automação"
+// WhatsApp links seguem o padrão global da conta-mãe via whatsappBuilder
+
+import { buildWhatsAppLinkSync, type WhatsAppContext, type GlobalCommConfig } from './whatsappBuilder.ts';
 
 export interface CompanyInfo {
   name: string;
@@ -8,7 +11,15 @@ export interface CompanyInfo {
   whatsapp?: string;
   niche?: string;     // Para detectar tipo de conclusão
   services?: string;  // Backup para detecção de nicho
+  articleTitle?: string; // Para o template WhatsApp
 }
+
+// Configuração global padrão (será sobrescrita quando tiver a config real)
+const DEFAULT_WHATSAPP_CONFIG: GlobalCommConfig = {
+  whatsapp_base_url: 'https://wa.me/{phone}?text={message}',
+  message_template: 'Olá! Vi o artigo "{article_title}" no blog e gostaria de saber mais sobre {service} em {city}. Podem me ajudar?',
+  placeholders: ['phone', 'service', 'city', 'article_title', 'company_name']
+};
 
 // Tipos de conclusão baseados no nicho
 type ConclusionType = 'pragas' | 'advocacia' | 'clinica' | 'imobiliaria' | 'consultoria' | 'educacao' | 'alimentacao' | 'beleza' | 'construcao' | 'tecnologia' | 'financeiro' | 'default';
@@ -126,8 +137,9 @@ const GENERIC_END_PATTERNS = [
 
 /**
  * Gera CTA obrigatório personalizado com dados da empresa E nicho
+ * Usa o sistema global de WhatsApp da conta-mãe
  */
-export function generateCompanyCTA(company: CompanyInfo): string {
+export function generateCompanyCTA(company: CompanyInfo, whatsappConfig?: GlobalCommConfig): string {
   const conclusionType = detectConclusionType(company.niche, company.services);
   const template = CONCLUSION_TEMPLATES[conclusionType];
   
@@ -136,10 +148,22 @@ export function generateCompanyCTA(company: CompanyInfo): string {
   const locationText = company.city ? ` em ${company.city}` : '';
   const ctaButtonText = `Fale com a ${company.name} agora`;
   
-  // Link clicável se tiver WhatsApp
-  const ctaLink = company.whatsapp 
-    ? `[${ctaButtonText}](https://wa.me/${company.whatsapp.replace(/\D/g, '')})`
-    : `[${ctaButtonText}]`;
+  // Gerar link WhatsApp usando o padrão global
+  let ctaLink = ctaButtonText;
+  if (company.whatsapp) {
+    const config = whatsappConfig || DEFAULT_WHATSAPP_CONFIG;
+    const context: WhatsAppContext = {
+      phone: company.whatsapp,
+      companyName: company.name,
+      service: company.services || template.action,
+      city: company.city || '',
+      articleTitle: company.articleTitle || 'o artigo'
+    };
+    const whatsappUrl = buildWhatsAppLinkSync(context, config);
+    ctaLink = `[${ctaButtonText}](${whatsappUrl})`;
+  } else {
+    ctaLink = `[${ctaButtonText}]`;
+  }
 
   return `## Próximo passo
 
@@ -224,7 +248,7 @@ export function ensureCTA(content: string): string {
  * Garante CTA com dados personalizados da empresa E nicho.
  * Esta é a versão preferida quando temos informações do negócio.
  */
-export function ensureCompanyCTA(content: string, company: CompanyInfo): string {
+export function ensureCompanyCTA(content: string, company: CompanyInfo, whatsappConfig?: GlobalCommConfig): string {
   if (!content || typeof content !== 'string') {
     return content;
   }
@@ -237,7 +261,7 @@ export function ensureCompanyCTA(content: string, company: CompanyInfo): string 
   console.log(`[EDITORIAL CONTRACT] Aplicando CTA personalizado para: ${company.name} (nicho: ${company.niche || 'não especificado'})`);
   
   const cleanContent = cleanGenericEndings(content);
-  const companyCTA = generateCompanyCTA(company);
+  const companyCTA = generateCompanyCTA(company, whatsappConfig);
   const result = cleanContent + '\n\n' + companyCTA;
   
   console.log('[EDITORIAL CONTRACT] CTA personalizado com empresa e nicho anexado');

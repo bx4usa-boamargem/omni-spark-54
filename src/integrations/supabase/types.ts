@@ -2949,6 +2949,39 @@ export type Database = {
           },
         ]
       }
+      global_comm_config: {
+        Row: {
+          config_key: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          message_template: string
+          placeholders: Json
+          updated_at: string | null
+          whatsapp_base_url: string
+        }
+        Insert: {
+          config_key: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_template: string
+          placeholders?: Json
+          updated_at?: string | null
+          whatsapp_base_url?: string
+        }
+        Update: {
+          config_key?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_template?: string
+          placeholders?: Json
+          updated_at?: string | null
+          whatsapp_base_url?: string
+        }
+        Relationships: []
+      }
       gsc_alert_history: {
         Row: {
           alert_id: string | null
