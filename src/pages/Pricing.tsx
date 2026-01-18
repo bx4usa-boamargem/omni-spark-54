@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { useCaptureReferral, getStoredReferralCode } from "@/hooks/useReferral";
+import { useGlobalWhatsApp } from "@/hooks/useGlobalWhatsApp";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -130,12 +131,15 @@ export default function Pricing() {
     return plan.price[currency as 'usd' | 'brl'].monthly;
   };
 
+  // Get openLink from global WhatsApp hook
+  const { openLink } = useGlobalWhatsApp();
+
   const handleSelectPlan = async (planId: string) => {
     if (planId === 'business') {
-      // Open contact for business plan - uses OmniSeen official WhatsApp
+      // ⚠️ Usar builder global com messageOverride - NUNCA URL manual
       const omniseenWhatsApp = import.meta.env.VITE_OMNISEEN_WHATSAPP || '5511999999999';
-      const businessMessage = encodeURIComponent('Olá! Tenho interesse no plano Business da OmniSeen. Podem me apresentar?');
-      window.open(`https://wa.me/${omniseenWhatsApp}?text=${businessMessage}`, '_blank');
+      const businessMessage = 'Olá! Tenho interesse no plano Business da OmniSeen. Podem me apresentar?';
+      openLink({ phone: omniseenWhatsApp }, businessMessage);
       return;
     }
 

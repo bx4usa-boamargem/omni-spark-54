@@ -12,7 +12,8 @@ import {
   WhatsAppContext, 
   buildWhatsAppLinkSync,
   cleanPhoneNumber,
-  interpolateMessage
+  interpolateMessage,
+  openWhatsApp
 } from '@/lib/whatsappBuilder';
 
 interface UseGlobalWhatsAppReturn {
@@ -20,7 +21,9 @@ interface UseGlobalWhatsAppReturn {
   loading: boolean;
   error: Error | null;
   buildLink: (context: WhatsAppContext) => string;
+  buildLinkWithOverride: (context: WhatsAppContext, messageOverride?: string) => string;
   previewMessage: (context: WhatsAppContext) => string;
+  openLink: (context: WhatsAppContext, messageOverride?: string) => void;
 }
 
 const DEFAULT_CONFIG: GlobalCommConfig = {
@@ -83,6 +86,30 @@ export function useGlobalWhatsApp(): UseGlobalWhatsAppReturn {
   }, [config]);
 
   /**
+   * Constrói link WhatsApp com mensagem customizada (override)
+   */
+  const buildLinkWithOverride = useCallback((context: WhatsAppContext, messageOverride?: string): string => {
+    const effectiveConfig = config || DEFAULT_CONFIG;
+    
+    const cleanPhone = cleanPhoneNumber(context.phone);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      return '#';
+    }
+    
+    return buildWhatsAppLinkSync(context, effectiveConfig, { messageOverride });
+  }, [config]);
+
+  /**
+   * Abre WhatsApp diretamente (resiliente a popup blockers)
+   */
+  const openLink = useCallback((context: WhatsAppContext, messageOverride?: string): void => {
+    const url = messageOverride 
+      ? buildLinkWithOverride(context, messageOverride)
+      : buildLink(context);
+    openWhatsApp(url);
+  }, [buildLink, buildLinkWithOverride]);
+
+  /**
    * Gera preview da mensagem interpolada (sem link)
    */
   const previewMessage = useCallback((context: WhatsAppContext): string => {
@@ -95,6 +122,8 @@ export function useGlobalWhatsApp(): UseGlobalWhatsAppReturn {
     loading, 
     error,
     buildLink,
-    previewMessage
+    buildLinkWithOverride,
+    previewMessage,
+    openLink
   };
 }

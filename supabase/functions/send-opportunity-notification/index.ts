@@ -247,8 +247,20 @@ serve(async (req) => {
             ? formatHighScoreWhatsAppMessage(title, score, keywords, territoryName)
             : formatWhatsAppMessage(title, score, keywords, territoryName);
           
-          // Build WhatsApp URL using shared builder
-          const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(whatsappMessage)}`;
+          // ⚠️ Build WhatsApp URL using shared builder - NUNCA URL manual
+          const notificationContext: WhatsAppContext = {
+            phone: formattedPhone,
+            articleTitle: title,
+            service: 'oportunidade de conteúdo',
+            city: territoryName || 'sua região'
+          };
+          
+          // Use builder with messageOverride for notification-specific messages
+          const whatsappUrl = buildWhatsAppLinkSync(
+            notificationContext,
+            globalConfig,
+            { messageOverride: whatsappMessage }
+          );
 
           // Log WhatsApp notification with the URL (user clicks to send)
           await supabase

@@ -128,20 +128,61 @@ export async function buildWhatsAppLink(context: WhatsAppContext): Promise<strin
  * Versão síncrona para componentes que já possuem a config carregada.
  * Deve ser usada em conjunto com useGlobalWhatsApp hook.
  */
+export interface BuildWhatsAppOptions {
+  messageOverride?: string; // Mensagem específica (ex: Pricing Business)
+}
+
 export function buildWhatsAppLinkSync(
   context: WhatsAppContext, 
-  config: GlobalCommConfig
+  config: GlobalCommConfig,
+  options?: BuildWhatsAppOptions
 ): string {
   const cleanPhone = cleanPhoneNumber(context.phone);
   if (!cleanPhone || cleanPhone.length < 10) {
+    console.warn('[WhatsApp] Invalid phone number:', context.phone);
     return '#';
   }
   
-  const message = interpolateMessage(config.message_template, { ...context, phone: cleanPhone });
+  // Se tem override, usa ele; senão, interpola template global
+  const message = options?.messageOverride 
+    ? options.messageOverride
+    : interpolateMessage(config.message_template, { ...context, phone: cleanPhone });
   
-  return config.whatsapp_base_url
+  const url = config.whatsapp_base_url
     .replace('{phone}', cleanPhone)
     .replace('{message}', encodeURIComponent(message));
+  
+  // Health check log
+  console.log('[WhatsApp Health Check]', {
+    phoneRaw: context.phone,
+    phoneClean: cleanPhone,
+    hasOverride: !!options?.messageOverride,
+    urlGenerated: url.substring(0, 80) + '...'
+  });
+  
+  return url;
+}
+
+/**
+ * Abre WhatsApp de forma resiliente
+ * - Tenta window.open primeiro
+ * - Se bloqueado, usa location.href como fallback
+ * IMPORTANTE: Chamar diretamente no evento de click (sem await antes)
+ */
+export function openWhatsApp(url: string): void {
+  if (!url || url === '#') {
+    console.error('[openWhatsApp] Invalid URL:', url);
+    return;
+  }
+  
+  // Tentar popup primeiro
+  const newWindow = window.open(url, '_blank');
+  
+  // Se bloqueado, usar redirect direto
+  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+    console.warn('[openWhatsApp] Popup blocked, using location.href');
+    window.location.href = url;
+  }
 }
 
 /**

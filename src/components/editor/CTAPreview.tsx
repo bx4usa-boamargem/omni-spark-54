@@ -1,16 +1,37 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MessageCircle, Eye, ExternalLink, AlertTriangle } from 'lucide-react';
 
+import { useGlobalWhatsApp } from '@/hooks/useGlobalWhatsApp';
+import { openWhatsApp } from '@/lib/whatsappBuilder';
+
 interface CTAPreviewProps {
   companyName: string;
   city?: string;
   whatsapp?: string;
+  service?: string;
 }
 
-export function CTAPreview({ companyName, city, whatsapp }: CTAPreviewProps) {
+export function CTAPreview({ companyName, city, whatsapp, service }: CTAPreviewProps) {
+  const { buildLink } = useGlobalWhatsApp();
   const locationText = city ? ` em ${city}` : '';
   const ctaText = `Fale com a ${companyName} agora`;
-  const whatsappLink = whatsapp ? `https://wa.me/${whatsapp}` : null;
+  
+  // Gerar link usando builder global com template herdado
+  const whatsappLink = whatsapp 
+    ? buildLink({
+        phone: whatsapp,
+        companyName,
+        city,
+        service: service || 'nossos serviços',
+        articleTitle: 'Preview CTA'
+      })
+    : null;
+
+  const handleWhatsAppClick = () => {
+    if (whatsappLink && whatsappLink !== '#') {
+      openWhatsApp(whatsappLink);
+    }
+  };
 
   return (
     <Card className="border-dashed border-primary/30 bg-primary/5">
@@ -38,17 +59,15 @@ export function CTAPreview({ companyName, city, whatsapp }: CTAPreviewProps) {
             <strong className="text-foreground">{companyName}</strong>{locationText}.
           </p>
           
-          {whatsappLink ? (
-            <a 
-              href={whatsappLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          {whatsappLink && whatsappLink !== '#' ? (
+            <button 
+              onClick={handleWhatsAppClick}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors cursor-pointer"
             >
               <MessageCircle className="h-4 w-4" />
               {ctaText}
               <ExternalLink className="h-3 w-3" />
-            </a>
+            </button>
           ) : (
             <span className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium">
               👉 {ctaText}
