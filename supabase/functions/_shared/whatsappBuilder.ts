@@ -97,6 +97,10 @@ export function interpolateMessage(template: string, context: WhatsAppContext): 
  * FUNÇÃO ÚNICA usada em todo o backend para gerar links WhatsApp.
  * Busca automaticamente a configuração da conta-mãe.
  */
+export interface BuildWhatsAppOptions {
+  messageOverride?: string; // Mensagem específica (override do template global)
+}
+
 export async function buildWhatsAppLink(
   supabase: SupabaseClient,
   context: WhatsAppContext
@@ -115,18 +119,31 @@ export async function buildWhatsAppLink(
  */
 export function buildWhatsAppLinkSync(
   context: WhatsAppContext, 
-  config: GlobalCommConfig
+  config: GlobalCommConfig,
+  options?: BuildWhatsAppOptions
 ): string {
   const cleanPhone = cleanPhoneNumber(context.phone);
   if (!cleanPhone || cleanPhone.length < 10) {
+    console.warn('[WhatsApp Backend] Invalid phone number:', context.phone);
     return '#';
   }
   
-  const message = interpolateMessage(config.message_template, { ...context, phone: cleanPhone });
+  // Se tem override, usa ele; senão, interpola template global
+  const message = options?.messageOverride 
+    ? options.messageOverride
+    : interpolateMessage(config.message_template, { ...context, phone: cleanPhone });
   
-  return config.whatsapp_base_url
+  const url = config.whatsapp_base_url
     .replace('{phone}', cleanPhone)
     .replace('{message}', encodeURIComponent(message));
+  
+  console.log('[WhatsApp Backend]', {
+    phoneClean: cleanPhone,
+    hasOverride: !!options?.messageOverride,
+    urlLength: url.length
+  });
+  
+  return url;
 }
 
 /**
