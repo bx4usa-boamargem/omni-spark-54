@@ -165,19 +165,39 @@ serve(async (req) => {
       if (error) {
         console.error('Error inserting section analytics:', error);
       }
-    } else if (event.type === 'funnel_event') {
+  } else if (event.type === 'funnel_event') {
+      const funnelEvent = event.data?.funnelEvent || 'unknown';
+      
       // Track funnel event
       const { error } = await supabase.from('funnel_events').insert({
         blog_id: event.blogId,
         article_id: event.articleId,
         session_id: event.sessionId,
         visitor_id: event.visitorId,
-        event_type: event.data?.funnelEvent || 'unknown',
+        event_type: funnelEvent,
         event_data: event.data?.funnelData || {},
       });
 
       if (error) {
         console.error('Error inserting funnel event:', error);
+      }
+
+      // Track real lead on CTA click or conversion_intent
+      if (funnelEvent === 'cta_click' || funnelEvent === 'conversion_intent') {
+        const { error: leadError } = await supabase.from('real_leads').insert({
+          blog_id: event.blogId,
+          article_id: event.articleId,
+          lead_type: 'whatsapp_click',
+          source_url: event.data?.funnelData?.url || null,
+          visitor_id: event.visitorId,
+          session_id: event.sessionId,
+        });
+
+        if (leadError) {
+          console.error('Error inserting real lead:', leadError);
+        } else {
+          console.log('Real lead tracked:', event.blogId, event.articleId);
+        }
       }
     } else if (event.type === 'scroll_granular') {
       // Update scroll positions for heatmap

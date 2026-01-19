@@ -25,6 +25,7 @@ import { GenerationHistoryCard } from '@/components/dashboard/GenerationHistoryC
 import { OpportunitiesCarouselBanner } from '@/components/dashboard/OpportunitiesCarouselBanner';
 import { TerritoryMetricsDashboard } from '@/components/dashboard/TerritoryMetricsDashboard';
 import { ClientSetupChecklist } from '@/components/dashboard/ClientSetupChecklist';
+import { ValueProofDashboard } from '@/components/dashboard/ValueProofDashboard';
 
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -354,6 +355,10 @@ export default function ClientDashboard() {
         />
       )}
 
+      {/* Value Proof Dashboard - First section after hero */}
+      {blog?.id && (
+        <ValueProofDashboard blogId={blog.id} />
+      )}
 
       {/* Opportunities Carousel Banner */}
       {blog?.id && (
