@@ -3,6 +3,7 @@
  * 
  * Fornece acesso à configuração da conta-mãe e uma função
  * para construir links WhatsApp de forma síncrona.
+ * Suporta campos territoriais (neighborhood, territoryName, leadSource).
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -28,8 +29,8 @@ interface UseGlobalWhatsAppReturn {
 
 const DEFAULT_CONFIG: GlobalCommConfig = {
   whatsapp_base_url: 'https://wa.me/{phone}?text={message}',
-  message_template: 'Olá! Vi o artigo "{article_title}" no blog e gostaria de saber mais sobre {service} em {city}. Podem me ajudar?',
-  placeholders: ['phone', 'service', 'city', 'article_title', 'company_name']
+  message_template: 'Olá! Encontrei sua empresa ao buscar por {service} em {neighborhood}. Li o artigo "{article_title}" no blog da unidade {territory_name} e gostaria de falar com um especialista local.',
+  placeholders: ['phone', 'service', 'city', 'article_title', 'company_name', 'neighborhood', 'territory_name', 'lead_source']
 };
 
 export function useGlobalWhatsApp(): UseGlobalWhatsAppReturn {
@@ -73,6 +74,7 @@ export function useGlobalWhatsApp(): UseGlobalWhatsAppReturn {
 
   /**
    * Constrói link WhatsApp usando a configuração global
+   * Suporta campos territoriais (neighborhood, territoryName, leadSource)
    */
   const buildLink = useCallback((context: WhatsAppContext): string => {
     const effectiveConfig = config || DEFAULT_CONFIG;
@@ -111,6 +113,7 @@ export function useGlobalWhatsApp(): UseGlobalWhatsAppReturn {
 
   /**
    * Gera preview da mensagem interpolada (sem link)
+   * Suporta campos territoriais
    */
   const previewMessage = useCallback((context: WhatsAppContext): string => {
     const effectiveConfig = config || DEFAULT_CONFIG;

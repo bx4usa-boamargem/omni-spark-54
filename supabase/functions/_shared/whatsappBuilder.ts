@@ -13,6 +13,10 @@ export interface WhatsAppContext {
   service?: string;        // Serviço principal
   city?: string;           // Cidade
   articleTitle?: string;   // Título do artigo (quando aplicável)
+  // NOVOS CAMPOS TERRITORIAIS
+  neighborhood?: string;       // Bairro específico
+  territoryName?: string;      // Nome oficial do território validado
+  leadSource?: string;         // Origem: 'map' | 'article' | 'neighborhood' | 'search'
 }
 
 export interface GlobalCommConfig {
@@ -25,12 +29,12 @@ export interface GlobalCommConfig {
 let cachedConfig: GlobalCommConfig | null = null;
 
 /**
- * Configuração padrão (fallback)
+ * Configuração padrão (fallback) - COM PLACEHOLDERS TERRITORIAIS
  */
 const DEFAULT_CONFIG: GlobalCommConfig = {
   whatsapp_base_url: 'https://wa.me/{phone}?text={message}',
-  message_template: 'Olá! Vi o artigo "{article_title}" no blog e gostaria de saber mais sobre {service} em {city}. Podem me ajudar?',
-  placeholders: ['phone', 'service', 'city', 'article_title', 'company_name']
+  message_template: 'Olá! Encontrei sua empresa ao buscar por {service} em {neighborhood}. Li o artigo "{article_title}" no blog da unidade {territory_name} e gostaria de falar com um especialista local.',
+  placeholders: ['phone', 'service', 'city', 'article_title', 'company_name', 'neighborhood', 'territory_name', 'lead_source']
 };
 
 /**
@@ -79,16 +83,25 @@ export function cleanPhoneNumber(phone: string): string {
 
 /**
  * Interpola placeholders no template de mensagem
+ * Suporta placeholders territoriais (neighborhood, territory_name, lead_source)
  */
 export function interpolateMessage(template: string, context: WhatsAppContext): string {
   const cleanPhone = cleanPhoneNumber(context.phone);
+  
+  // Fallback inteligente: usa neighborhood -> city -> default
+  const locationFallback = context.neighborhood || context.city || 'sua região';
+  const territoryFallback = context.territoryName || context.city || 'nossa unidade';
   
   return template
     .replace(/{phone}/g, cleanPhone)
     .replace(/{company_name}/g, context.companyName || 'nossa empresa')
     .replace(/{service}/g, context.service || 'nossos serviços')
     .replace(/{city}/g, context.city || 'sua região')
-    .replace(/{article_title}/g, context.articleTitle || 'o conteúdo');
+    .replace(/{article_title}/g, context.articleTitle || 'o conteúdo')
+    // NOVOS PLACEHOLDERS TERRITORIAIS
+    .replace(/{neighborhood}/g, locationFallback)
+    .replace(/{territory_name}/g, territoryFallback)
+    .replace(/{lead_source}/g, context.leadSource || 'site');
 }
 
 /**
@@ -140,6 +153,9 @@ export function buildWhatsAppLinkSync(
   console.log('[WhatsApp Backend]', {
     phoneClean: cleanPhone,
     hasOverride: !!options?.messageOverride,
+    hasNeighborhood: !!context.neighborhood,
+    hasTerritory: !!context.territoryName,
+    leadSource: context.leadSource,
     urlLength: url.length
   });
   
