@@ -12,6 +12,14 @@ export interface Territory {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Google Maps fields
+  place_id: string | null;
+  lat: number | null;
+  lng: number | null;
+  radius_km: number;
+  neighborhood_tags: string[];
+  validated_at: string | null;
+  official_name: string | null;
 }
 
 interface UseTerritories {
@@ -25,6 +33,8 @@ interface UseTerritories {
   addTerritory: (country: string, state?: string, city?: string) => Promise<boolean>;
   removeTerritory: (id: string) => Promise<boolean>;
   toggleActive: (id: string, isActive: boolean) => Promise<boolean>;
+  syncWithGoogle: (territoryId: string, placeId: string) => Promise<boolean>;
+  updateRadius: (territoryId: string, radiusKm: number) => Promise<boolean>;
   refresh: () => Promise<void>;
 }
 
@@ -55,8 +65,14 @@ export function useTerritories(blogId: string | undefined): UseTerritories {
 
       if (error) throw error;
 
-      // Type assertion since territories is a new table
-      setTerritories((data || []) as Territory[]);
+      // Map data with defaults for new fields
+      const mappedTerritories = (data || []).map(t => ({
+        ...t,
+        radius_km: t.radius_km ?? 15,
+        neighborhood_tags: t.neighborhood_tags ?? [],
+      })) as Territory[];
+
+      setTerritories(mappedTerritories);
     } catch (error) {
       console.error('Error fetching territories:', error);
     } finally {
@@ -100,6 +116,8 @@ export function useTerritories(blogId: string | undefined): UseTerritories {
           state: state || null,
           city: city || null,
           is_active: true,
+          radius_km: 15,
+          neighborhood_tags: [],
         })
         .select()
         .single();
@@ -112,7 +130,13 @@ export function useTerritories(blogId: string | undefined): UseTerritories {
         throw error;
       }
 
-      setTerritories(prev => [...prev, data as Territory]);
+      const newTerritory: Territory = {
+        ...data,
+        radius_km: data.radius_km ?? 15,
+        neighborhood_tags: data.neighborhood_tags ?? [],
+      };
+
+      setTerritories(prev => [...prev, newTerritory]);
       toast.success('Território adicionado!');
       return true;
     } catch (error) {
@@ -173,6 +197,76 @@ export function useTerritories(blogId: string | undefined): UseTerritories {
     }
   };
 
+  /**
+   * Sincroniza território com Google Places API
+   */
+  const syncWithGoogle = async (territoryId: string, placeId: string): Promise<boolean> => {
+    try {
+      toast.loading('Sincronizando com Google Maps...', { id: 'sync-google' });
+
+      const { data, error } = await supabase.functions.invoke('sync-google-place', {
+        body: { territory_id: territoryId, place_id: placeId }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Update local state with synced data
+        setTerritories(prev =>
+          prev.map(t =>
+            t.id === territoryId
+              ? {
+                  ...t,
+                  place_id: placeId,
+                  lat: data.lat,
+                  lng: data.lng,
+                  official_name: data.official_name,
+                  neighborhood_tags: data.neighborhood_tags || [],
+                  validated_at: data.validated_at,
+                }
+              : t
+          )
+        );
+
+        toast.success('Território validado pelo Google!', {
+          id: 'sync-google',
+          description: `${data.neighborhood_tags?.length || 0} bairros detectados`,
+        });
+        return true;
+      } else {
+        throw new Error(data?.error || 'Falha na sincronização');
+      }
+    } catch (error) {
+      console.error('Error syncing with Google:', error);
+      toast.error('Erro ao sincronizar com Google Maps', { id: 'sync-google' });
+      return false;
+    }
+  };
+
+  /**
+   * Atualiza o raio de cobertura do território
+   */
+  const updateRadius = async (territoryId: string, radiusKm: number): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('territories')
+        .update({ radius_km: radiusKm, updated_at: new Date().toISOString() })
+        .eq('id', territoryId);
+
+      if (error) throw error;
+
+      setTerritories(prev =>
+        prev.map(t => (t.id === territoryId ? { ...t, radius_km: radiusKm } : t))
+      );
+      toast.success(`Raio atualizado para ${radiusKm}km`);
+      return true;
+    } catch (error) {
+      console.error('Error updating radius:', error);
+      toast.error('Erro ao atualizar raio');
+      return false;
+    }
+  };
+
   const activeTerritories = territories.filter(t => t.is_active).length;
   const canAdd = limitInfo.isUnlimited || activeTerritories < limitInfo.limit;
 
@@ -187,6 +281,8 @@ export function useTerritories(blogId: string | undefined): UseTerritories {
     addTerritory,
     removeTerritory,
     toggleActive,
+    syncWithGoogle,
+    updateRadius,
     refresh: fetchTerritories,
   };
 }

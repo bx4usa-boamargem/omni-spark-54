@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,11 @@ import {
   Trash2, 
   Crown,
   Building2,
-  Map
+  Map,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Navigation
 } from 'lucide-react';
 import { AddTerritoryModal } from './AddTerritoryModal';
 
@@ -45,12 +50,19 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
     plan,
     addTerritory, 
     removeTerritory, 
-    toggleActive 
+    toggleActive,
+    syncWithGoogle,
+    updateRadius
   } = useTerritories(blogId);
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const getLocationLabel = (territory: Territory): string => {
+    // Prefer official_name if validated
+    if (territory.official_name) {
+      return territory.official_name;
+    }
     if (territory.city && territory.state) {
       return `${territory.city}, ${territory.state}`;
     }
@@ -70,6 +82,38 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
     if (territory.city) return 'Cidade';
     if (territory.state) return 'Estado';
     return 'País';
+  };
+
+  const handleSyncWithGoogle = async (territory: Territory) => {
+    // For now, we'll use a simple Google Places search based on location
+    // In production, you'd use Google Places Autocomplete in the modal
+    const searchQuery = territory.city 
+      ? `${territory.city}, ${territory.state || ''}, ${territory.country}`
+      : territory.state 
+        ? `${territory.state}, ${territory.country}`
+        : territory.country;
+    
+    setSyncingId(territory.id);
+    
+    try {
+      // Use Google Places Text Search to find place_id
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(searchQuery)}&inputtype=textquery&fields=place_id&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}`
+      );
+      
+      // Note: This requires CORS setup or a proxy. For now, we'll show a manual input option
+      // In production, use the Google Places JavaScript API directly
+      
+      // Fallback: Show toast with instructions
+      const { toast } = await import('sonner');
+      toast.info('Sincronização manual necessária', {
+        description: 'Use o Google Maps para encontrar o Place ID do território.',
+      });
+    } catch (error) {
+      console.error('Error syncing:', error);
+    } finally {
+      setSyncingId(null);
+    }
   };
 
   if (loading) {
@@ -138,65 +182,132 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
               {territories.map((territory) => (
                 <div
                   key={territory.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                  className={`flex flex-col gap-3 p-4 rounded-lg border ${
                     territory.is_active 
                       ? 'bg-primary/5 border-primary/20' 
                       : 'bg-muted/50 border-border opacity-60'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      territory.is_active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {getScopeIcon(territory)}
-                    </div>
-                    <div>
-                      <p className="font-medium">{getLocationLabel(territory)}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-xs">
-                          {getScopeBadge(territory)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {territory.country}
-                        </span>
+                  {/* Main Row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        territory.is_active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {getScopeIcon(territory)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{getLocationLabel(territory)}</p>
+                          {/* Validation Status */}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                {territory.validated_at ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                                )}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {territory.validated_at 
+                                  ? `Validado pelo Google em ${new Date(territory.validated_at).toLocaleDateString('pt-BR')}`
+                                  : 'Não validado pelo Google Maps'
+                                }
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <Badge variant="outline" className="text-xs">
+                            {getScopeBadge(territory)}
+                          </Badge>
+                          {territory.radius_km && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <Navigation className="h-3 w-3" />
+                              {territory.radius_km}km
+                            </Badge>
+                          )}
+                          {territory.lat && territory.lng && (
+                            <span className="text-xs text-muted-foreground">
+                              📍 {territory.lat.toFixed(4)}, {territory.lng.toFixed(4)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    {/* Active Toggle */}
-                    <Switch
-                      checked={territory.is_active}
-                      onCheckedChange={(checked) => toggleActive(territory.id, checked)}
-                    />
-
-                    {/* Delete Button */}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
+                    <div className="flex items-center gap-3">
+                      {/* Sync with Google Button */}
+                      {!territory.validated_at && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleSyncWithGoogle(territory)}
+                          disabled={syncingId === territory.id}
+                        >
+                          {syncingId === territory.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover território?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            O território "{getLocationLabel(territory)}" será removido. 
-                            Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => removeTerritory(territory.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Remover
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      )}
+
+                      {/* Active Toggle */}
+                      <Switch
+                        checked={territory.is_active}
+                        onCheckedChange={(checked) => toggleActive(territory.id, checked)}
+                      />
+
+                      {/* Delete Button */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remover território?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              O território "{getLocationLabel(territory)}" será removido. 
+                              Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => removeTerritory(territory.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remover
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
+
+                  {/* Neighborhoods Row (if validated) */}
+                  {territory.neighborhood_tags && territory.neighborhood_tags.length > 0 && (
+                    <div className="pl-12">
+                      <p className="text-xs text-muted-foreground mb-1.5">Bairros cobertos:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {territory.neighborhood_tags.slice(0, 8).map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs font-normal">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {territory.neighborhood_tags.length > 8 && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            +{territory.neighborhood_tags.length - 8} mais
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -240,7 +351,8 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
             <p className="text-sm text-muted-foreground">
               <strong>💡 Como funciona:</strong> O Radar de Oportunidades analisa cada território 
               ativo semanalmente, identificando temas relevantes e tendências locais para gerar 
-              artigos personalizados.
+              artigos personalizados. Territórios validados pelo Google incluem bairros reais 
+              que serão mencionados nos artigos para máxima autoridade local.
             </p>
           </div>
         </CardContent>
