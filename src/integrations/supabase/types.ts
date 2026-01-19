@@ -4334,6 +4334,57 @@ export type Database = {
           },
         ]
       }
+      real_leads: {
+        Row: {
+          article_id: string | null
+          blog_id: string
+          contact_data: Json | null
+          created_at: string | null
+          id: string
+          lead_type: string
+          session_id: string | null
+          source_url: string | null
+          visitor_id: string | null
+        }
+        Insert: {
+          article_id?: string | null
+          blog_id: string
+          contact_data?: Json | null
+          created_at?: string | null
+          id?: string
+          lead_type: string
+          session_id?: string | null
+          source_url?: string | null
+          visitor_id?: string | null
+        }
+        Update: {
+          article_id?: string | null
+          blog_id?: string
+          contact_data?: Json | null
+          created_at?: string | null
+          id?: string
+          lead_type?: string
+          session_id?: string | null
+          source_url?: string | null
+          visitor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "real_leads_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "real_leads_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referral_conversions: {
         Row: {
           commission_amount_cents: number

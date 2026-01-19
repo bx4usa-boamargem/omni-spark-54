@@ -178,8 +178,9 @@ export const ReadingTracker = ({ articleId, blogId }: ReadingTrackerProps) => {
         
         // Track clicks - both as funnel event and conversion_intent
         el.addEventListener("click", () => {
-          sendFunnelEvent("cta_click");
-          sendFunnelEvent("conversion_intent"); // High-value conversion
+          const clickUrl = window.location.href;
+          sendFunnelEvent("cta_click", { url: clickUrl });
+          sendFunnelEvent("conversion_intent", { url: clickUrl }); // High-value conversion -> triggers real_lead
         });
       });
     };
