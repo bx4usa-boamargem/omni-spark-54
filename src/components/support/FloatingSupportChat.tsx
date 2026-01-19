@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+
+const SUGGESTION_BUBBLE_SHOWN_KEY = 'omniseen_support_bubble_shown_session';
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,11 +146,18 @@ export function FloatingSupportChat() {
     [location.pathname, t]
   );
 
-  // Show proactive suggestion bubble after 4 seconds
+  // Show proactive suggestion bubble after 4 seconds (only once per session)
   useEffect(() => {
+    const alreadyShown = sessionStorage.getItem(SUGGESTION_BUBBLE_SHOWN_KEY);
+    
+    if (alreadyShown) {
+      return;
+    }
+    
     const timer = setTimeout(() => {
       if (!isOpen) {
         setShowSuggestionBubble(true);
+        sessionStorage.setItem(SUGGESTION_BUBBLE_SHOWN_KEY, 'true');
       }
     }, 4000);
     return () => clearTimeout(timer);
