@@ -5255,8 +5255,15 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          lat: number | null
+          lng: number | null
+          neighborhood_tags: string[] | null
+          official_name: string | null
+          place_id: string | null
+          radius_km: number | null
           state: string | null
           updated_at: string | null
+          validated_at: string | null
         }
         Insert: {
           blog_id: string
@@ -5265,8 +5272,15 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          neighborhood_tags?: string[] | null
+          official_name?: string | null
+          place_id?: string | null
+          radius_km?: number | null
           state?: string | null
           updated_at?: string | null
+          validated_at?: string | null
         }
         Update: {
           blog_id?: string
@@ -5275,8 +5289,15 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          neighborhood_tags?: string[] | null
+          official_name?: string | null
+          place_id?: string | null
+          radius_km?: number | null
           state?: string | null
           updated_at?: string | null
+          validated_at?: string | null
         }
         Relationships: [
           {
