@@ -1,6 +1,15 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+interface TerritorialData {
+  official_name: string | null;
+  neighborhoods_used: string[];
+  geo: {
+    latitude: number;
+    longitude: number;
+  } | null;
+}
+
 interface SEOHeadProps {
   title: string;
   description: string;
@@ -12,6 +21,8 @@ interface SEOHeadProps {
   keywords?: string[];
   faq?: { question: string; answer: string }[];
   favicon?: string;
+  // Territorial data for local SEO
+  territorial?: TerritorialData;
 }
 
 export const SEOHead = ({
@@ -25,6 +36,7 @@ export const SEOHead = ({
   keywords,
   faq,
   favicon,
+  territorial,
 }: SEOHeadProps) => {
   const { i18n } = useTranslation();
 
@@ -146,6 +158,26 @@ export const SEOHead = ({
       });
     }
 
+    // Territorial GeoCoordinates for local SEO
+    if (territorial?.geo) {
+      schemas.push({
+        "@context": "https://schema.org",
+        "@type": "Place",
+        name: territorial.official_name || "Local Coverage Area",
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: territorial.geo.latitude,
+          longitude: territorial.geo.longitude
+        },
+        ...(territorial.neighborhoods_used?.length ? {
+          containsPlace: territorial.neighborhoods_used.map(n => ({
+            "@type": "Place",
+            name: n
+          }))
+        } : {})
+      });
+    }
+
     if (schemas.length > 0) {
       const schemaScript = document.createElement("script");
       schemaScript.type = "application/ld+json";
@@ -157,7 +189,7 @@ export const SEOHead = ({
       const schema = document.querySelector('script[type="application/ld+json"]');
       if (schema) schema.remove();
     };
-  }, [title, description, ogImage, ogType, articlePublishedTime, articleAuthor, canonicalUrl, keywords, faq, favicon, i18n.language]);
+  }, [title, description, ogImage, ogType, articlePublishedTime, articleAuthor, canonicalUrl, keywords, faq, favicon, territorial, i18n.language]);
 
   return null;
 };

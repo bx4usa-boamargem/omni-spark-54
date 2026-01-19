@@ -33,6 +33,7 @@ import {
   Navigation
 } from 'lucide-react';
 import { AddTerritoryModal } from './AddTerritoryModal';
+import { GooglePlaceSearchDialog } from './GooglePlaceSearchDialog';
 
 interface TerritoriesSectionProps {
   blogId: string;
@@ -56,7 +57,8 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
   } = useTerritories(blogId);
   
   const [showAddModal, setShowAddModal] = useState(false);
-  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncingTerritory, setSyncingTerritory] = useState<Territory | null>(null);
 
   const getLocationLabel = (territory: Territory): string => {
     // Prefer official_name if validated
@@ -84,36 +86,14 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
     return 'País';
   };
 
-  const handleSyncWithGoogle = async (territory: Territory) => {
-    // For now, we'll use a simple Google Places search based on location
-    // In production, you'd use Google Places Autocomplete in the modal
-    const searchQuery = territory.city 
-      ? `${territory.city}, ${territory.state || ''}, ${territory.country}`
-      : territory.state 
-        ? `${territory.state}, ${territory.country}`
-        : territory.country;
-    
-    setSyncingId(territory.id);
-    
-    try {
-      // Use Google Places Text Search to find place_id
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(searchQuery)}&inputtype=textquery&fields=place_id&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}`
-      );
-      
-      // Note: This requires CORS setup or a proxy. For now, we'll show a manual input option
-      // In production, use the Google Places JavaScript API directly
-      
-      // Fallback: Show toast with instructions
-      const { toast } = await import('sonner');
-      toast.info('Sincronização manual necessária', {
-        description: 'Use o Google Maps para encontrar o Place ID do território.',
-      });
-    } catch (error) {
-      console.error('Error syncing:', error);
-    } finally {
-      setSyncingId(null);
-    }
+  const handleOpenSyncDialog = (territory: Territory) => {
+    setSyncingTerritory(territory);
+    setSyncDialogOpen(true);
+  };
+
+  const handleSyncSelect = async (placeId: string): Promise<boolean> => {
+    if (!syncingTerritory) return false;
+    return await syncWithGoogle(syncingTerritory.id, placeId);
   };
 
   if (loading) {
@@ -239,21 +219,26 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
 
                     <div className="flex items-center gap-3">
                       {/* Sync with Google Button */}
-                      {!territory.validated_at && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleSyncWithGoogle(territory)}
-                          disabled={syncingId === territory.id}
-                        >
-                          {syncingId === territory.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleOpenSyncDialog(territory)}
+                            >
+                              <RefreshCw className={`h-4 w-4 ${territory.validated_at ? 'text-green-500' : ''}`} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {territory.validated_at 
+                              ? 'Re-sincronizar com Google Maps' 
+                              : 'Sincronizar com Google Maps'
+                            }
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
 
                       {/* Active Toggle */}
                       <Switch
@@ -363,7 +348,22 @@ export function TerritoriesSection({ blogId }: TerritoriesSectionProps) {
         open={showAddModal}
         onOpenChange={setShowAddModal}
         onAdd={addTerritory}
+        syncWithGoogle={syncWithGoogle}
       />
+
+      {/* Google Place Search Dialog for Sync */}
+      {syncingTerritory && (
+        <GooglePlaceSearchDialog
+          open={syncDialogOpen}
+          onOpenChange={(open) => {
+            setSyncDialogOpen(open);
+            if (!open) setSyncingTerritory(null);
+          }}
+          territoryId={syncingTerritory.id}
+          currentLocation={getLocationLabel(syncingTerritory)}
+          onSelect={handleSyncSelect}
+        />
+      )}
     </>
   );
 }

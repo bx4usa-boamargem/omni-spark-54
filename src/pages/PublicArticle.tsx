@@ -69,6 +69,15 @@ interface Article {
   faq: { question: string; answer: string }[] | null;
   view_count: number | null;
   share_count: number | null;
+  // Territorial data
+  territory_id: string | null;
+}
+
+interface TerritoryInfo {
+  official_name: string | null;
+  neighborhood_tags: string[] | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface RelatedArticle {
@@ -125,6 +134,7 @@ const PublicArticle = () => {
   const [blog, setBlog] = useState<Blog | null>(null);
   const [article, setArticle] = useState<Article | null>(null);
   const [relatedArticles, setRelatedArticles] = useState<RelatedArticle[]>([]);
+  const [territoryInfo, setTerritoryInfo] = useState<TerritoryInfo | null>(null);
   const [availableTranslations, setAvailableTranslations] = useState<string[]>([]);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('pt-BR');
   const [loading, setLoading] = useState(true);
@@ -240,6 +250,19 @@ const PublicArticle = () => {
         if (relatedData) {
           setRelatedArticles(relatedData);
         }
+
+        // Fetch territory data if article has territory_id
+        if (articleData.territory_id) {
+          const { data: territoryData } = await supabase
+            .from("territories")
+            .select("official_name, neighborhood_tags, lat, lng")
+            .eq("id", articleData.territory_id)
+            .maybeSingle();
+
+          if (territoryData) {
+            setTerritoryInfo(territoryData as TerritoryInfo);
+          }
+        }
       } catch (err) {
         console.error("Error:", err);
         setError(t('common.error'));
@@ -317,6 +340,14 @@ const PublicArticle = () => {
         keywords={article.keywords || undefined}
         faq={displayedFaq || undefined}
         favicon={blog.favicon_url || undefined}
+        territorial={territoryInfo ? {
+          official_name: territoryInfo.official_name,
+          neighborhoods_used: territoryInfo.neighborhood_tags || [],
+          geo: territoryInfo.lat && territoryInfo.lng ? {
+            latitude: territoryInfo.lat,
+            longitude: territoryInfo.lng
+          } : null
+        } : undefined}
       />
 
       <BlogHeader 
