@@ -5,9 +5,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SEOScoreGauge } from '@/components/seo/SEOScoreGauge';
-import { ClientRobotIllustration } from '@/components/client/ClientRobotIllustration';
 import { calculateSEOScore } from '@/utils/seoScore';
 import { InteractiveTour, DASHBOARD_TOUR_STEPS } from '@/components/onboarding/InteractiveTour';
+import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
+import { MetricCardsRow } from '@/components/dashboard/MetricCardsRow';
 import { 
   FileText, 
   Calendar,
@@ -65,6 +66,7 @@ export default function ClientDashboard() {
   const [copied, setCopied] = useState(false);
   const [checklistComplete, setChecklistComplete] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [userFullName, setUserFullName] = useState<string | null>(null);
   
   const isMounted = useRef(true);
   const blogIdRef = useRef<string | null>(null);
@@ -74,6 +76,18 @@ export default function ClientDashboard() {
     if (!isMounted.current) return;
     
     try {
+      // Fetch user profile name
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (!isMounted.current) return;
+        setUserFullName(profile?.full_name || null);
+      }
+
       // Fetch automation status
       const { data: automation } = await supabase
         .from('blog_automation')
@@ -259,92 +273,15 @@ export default function ClientDashboard() {
         />
       )}
 
-      {/* Hero Section - Integrated with Blog Info */}
-      <div data-tour="hero-section" className="client-card client-card-glow p-4 sm:p-6 md:p-8 relative overflow-hidden">
-        {/* Decorative gradient orb */}
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-gradient-to-br from-purple-500/20 to-orange-500/20 rounded-full blur-3xl" />
-        
-        <div className="relative flex flex-col md:flex-row items-center gap-4 md:gap-8">
-          {/* Robot Illustration */}
-          <ClientRobotIllustration 
-            variant={automationActive ? 'working' : 'idle'} 
-            size="lg" 
-            className="hidden sm:block"
-          />
-          
-          {/* Content */}
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-2">
-              Está tudo certo.
-            </h1>
-            <p className="text-lg text-muted-foreground mb-4">
-              {automationActive 
-                ? 'Seu conteúdo está sendo gerado automaticamente.'
-                : 'Ative a automação para publicar artigos automaticamente.'}
-            </p>
-            
-            {/* Blog Info integrated into Hero */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-              <h3 className="font-semibold text-foreground">{blog?.name}</h3>
-              <div className="flex items-center gap-2">
-                <Button 
-                  size="sm"
-                  onClick={handleOpenBlog}
-                  className="client-btn-primary gap-1.5"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Abrir meu blog
-                </Button>
-                <Button 
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyUrl}
-                  className="gap-1.5"
-                >
-                  {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                </Button>
-                <Badge 
-                  className={`${
-                    automationActive 
-                      ? 'bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30' 
-                      : 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/30'
-                  }`}
-                >
-                  {automationActive ? '✓ Ativa' : 'Pausada'}
-                </Badge>
-              </div>
-            </div>
+      {/* Welcome Header - New SaaS Style */}
+      <WelcomeHeader 
+        userName={userFullName}
+        blogName={blog?.name}
+        onCreateArticle={() => navigate('/client/create')}
+      />
 
-            {/* Mini-metrics inline */}
-            <div className="flex flex-wrap justify-center md:justify-start gap-2 sm:gap-4 mb-4 sm:mb-6">
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-muted/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
-                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                <span className="font-semibold text-foreground text-sm sm:text-base">{totalArticles}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground">Publicados</span>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-muted/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
-                <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500" />
-                <span className="font-semibold text-foreground text-sm sm:text-base">{draftCount}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground">Rascunhos</span>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-muted/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
-                <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
-                <span className="font-semibold text-foreground text-sm sm:text-base">{totalViews.toLocaleString()}</span>
-                <span className="text-xs sm:text-sm text-muted-foreground">Visualizações</span>
-              </div>
-            </div>
-
-            <Button 
-              data-tour="create-button"
-              onClick={() => navigate('/client/create')}
-              className="client-btn-primary text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 gap-2"
-            >
-              <FileText className="h-5 w-5" />
-              Criar Artigo
-            </Button>
-          </div>
-        </div>
-      </div>
+      {/* 5 Metric Cards Row */}
+      <MetricCardsRow blogId={blog?.id} />
 
       {/* Setup Checklist - Only shows if not complete */}
       {!checklistComplete && blog?.id && user?.id && (
