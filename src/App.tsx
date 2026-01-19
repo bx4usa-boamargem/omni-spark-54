@@ -258,7 +258,48 @@ const AppRoutes = () => {
     );
   }
 
-  // Platform mode - authenticated app (app.omniseen.app or localhost)
+  // App mode - app.omniseen.app redirects root to /auth
+  if (mode === 'app') {
+    return (
+      <Routes>
+        {/* Root redirects to auth for app subdomain */}
+        <Route path="/" element={<Navigate to="/auth" replace />} />
+        
+        {/* Auth routes */}
+        <Route path="/auth" element={<Auth />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/blocked" element={<Blocked />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/access-denied" element={<AccessDenied />} />
+        <Route path="/invite/accept" element={<AcceptInvite />} />
+        <Route path="/oauth/google/callback" element={<GoogleOAuthCallback />} />
+        
+        {/* Protected user routes */}
+        <Route path="/app/*" element={<UserRoutes />} />
+        
+        {/* Protected admin routes */}
+        <Route path="/admin/*" element={<AdminRoutes />} />
+        
+        {/* SubAccount (Client) routes */}
+        <Route path="/client/*" element={<ClientRoutes />} />
+        
+        {/* Public content */}
+        <Route path="/help" element={<Help />} />
+        <Route path="/terms" element={<TermsOfUse />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/ebook/:slug" element={<PublicEbook />} />
+        <Route path="/review/:token" element={<ClientReview />} />
+        <Route path="/blog/:blogSlug" element={<PublicBlog />} />
+        <Route path="/blog/:blogSlug/:articleSlug" element={<PublicArticle />} />
+        
+        {/* Catch-all */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+
+  // Platform mode - localhost/preview (development)
   return (
     <Routes>
       {/* Landing Page for all visitors */}

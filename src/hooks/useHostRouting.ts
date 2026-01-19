@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-type RoutingMode = 'landing' | 'platform' | 'blog';
+type RoutingMode = 'landing' | 'platform' | 'blog' | 'app';
 
 interface UseHostRoutingResult {
   mode: RoutingMode;
@@ -71,12 +71,12 @@ export function useHostRouting(): UseHostRoutingResult {
         return;
       }
       
-      // 4. App subdomain (app.omniseen.app) → platform mode
+      // 4. App subdomain (app.omniseen.app) → app mode (redirect to /auth)
       if (hostname === 'app.omniseen.app') {
-        console.log('[useHostRouting] 📱 App subdomain detected -> platform mode');
-        setMode('platform');
+        console.log('[useHostRouting] 📱 App subdomain detected -> app mode (direct to auth)');
+        setMode('app');
         setLoading(false);
-        logRoutingResult('platform', null, null);
+        logRoutingResult('app', null, null);
         return;
       }
       
