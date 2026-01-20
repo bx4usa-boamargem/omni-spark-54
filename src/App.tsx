@@ -5,15 +5,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
-import { TenantDomainProvider, useTenantDomainContext } from "@/contexts/TenantDomainContext";
-import { UserGuard } from "@/components/auth/UserGuard";
+import { TenantProvider } from "@/contexts/TenantContext";
+import { TenantGuard } from "@/components/auth/TenantGuard";
 import { PlatformAdminGuard } from "@/components/auth/PlatformAdminGuard";
 import { SubAccountGuard } from "@/components/auth/SubAccountGuard";
 import { SubAccountLayout } from "@/components/layout/SubAccountLayout";
-// Index page removed - redirects to /auth
-import Auth from "./pages/Auth";
+
+// New Auth Pages
+import Login from "./pages/auth/Login";
+import Signup from "./pages/auth/Signup";
+import NewOnboarding from "./pages/auth/Onboarding";
+
+// Legacy pages (to be migrated)
 import Dashboard from "./pages/Dashboard";
-import Onboarding from "./pages/Onboarding";
 import Articles from "./pages/Articles";
 import NewArticle from "./pages/NewArticle";
 import NewArticleChat from "./pages/NewArticleChat";
@@ -49,7 +53,6 @@ import MyBlog from "./pages/MyBlog";
 import ValidationDashboard from "./pages/ValidationDashboard";
 import Referrals from "./pages/Referrals";
 import QuickAccess from "./pages/QuickAccess";
-// LandingPageInternal removed - SaaS only
 import ResetPassword from "./pages/ResetPassword";
 import Blocked from "./pages/Blocked";
 import TermsOfUse from "./pages/TermsOfUse";
@@ -62,7 +65,6 @@ import Integrations from "./pages/Integrations";
 import GoogleIntegration from "./pages/GoogleIntegration";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ArticleQueuePage from "./pages/ArticleQueuePage";
-import DomainNotFound from "./pages/DomainNotFound";
 
 // Client (SubAccount) pages
 import ClientDashboard from "./pages/client/ClientDashboard";
@@ -106,39 +108,15 @@ const HostnameLoader = () => (
   </div>
 );
 
-// User protected routes wrapper
+// User protected routes wrapper - uses TenantGuard
 const UserRoutes = () => (
-  <UserGuard>
+  <TenantGuard>
     <Routes>
-      <Route path="dashboard" element={<Dashboard />} />
-      <Route path="articles" element={<Articles />} />
-      <Route path="articles/new" element={<NewArticle />} />
-      <Route path="articles/new-chat" element={<NewArticleChat />} />
-      <Route path="articles/:id/edit" element={<EditArticle />} />
-      <Route path="ebooks" element={<Ebooks />} />
-      <Route path="ebooks/:id" element={<EbookDetails />} />
-      <Route path="strategy" element={<Strategy />} />
-      <Route path="performance" element={<Performance />} />
-      <Route path="performance/query/:queryId" element={<QueryDetails />} />
-      <Route path="automation" element={<AutomationSettings />} />
-      <Route path="keywords" element={<Keywords />} />
-      <Route path="clusters" element={<Clusters />} />
-      <Route path="calendar" element={<Calendar />} />
-      <Route path="analytics" element={<Analytics />} />
-      <Route path="my-blog" element={<MyBlog />} />
-      <Route path="settings" element={<Settings />} />
-      <Route path="account" element={<Account />} />
-      <Route path="profile" element={<Profile />} />
-      <Route path="referrals" element={<Referrals />} />
-      <Route path="subscription" element={<Subscription />} />
-      <Route path="quick-access" element={<QuickAccess />} />
-      {/* Landing page removed - SaaS only */}
-      <Route path="integrations" element={<Integrations />} />
-      <Route path="integrations/google" element={<GoogleIntegration />} />
-      <Route path="articles/queue" element={<ArticleQueuePage />} />
-      <Route path="*" element={<NotFound />} />
+      <Route index element={<Navigate to="/client/dashboard" replace />} />
+      <Route path="dashboard" element={<Navigate to="/client/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/client/dashboard" replace />} />
     </Routes>
-  </UserGuard>
+  </TenantGuard>
 );
 
 // Admin protected routes wrapper
@@ -207,20 +185,24 @@ const ClientRoutes = () => (
   </SubAccountGuard>
 );
 
-// Platform routes (app.omniseen.app, localhost, preview)
+// Platform routes - SIMPLIFIED without hostname-based mode switching
 const PlatformRoutes = () => (
   <Routes>
-    {/* Redirect root to auth */}
-    <Route path="/" element={<Navigate to="/auth" replace />} />
+    {/* Redirect root to login */}
+    <Route path="/" element={<Navigate to="/login" replace />} />
     
-    {/* Auth routes */}
-    <Route path="/auth" element={<Auth />} />
+    {/* New Auth routes */}
+    <Route path="/login" element={<Login />} />
+    <Route path="/signup" element={<Signup />} />
+    <Route path="/onboarding" element={<NewOnboarding />} />
     <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/blocked" element={<Blocked />} />
-    <Route path="/onboarding" element={<Onboarding />} />
     <Route path="/access-denied" element={<AccessDenied />} />
     <Route path="/invite/accept" element={<AcceptInvite />} />
     <Route path="/oauth/google/callback" element={<GoogleOAuthCallback />} />
+    
+    {/* Legacy auth redirect */}
+    <Route path="/auth" element={<Navigate to="/login" replace />} />
     
     {/* Public content */}
     <Route path="/help" element={<Help />} />
@@ -238,83 +220,25 @@ const PlatformRoutes = () => (
     <Route path="/blog/:blogSlug" element={<PublicBlog />} />
     <Route path="/blog/:blogSlug/:articleSlug" element={<PublicArticle />} />
 
-    {/* Protected user routes */}
+    {/* Protected user routes - redirects to /client */}
     <Route path="/app/*" element={<UserRoutes />} />
 
     {/* Protected admin routes */}
     <Route path="/admin/*" element={<AdminRoutes />} />
 
-    {/* SubAccount (Client) routes */}
+    {/* SubAccount (Client) routes - main app experience */}
     <Route path="/client/*" element={<ClientRoutes />} />
 
     {/* Legacy redirects */}
-    <Route path="/dashboard" element={<Navigate to="/app/dashboard" replace />} />
-    <Route path="/articles" element={<Navigate to="/app/articles" replace />} />
-    <Route path="/articles/new" element={<Navigate to="/app/articles/new" replace />} />
-    <Route path="/articles/new-chat" element={<Navigate to="/app/articles/new-chat" replace />} />
-    <Route path="/articles/:id/edit" element={<ArticleEditRedirect />} />
-    <Route path="/profile" element={<Navigate to="/app/profile" replace />} />
-    <Route path="/quick-access" element={<Navigate to="/app/quick-access" replace />} />
+    <Route path="/dashboard" element={<Navigate to="/client/dashboard" replace />} />
+    <Route path="/articles" element={<Navigate to="/client/articles" replace />} />
 
     {/* Catch-all */}
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
 
-// Component that renders appropriate routes based on domain resolution via tenant_domains
-const AppRoutes = () => {
-  const { mode, loading, blogId, domain } = useTenantDomainContext();
-
-  // Show loading while resolving domain
-  if (loading) {
-    return <HostnameLoader />;
-  }
-
-  // Unknown mode - domain not found in tenant_domains
-  if (mode === 'unknown') {
-    return (
-      <Routes>
-        <Route path="*" element={<DomainNotFound domain={domain} />} />
-      </Routes>
-    );
-  }
-
-  // Blog mode - domain resolved to an active blog via tenant_domains
-  // Includes both public blog routes AND authenticated client routes
-  if (mode === 'blog') {
-    if (!blogId) {
-      return (
-        <Routes>
-          <Route path="*" element={<DomainNotFound domain={domain} />} />
-        </Routes>
-      );
-    }
-    
-    return (
-      <Routes>
-        {/* Public Blog Routes */}
-        <Route path="/" element={<CustomDomainBlog blogId={blogId} blogSlug={null} />} />
-        <Route path="/:articleSlug" element={<CustomDomainArticle blogId={blogId} blogSlug={null} />} />
-        
-        {/* Auth Routes - Allow login on subdomain */}
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/oauth/google/callback" element={<GoogleOAuthCallback />} />
-        
-        {/* Client (SubAccount) Routes - Dashboard on subdomain */}
-        <Route path="/client/*" element={<ClientRoutes />} />
-        
-        {/* Fallback */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    );
-  }
-
-  // Platform mode - all standard application routes
-  return <PlatformRoutes />;
-};
-
+// Main App - no more hostname-based mode switching
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider 
@@ -324,15 +248,15 @@ const App = () => (
       disableTransitionOnChange
     >
       <AuthProvider>
-        <TenantDomainProvider>
+        <TenantProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <AppRoutes />
+              <PlatformRoutes />
             </BrowserRouter>
           </TooltipProvider>
-        </TenantDomainProvider>
+        </TenantProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

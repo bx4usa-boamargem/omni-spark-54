@@ -4374,9 +4374,11 @@ export type Database = {
         Row: {
           avatar_url: string | null
           blog_objective: string | null
+          company_name: string | null
           created_at: string
           full_name: string | null
           id: string
+          onboarding_completed: boolean | null
           onboarding_progress: Json | null
           phone: string | null
           preferred_language: string | null
@@ -4388,9 +4390,11 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           blog_objective?: string | null
+          company_name?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
+          onboarding_completed?: boolean | null
           onboarding_progress?: Json | null
           phone?: string | null
           preferred_language?: string | null
@@ -4402,9 +4406,11 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           blog_objective?: string | null
+          company_name?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
+          onboarding_completed?: boolean | null
           onboarding_progress?: Json | null
           phone?: string | null
           preferred_language?: string | null
