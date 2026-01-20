@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { ErrorBoundary } from "react-error-boundary";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { TenantGuard } from "@/components/auth/TenantGuard";
@@ -100,13 +101,36 @@ const ArticleEditRedirect = () => {
   return <Navigate to={`/app/articles/${id}/edit`} replace />;
 };
 
-// Loading component while checking hostname - visible on iOS
-const HostnameLoader = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-900 gap-4">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-    <p className="text-sm text-gray-600 dark:text-gray-400">Carregando...</p>
-  </div>
-);
+// Global Error Fallback - prevents white screen crashes
+function GlobalErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-6 p-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Algo deu errado</h1>
+        <p className="text-muted-foreground mb-4">
+          Ocorreu um erro inesperado. Tente recarregar a página.
+        </p>
+        <pre className="text-xs text-destructive bg-destructive/10 p-3 rounded-md mb-4 overflow-auto max-h-32">
+          {error.message}
+        </pre>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Recarregar Página
+          </button>
+          <button
+            onClick={resetErrorBoundary}
+            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // User protected routes wrapper - uses TenantGuard
 const UserRoutes = () => (
@@ -238,28 +262,34 @@ const PlatformRoutes = () => (
   </Routes>
 );
 
-// Main App - no more hostname-based mode switching
+// Main App - with global ErrorBoundary for crash protection
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider 
-      attribute="class" 
-      defaultTheme="system" 
-      enableSystem
-      disableTransitionOnChange
-    >
-      <AuthProvider>
-        <TenantProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <PlatformRoutes />
-            </BrowserRouter>
-          </TooltipProvider>
-        </TenantProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+  <ErrorBoundary 
+    FallbackComponent={GlobalErrorFallback}
+    onReset={() => window.location.href = '/login'}
+    onError={(error) => console.error('[App] Global error caught:', error)}
+  >
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider 
+        attribute="class" 
+        defaultTheme="system" 
+        enableSystem
+        disableTransitionOnChange
+      >
+        <AuthProvider>
+          <TenantProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <PlatformRoutes />
+              </BrowserRouter>
+            </TooltipProvider>
+          </TenantProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
