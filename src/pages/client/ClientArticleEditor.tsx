@@ -31,8 +31,10 @@ import {
   Sparkles,
   Image as ImageIcon,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  BookOpen
 } from 'lucide-react';
+import { ArticlePdfDownload } from '@/components/articles/ArticlePdfDownload';
 
 type EditorPhase = 'form' | 'generating' | 'editing';
 type ViewMode = 'editor' | 'preview' | 'split';
@@ -1257,6 +1259,15 @@ export default function ClientArticleEditor() {
                 <ExternalLink className="h-4 w-4" />
                 Ver no site
               </Button>
+            )}
+            
+            {/* PDF Download Button */}
+            {existingArticleId && title && (
+              <ArticlePdfDownload
+                articleId={existingArticleId}
+                articleTitle={title}
+                variant="compact"
+              />
             )}
             <Button
               variant="outline"
