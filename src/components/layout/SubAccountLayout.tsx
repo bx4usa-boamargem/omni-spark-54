@@ -76,6 +76,7 @@ const navSections: NavSection[] = [
       { icon: MapPin, label: 'Territórios', path: '/client/territories' },
       { icon: Building2, label: 'Minha Empresa', path: '/client/company' },
       { icon: User, label: 'Minha Conta', path: '/client/account' },
+      { icon: Globe, label: 'Domínios', path: '/client/domains' },
       { icon: HelpCircle, label: 'Ajuda', path: '/client/help' },
     ]
   },

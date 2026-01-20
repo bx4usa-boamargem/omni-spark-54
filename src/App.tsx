@@ -88,6 +88,7 @@ import ClientHelpSearch from "./pages/client/ClientHelpSearch";
 import ClientLeads from "./pages/client/ClientLeads";
 import ClientEbooks from "./pages/client/ClientEbooks";
 import ClientEbookEditor from "./pages/client/ClientEbookEditor";
+import ClientDomains from "./pages/client/ClientDomains";
 
 const queryClient = new QueryClient();
 
@@ -180,6 +181,7 @@ const ClientRoutes = () => (
         <Route path="company" element={<ClientCompany />} />
         <Route path="account" element={<ClientAccount />} />
         <Route path="territories" element={<ClientTerritoryAnalytics />} />
+        <Route path="domains" element={<ClientDomains />} />
         
         {/* Integrações */}
         <Route path="integrations/gsc" element={<ClientGSCIntegration />} />
