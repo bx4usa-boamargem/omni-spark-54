@@ -7,7 +7,7 @@
  * - Redirect sempre para /app após login
  */
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +59,7 @@ function LoginContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user, signIn, signInWithGoogle, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -78,6 +79,14 @@ function LoginContent() {
     console.log('[Login] Component mounted');
     console.log('[Login] authLoading:', authLoading, 'user:', user?.email);
   }, [authLoading, user]);
+
+  // Pre-fill email from query string (when redirected from signup)
+  useEffect(() => {
+    const emailFromQuery = searchParams.get('email');
+    if (emailFromQuery && !email) {
+      setEmail(emailFromQuery);
+    }
+  }, [searchParams, email]);
 
   // Timeout para loading infinito
   useEffect(() => {
