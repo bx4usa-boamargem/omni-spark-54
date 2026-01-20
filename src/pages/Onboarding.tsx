@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { ContextStep } from "@/components/onboarding/ContextStep";
 import { ProfileStep } from "@/components/onboarding/ProfileStep";
@@ -165,16 +164,24 @@ export default function Onboarding() {
   const progress = (currentStep / STEPS.length) * 100;
 
   const nextStep = () => {
-    console.log('[Onboarding] nextStep called. Current:', currentStep, '-> Next:', currentStep + 1);
-    if (currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1);
+    try {
+      console.log('[Onboarding] nextStep called. Current:', currentStep, '-> Next:', currentStep + 1);
+      if (currentStep < STEPS.length) {
+        setCurrentStep(currentStep + 1);
+      }
+    } catch (error) {
+      console.error('[Onboarding] Error in nextStep:', error);
     }
   };
 
   const prevStep = () => {
-    console.log('[Onboarding] prevStep called. Current:', currentStep, '-> Prev:', currentStep - 1);
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    try {
+      console.log('[Onboarding] prevStep called. Current:', currentStep, '-> Prev:', currentStep - 1);
+      if (currentStep > 1) {
+        setCurrentStep(currentStep - 1);
+      }
+    } catch (error) {
+      console.error('[Onboarding] Error in prevStep:', error);
     }
   };
 
@@ -257,17 +264,22 @@ export default function Onboarding() {
     }
   };
 
-  // Handle error boundary reset - volta para step 1
+  // Handle error boundary reset - volta para step 1 com fallback seguro
   const handleErrorReset = () => {
-    setCurrentStep(1);
-    setData({
-      blogObjective: "",
-      userType: "",
-      phone: "",
-      referralSource: "",
-      blogName: "",
-      blogSlug: "",
-    });
+    try {
+      setCurrentStep(1);
+      setData({
+        blogObjective: "",
+        userType: "",
+        phone: "",
+        referralSource: "",
+        blogName: "",
+        blogSlug: "",
+      });
+    } catch (e) {
+      console.error('[Onboarding] Reset failed, reloading page:', e);
+      window.location.reload();
+    }
   };
 
   if (loading) {
@@ -322,7 +334,13 @@ export default function Onboarding() {
               </div>
             ))}
           </div>
-          <Progress value={progress} className="h-2" />
+          {/* Progress bar nativo - sem Radix Portal */}
+          <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-300" 
+              style={{ width: `${progress}%` }}
+            />
+          </div>
           <p className="text-sm text-muted-foreground text-center mt-2">
             Etapa {currentStep} de {STEPS.length}
           </p>
