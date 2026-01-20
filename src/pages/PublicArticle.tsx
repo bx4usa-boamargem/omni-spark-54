@@ -22,6 +22,7 @@ import { useLocaleFormat } from "@/hooks/useLocaleFormat";
 import { usePublicArticleTranslation } from "@/hooks/useArticleTranslations";
 import { getCanonicalArticleUrl, getBlogPath } from "@/utils/blogUrl";
 import { Calendar, Clock, ChevronDown, ChevronUp, Eye, Share2, ArrowLeft } from "lucide-react";
+import { ArticlePdfDownload } from "@/components/articles/ArticlePdfDownload";
 
 interface Blog {
   id: string;
@@ -444,6 +445,14 @@ const PublicArticle = () => {
                   {formatNumber(article.share_count || 0)} {t('blog.shares')}
                 </span>
               )}
+              
+              {/* PDF Download Button */}
+              <ArticlePdfDownload
+                articleId={article.id}
+                articleTitle={article.title}
+                variant="icon"
+                primaryColor={blog.primary_color || undefined}
+              />
             </div>
           </div>
         </section>
