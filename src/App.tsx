@@ -224,8 +224,9 @@ const PlatformRoutes = () => (
     <Route path="/invite/accept" element={<AcceptInvite />} />
     <Route path="/oauth/google/callback" element={<GoogleOAuthCallback />} />
     
-    {/* Legacy auth redirect */}
+    {/* Legacy auth redirects */}
     <Route path="/auth" element={<Navigate to="/login" replace />} />
+    <Route path="/forgot-password" element={<Navigate to="/reset-password" replace />} />
     
     {/* Public content */}
     <Route path="/help" element={<Help />} />

@@ -119,7 +119,7 @@ export default function ResetPassword() {
           title: t('auth.reset.passwordReset'),
           description: t('auth.reset.passwordUpdated'),
         });
-        navigate("/auth");
+        navigate("/login");
       }
     } catch {
       toast({
@@ -208,7 +208,7 @@ export default function ResetPassword() {
                     type="button"
                     variant="ghost"
                     className="w-full"
-                    onClick={() => navigate("/auth")}
+                    onClick={() => navigate("/login")}
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     {t('auth.reset.backToLogin')}
@@ -232,7 +232,7 @@ export default function ResetPassword() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => navigate("/auth")}
+                    onClick={() => navigate("/login")}
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     {t('auth.reset.backToLogin')}

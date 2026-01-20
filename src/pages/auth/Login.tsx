@@ -300,7 +300,7 @@ function LoginContent() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">{t('auth.fields.password', 'Senha')}</Label>
                     <Link
-                      to="/forgot-password"
+                      to="/reset-password"
                       className="text-sm text-primary hover:underline"
                     >
                       {t('auth.login.forgotPassword', 'Esqueceu a senha?')}
