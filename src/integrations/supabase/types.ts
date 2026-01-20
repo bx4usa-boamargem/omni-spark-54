@@ -5806,6 +5806,7 @@ export type Database = {
         Returns: string
       }
       generate_referral_code: { Args: never; Returns: string }
+      get_user_tenant_ids: { Args: never; Returns: string[] }
       has_role:
         | {
             Args: {
@@ -5836,6 +5837,8 @@ export type Database = {
         Args: { p_blog_id: string; p_user_id: string }
         Returns: boolean
       }
+      is_tenant_admin: { Args: { p_tenant_id: string }; Returns: boolean }
+      is_tenant_member: { Args: { p_tenant_id: string }; Returns: boolean }
       normalize_title_for_fingerprint: {
         Args: { input_title: string }
         Returns: string
