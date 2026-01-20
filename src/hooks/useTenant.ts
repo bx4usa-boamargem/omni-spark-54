@@ -55,19 +55,77 @@ export function useTenant(): UseTenantResult {
     }
 
     try {
-      // Fetch all tenant memberships for the user
+      // Try to fetch tenant memberships for the user
       const { data: memberships, error: membershipError } = await supabase
         .from("tenant_members")
         .select("*")
         .eq("user_id", user.id);
 
+      // If tenant_members query fails (e.g., RLS issues), fallback to blogs
       if (membershipError) {
-        console.error("Error fetching tenant memberships:", membershipError);
+        console.warn("tenant_members query failed, trying fallback via blogs:", membershipError);
+        
+        const { data: userBlogs, error: blogsError } = await supabase
+          .from("blogs")
+          .select("tenant_id, tenants(*)")
+          .eq("user_id", user.id)
+          .not("tenant_id", "is", null)
+          .limit(1);
+
+        if (blogsError || !userBlogs?.length) {
+          console.error("Both tenant resolution methods failed");
+          setTenant(null);
+          setTenants([]);
+          setMembership(null);
+          setLoading(false);
+          return;
+        }
+
+        // Use tenant from blog as fallback
+        const blogTenant = userBlogs[0].tenants as unknown as Tenant;
+        if (blogTenant) {
+          setTenant(blogTenant);
+          setTenants([blogTenant]);
+          setMembership({
+            id: "fallback",
+            tenant_id: blogTenant.id,
+            user_id: user.id,
+            role: "owner",
+            joined_at: null
+          });
+        }
         setLoading(false);
         return;
       }
 
+      // No memberships found - try fallback via blogs
       if (!memberships || memberships.length === 0) {
+        console.warn("No tenant memberships found, trying fallback via blogs");
+        
+        const { data: userBlogs, error: blogsError } = await supabase
+          .from("blogs")
+          .select("tenant_id, tenants(*)")
+          .eq("user_id", user.id)
+          .not("tenant_id", "is", null)
+          .limit(1);
+
+        if (!blogsError && userBlogs?.length) {
+          const blogTenant = userBlogs[0].tenants as unknown as Tenant;
+          if (blogTenant) {
+            setTenant(blogTenant);
+            setTenants([blogTenant]);
+            setMembership({
+              id: "fallback",
+              tenant_id: blogTenant.id,
+              user_id: user.id,
+              role: "owner",
+              joined_at: null
+            });
+            setLoading(false);
+            return;
+          }
+        }
+
         setTenant(null);
         setTenants([]);
         setMembership(null);
