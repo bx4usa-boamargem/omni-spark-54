@@ -2,3 +2,9 @@ project_id = "lkyypeqdstftooegqngf"
 
 [functions.generate-article-pdf]
 verify_jwt = false
+
+[functions.provision-tenant]
+verify_jwt = false
+
+[functions.request-password-reset]
+verify_jwt = false

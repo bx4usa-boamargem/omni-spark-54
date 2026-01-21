@@ -134,7 +134,7 @@ function LoginContent() {
       if (error) {
         toast({
           title: 'Erro no login',
-          description: 'Email ou senha incorretos',
+          description: 'Email ou senha incorretos. Use "Esqueceu a senha?" para recuperar.',
           variant: 'destructive',
         });
         setIsLoading(false);
@@ -146,22 +146,18 @@ function LoginContent() {
         description: 'Login realizado com sucesso',
       });
       
-      // Aguardar a sessão ser confirmada antes de navegar (evita race condition)
-      console.log('[Login] Waiting for session confirmation...');
-      const maxRetries = 10;
-      for (let i = 0; i < maxRetries; i++) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session) {
-          console.log('[Login] Session confirmed, navigating to /app');
-          navigate('/app', { replace: true });
-          return;
-        }
-        // Aguardar 200ms antes de verificar novamente
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // Aguarda uma única verificação de sessão antes de navegar
+      // O TenantGuard e AutoProvisionTenant cuidam do resto
+      console.log('[Login] Login successful, checking session...');
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (sessionData?.session) {
+        console.log('[Login] Session confirmed, navigating to /app');
+      } else {
+        console.log('[Login] Session pending, TenantGuard will handle');
       }
       
-      // Fallback: navegar mesmo assim (o TenantGuard vai lidar)
-      console.log('[Login] Session not confirmed after retries, navigating anyway');
+      // Navigate - TenantGuard + AutoProvisionTenant handle the rest
       navigate('/app', { replace: true });
 
     } catch (err) {

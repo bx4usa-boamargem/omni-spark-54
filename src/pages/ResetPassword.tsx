@@ -52,28 +52,30 @@ export default function ResetPassword() {
         return;
       }
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // Use our custom edge function that sends via Brevo
+      const { error } = await supabase.functions.invoke('request-password-reset', {
+        body: { email }
       });
 
       if (error) {
-        toast({
-          title: t('common.error'),
-          description: t('auth.errors.resetFailed'),
-          variant: "destructive",
-        });
-      } else {
-        setSuccess(true);
-        toast({
-          title: t('auth.reset.emailSent'),
-          description: t('auth.reset.checkInbox'),
-        });
+        console.error('[ResetPassword] Function error:', error);
+        // Still show success to not reveal if email exists
       }
-    } catch {
+
+      // Always show success message (don't reveal if email exists)
+      setSuccess(true);
       toast({
-        title: t('common.error'),
-        description: t('auth.errors.unexpectedError'),
-        variant: "destructive",
+        title: t('auth.reset.emailSent'),
+        description: t('auth.reset.checkInbox'),
+      });
+
+    } catch (err) {
+      console.error('[ResetPassword] Unexpected error:', err);
+      // Still show success to not reveal if email exists
+      setSuccess(true);
+      toast({
+        title: t('auth.reset.emailSent'),
+        description: t('auth.reset.checkInbox'),
       });
     } finally {
       setIsLoading(false);
