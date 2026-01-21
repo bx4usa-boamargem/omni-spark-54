@@ -91,6 +91,31 @@ export function AutoProvisionTenant() {
 
     console.log('[AutoProvision] Starting for user:', user.email);
 
+    // Verificar e aguardar sessão ativa antes de prosseguir (evita race condition)
+    let sessionConfirmed = false;
+    for (let i = 0; i < 5; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('[AutoProvision] Session confirmed on attempt', i + 1);
+        sessionConfirmed = true;
+        break;
+      }
+      console.log('[AutoProvision] Session not ready, waiting... (attempt', i + 1, ')');
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    if (!sessionConfirmed) {
+      console.log('[AutoProvision] Session not confirmed after retries, attempting refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData.session) {
+        console.error('[AutoProvision] Failed to establish session after refresh');
+        await handleSessionExpired();
+        return;
+      }
+      console.log('[AutoProvision] Session established after refresh');
+    }
+
     try {
       // ========= STEP 1: Check if user already has a membership =========
       setStatusMessage('Verificando conta existente...');
@@ -188,10 +213,28 @@ export function AutoProvisionTenant() {
               continue;
             }
 
-            // Session expired
+            // RLS error - pode ser race condition ou sessão expirada
             if (tenantError.message?.includes('row-level security') ||
-                tenantError.message?.includes('policy') ||
-                tenantError.message?.includes('JWT')) {
+                tenantError.message?.includes('policy')) {
+              console.log('[AutoProvision] RLS error detected, attempting session refresh...');
+              
+              // Tentar forçar refresh da sessão
+              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+              
+              if (refreshError || !refreshData.session) {
+                console.log('[AutoProvision] Session truly expired, redirecting to login');
+                await handleSessionExpired();
+                return;
+              }
+              
+              // Sessão foi refreshed, aguardar e tentar novamente
+              console.log('[AutoProvision] Session refreshed, retrying insert...');
+              await new Promise(resolve => setTimeout(resolve, 300));
+              continue;
+            }
+
+            // JWT error (token inválido)
+            if (tenantError.message?.includes('JWT')) {
               await handleSessionExpired();
               return;
             }

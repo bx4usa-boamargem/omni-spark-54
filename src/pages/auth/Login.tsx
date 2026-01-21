@@ -5,12 +5,14 @@
  * - Sem Radix/Portal nos componentes críticos
  * - ErrorBoundary para evitar tela branca
  * - Redirect sempre para /app após login
+ * - Aguarda confirmação de sessão para evitar race condition
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -144,7 +146,22 @@ function LoginContent() {
         description: 'Login realizado com sucesso',
       });
       
-      // Redirect para /app (TenantGuard fará o redirecionamento correto)
+      // Aguardar a sessão ser confirmada antes de navegar (evita race condition)
+      console.log('[Login] Waiting for session confirmation...');
+      const maxRetries = 10;
+      for (let i = 0; i < maxRetries; i++) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          console.log('[Login] Session confirmed, navigating to /app');
+          navigate('/app', { replace: true });
+          return;
+        }
+        // Aguardar 200ms antes de verificar novamente
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      // Fallback: navegar mesmo assim (o TenantGuard vai lidar)
+      console.log('[Login] Session not confirmed after retries, navigating anyway');
       navigate('/app', { replace: true });
 
     } catch (err) {
