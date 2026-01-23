@@ -80,14 +80,23 @@ export interface SERPMatrix {
 interface NicheInfo {
   id: string;
   name: string;
+  displayName: string;
   minScore: number;
   floorApplied: boolean;
+}
+
+interface ArticleLockStatus {
+  nicheLocked: boolean;
+  scoreLocked: boolean;
+  lastScoreChangeReason: string | null;
+  nicheProfileId: string | null;
 }
 
 interface UseContentScoreReturn {
   score: ContentScore | null;
   serpMatrix: SERPMatrix | null;
   nicheInfo: NicheInfo | null;
+  lockStatus: ArticleLockStatus | null;
   loading: boolean;
   analyzing: boolean;
   optimizing: boolean;
@@ -112,9 +121,34 @@ export function useContentScore(
   const [serpMatrix, setSerpMatrix] = useState<SERPMatrix | null>(null);
   const [serpAnalysisId, setSerpAnalysisId] = useState<string | null>(null);
   const [nicheInfo, setNicheInfo] = useState<NicheInfo | null>(null);
+  const [lockStatus, setLockStatus] = useState<ArticleLockStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+
+  // Fetch article lock status
+  const fetchLockStatus = useCallback(async () => {
+    if (!articleId) return;
+    
+    try {
+      const { data: article } = await supabase
+        .from('articles')
+        .select('niche_locked, score_locked, last_score_change_reason, niche_profile_id')
+        .eq('id', articleId)
+        .single();
+      
+      if (article) {
+        setLockStatus({
+          nicheLocked: article.niche_locked ?? true,
+          scoreLocked: article.score_locked ?? true,
+          lastScoreChangeReason: article.last_score_change_reason,
+          nicheProfileId: article.niche_profile_id
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching lock status:', error);
+    }
+  }, [articleId]);
 
   // Fetch existing score and SERP data from database
   const fetchExistingData = useCallback(async () => {
@@ -255,10 +289,13 @@ export function useContentScore(
           setNicheInfo({
             id: data.nicheProfile.id,
             name: data.nicheProfile.name,
+            displayName: data.nicheProfile.displayName || data.nicheProfile.name,
             minScore: data.nicheProfile.minScore,
             floorApplied: data.nicheProfile.floorApplied || false
           });
         }
+        // Refresh lock status after score calculation
+        fetchLockStatus();
       }
     } catch (error) {
       console.error('Score calculation error:', error);
@@ -374,10 +411,16 @@ export function useContentScore(
     await calculateScore();
   }, [analyzeSERP, calculateScore]);
 
+  // Initial fetch of lock status
+  useEffect(() => {
+    fetchLockStatus();
+  }, [fetchLockStatus]);
+
   return {
     score,
     serpMatrix,
     nicheInfo,
+    lockStatus,
     loading,
     analyzing,
     optimizing,

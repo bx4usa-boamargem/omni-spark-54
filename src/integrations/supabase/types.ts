@@ -1060,10 +1060,13 @@ export type Database = {
           highlights: Json | null
           id: string
           keywords: string[] | null
+          last_score_change_reason: string | null
           last_user_action: string | null
           last_user_action_at: string | null
           meta_description: string | null
           mini_case: Json | null
+          niche_locked: boolean | null
+          niche_profile_id: string | null
           opportunity_id: string | null
           pdf_generated_at: string | null
           pdf_url: string | null
@@ -1073,6 +1076,7 @@ export type Database = {
           reading_time: number | null
           ready_for_publish_at: string | null
           scheduled_at: string | null
+          score_locked: boolean | null
           share_count: number | null
           slug: string
           social_share_count: Json | null
@@ -1112,10 +1116,13 @@ export type Database = {
           highlights?: Json | null
           id?: string
           keywords?: string[] | null
+          last_score_change_reason?: string | null
           last_user_action?: string | null
           last_user_action_at?: string | null
           meta_description?: string | null
           mini_case?: Json | null
+          niche_locked?: boolean | null
+          niche_profile_id?: string | null
           opportunity_id?: string | null
           pdf_generated_at?: string | null
           pdf_url?: string | null
@@ -1125,6 +1132,7 @@ export type Database = {
           reading_time?: number | null
           ready_for_publish_at?: string | null
           scheduled_at?: string | null
+          score_locked?: boolean | null
           share_count?: number | null
           slug: string
           social_share_count?: Json | null
@@ -1164,10 +1172,13 @@ export type Database = {
           highlights?: Json | null
           id?: string
           keywords?: string[] | null
+          last_score_change_reason?: string | null
           last_user_action?: string | null
           last_user_action_at?: string | null
           meta_description?: string | null
           mini_case?: Json | null
+          niche_locked?: boolean | null
+          niche_profile_id?: string | null
           opportunity_id?: string | null
           pdf_generated_at?: string | null
           pdf_url?: string | null
@@ -1177,6 +1188,7 @@ export type Database = {
           reading_time?: number | null
           ready_for_publish_at?: string | null
           scheduled_at?: string | null
+          score_locked?: boolean | null
           share_count?: number | null
           slug?: string
           social_share_count?: Json | null
@@ -1197,6 +1209,13 @@ export type Database = {
             columns: ["blog_id"]
             isOneToOne: false
             referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_niche_profile_id_fkey"
+            columns: ["niche_profile_id"]
+            isOneToOne: false
+            referencedRelation: "niche_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -4066,6 +4085,67 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      niche_guard_logs: {
+        Row: {
+          action_type: string
+          article_id: string | null
+          blocked_reason: string | null
+          blocked_terms: string[] | null
+          blog_id: string | null
+          created_at: string | null
+          id: string
+          niche_profile_id: string | null
+          original_value: Json | null
+          source_function: string
+        }
+        Insert: {
+          action_type: string
+          article_id?: string | null
+          blocked_reason?: string | null
+          blocked_terms?: string[] | null
+          blog_id?: string | null
+          created_at?: string | null
+          id?: string
+          niche_profile_id?: string | null
+          original_value?: Json | null
+          source_function: string
+        }
+        Update: {
+          action_type?: string
+          article_id?: string | null
+          blocked_reason?: string | null
+          blocked_terms?: string[] | null
+          blog_id?: string | null
+          created_at?: string | null
+          id?: string
+          niche_profile_id?: string | null
+          original_value?: Json | null
+          source_function?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niche_guard_logs_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "niche_guard_logs_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "niche_guard_logs_niche_profile_id_fkey"
+            columns: ["niche_profile_id"]
+            isOneToOne: false
+            referencedRelation: "niche_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       niche_profiles: {
         Row: {

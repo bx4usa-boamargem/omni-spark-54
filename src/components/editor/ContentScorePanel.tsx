@@ -13,8 +13,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  Info
+  Info,
+  Shield,
+  Lock
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 // Import modular components
 import { ContentScoreGauge } from './ContentScoreGauge';
@@ -54,6 +57,8 @@ export function ContentScorePanel({
   const {
     score,
     serpMatrix,
+    nicheInfo,
+    lockStatus,
     loading,
     analyzing,
     optimizing,
@@ -321,6 +326,40 @@ export function ContentScorePanel({
                 runningTo100={optimizer.isRunning}
                 hasAnalysis={!!serpMatrix}
               />
+
+              {/* Niche Lock Status */}
+              {nicheInfo && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-sm">Nicho: {nicheInfo.displayName || nicheInfo.name}</span>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Piso mínimo: {nicheInfo.minScore} pontos
+                  </div>
+                  
+                  {nicheInfo.floorApplied && (
+                    <Badge variant="outline" className="mt-2 text-green-600 border-green-600 text-xs">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Score estabilizado pelo perfil
+                    </Badge>
+                  )}
+                  
+                  {lockStatus?.scoreLocked && (
+                    <div className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                      <Lock className="h-3 w-3" />
+                      Alterações apenas por ação manual
+                    </div>
+                  )}
+                  
+                  {lockStatus?.lastScoreChangeReason && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {lockStatus.lastScoreChangeReason}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Quality Gate Status */}
               {score && (

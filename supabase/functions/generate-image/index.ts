@@ -1,5 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  ANTI_FUTURISTIC_IMAGE_RULES, 
+  getNicheImageInstructions,
+  logBlockedAttempt,
+  isMarketingNiche
+} from "../_shared/nicheGuard.ts";
+import { getNicheProfile } from "../_shared/nicheProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -354,7 +361,22 @@ serve(async (req) => {
     // ============================================================================
     const visualProfile = getVisualProfileFromNiche(businessNiche, businessServices, effectiveTitle);
 
-    // SISTEMA ANTI-CLONE V2.0 - Regras absolutas
+    // ============================================================================
+    // NICHE LOCK SYSTEM - Carregar perfil de nicho para regras de imagem
+    // ============================================================================
+    let nicheProfile = null;
+    if (blog_id) {
+      nicheProfile = await getNicheProfile(supabase, blog_id);
+      console.log(`[${requestId}] Niche profile loaded: ${nicheProfile?.name || 'default'}`);
+    }
+
+    // Obter instruções visuais específicas do nicho
+    const nicheImageInstructions = getNicheImageInstructions(nicheProfile?.name || 'default');
+    
+    // Determinar se é nicho de marketing (pode ter elementos tech)
+    const allowTechElements = isMarketingNiche(nicheProfile?.name);
+
+    // SISTEMA ANTI-CLONE V2.0 + ANTI-FUTURISTA (do nicheGuard)
     const ANTI_CLONE_RULES = `
 ## ⛔ REGRAS ABSOLUTAS ANTI-CLONE (INVIOLÁVEIS):
 
@@ -379,13 +401,22 @@ serve(async (req) => {
 Este seed garante identidade visual única para esta geração.
 `.trim();
 
+    // Combinar regras anti-futurista (obrigatório para nichos não-marketing)
+    const antiFuturisticSection = allowTechElements ? '' : `
+${ANTI_FUTURISTIC_IMAGE_RULES}
+`;
+
     const enhancedPrompt = `
 Você é um diretor de fotografia editorial para blogs profissionais.
 Crie uma imagem fotográfica realista que represente VISUALMENTE o conteúdo descrito.
 
 ${ANTI_CLONE_RULES}
+${antiFuturisticSection}
 
-PERFIL VISUAL BASEADO NO NICHO DO NEGÓCIO:
+## PERFIL VISUAL DO NICHO: ${nicheProfile?.displayName || 'Geral'}
+${nicheImageInstructions}
+
+## PERFIL VISUAL BASEADO NO NEGÓCIO:
 ${visualProfile}
 
 CONTEXTO DO NEGÓCIO:
@@ -404,16 +435,18 @@ ${contextInstructions[effectiveContext] || 'Ilustrar o conceito de forma profiss
 DESCRIÇÃO ESPECÍFICA:
 ${finalPrompt}
 
-REQUISITOS TÉCNICOS:
+REQUISITOS TÉCNICOS ABSOLUTOS:
 - Aspecto 16:9 para web
 - Alta resolução, nítida e bem definida
-- Iluminação natural e profissional
+- Iluminação NATURAL e profissional
 - Composição equilibrada
 - EVITAR: close-up de rostos, pessoas similares, stock photo genérico
-- PREFERIR: ambientes reais do nicho, objetos do cotidiano do serviço, conceitos visuais
+${allowTechElements ? '' : '- PROIBIDO: hologramas, telas flutuantes, HUD futurista, sci-fi, neon irreal'}
+- PREFERIR: ambientes REAIS do nicho, objetos do COTIDIANO do serviço, conceitos visuais
 
-A imagem deve parecer uma fotografia real capturada no mundo real, relacionada ao nicho do negócio.
+A imagem DEVE parecer uma fotografia REAL capturada no mundo real, relacionada ao nicho do negócio.
 NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos, ilustrações genéricas, rostos repetidos.
+${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elementos de ficção científica.'}
 `.trim();
 
     // Generate cache key and check cache
