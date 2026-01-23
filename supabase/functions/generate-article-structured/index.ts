@@ -2334,7 +2334,8 @@ Retorne o artigo completo e expandido no formato JSON da tool create_article.`;
             keyword: primaryKeyword,
             territory: territoryData?.official_name || null,
             blogId: blog_id,
-            forceRefresh: false
+            forceRefresh: true,      // V3.0: Force fresh analysis for new articles
+            useFirecrawl: true       // V3.0: ALWAYS use real scraping
           }),
         });
 
