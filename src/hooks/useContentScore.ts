@@ -92,11 +92,21 @@ interface ArticleLockStatus {
   nicheProfileId: string | null;
 }
 
+interface ScoreChangeLogEntry {
+  id: string;
+  old_score: number;
+  new_score: number;
+  change_reason: string;
+  triggered_by: string;
+  created_at: string;
+}
+
 interface UseContentScoreReturn {
   score: ContentScore | null;
   serpMatrix: SERPMatrix | null;
   nicheInfo: NicheInfo | null;
   lockStatus: ArticleLockStatus | null;
+  scoreHistory: ScoreChangeLogEntry[];
   loading: boolean;
   analyzing: boolean;
   optimizing: boolean;
@@ -104,7 +114,7 @@ interface UseContentScoreReturn {
   
   // Actions
   analyzeSERP: () => Promise<void>;
-  calculateScore: () => Promise<void>;
+  calculateScore: (userInitiated?: boolean) => Promise<void>;
   optimizeForSERP: () => Promise<string | null>;
   boostScore: (targetScore?: number) => Promise<string | null>;
   refresh: () => Promise<void>;
@@ -122,9 +132,30 @@ export function useContentScore(
   const [serpAnalysisId, setSerpAnalysisId] = useState<string | null>(null);
   const [nicheInfo, setNicheInfo] = useState<NicheInfo | null>(null);
   const [lockStatus, setLockStatus] = useState<ArticleLockStatus | null>(null);
+  const [scoreHistory, setScoreHistory] = useState<ScoreChangeLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+
+  // Fetch score change history
+  const fetchScoreHistory = useCallback(async () => {
+    if (!articleId) return;
+    
+    try {
+      const { data: history } = await supabase
+        .from('score_change_log')
+        .select('id, old_score, new_score, change_reason, triggered_by, created_at')
+        .eq('article_id', articleId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (history) {
+        setScoreHistory(history);
+      }
+    } catch (error) {
+      console.error('Error fetching score history:', error);
+    }
+  }, [articleId]);
 
   // Fetch article lock status
   const fetchLockStatus = useCallback(async () => {
@@ -261,7 +292,8 @@ export function useContentScore(
   }, [keyword, blogId]);
 
   // Calculate content score
-  const calculateScore = useCallback(async () => {
+  // V2.0: userInitiated flag controls whether score can decrease
+  const calculateScore = useCallback(async (userInitiated = false) => {
     if (!content || !keyword || !blogId) return;
 
     setLoading(true);
@@ -274,7 +306,8 @@ export function useContentScore(
           keyword,
           blogId,
           serpAnalysisId,
-          saveScore: !!articleId
+          saveScore: !!articleId,
+          userInitiated  // V2.0: Pass user intent to control score stability
         }
       });
 
@@ -294,8 +327,18 @@ export function useContentScore(
             floorApplied: data.nicheProfile.floorApplied || false
           });
         }
-        // Refresh lock status after score calculation
+        
+        // Show message if score was blocked
+        if (data.scoreBlocked) {
+          toast({
+            title: 'Score estável',
+            description: 'O score não foi alterado para manter a estabilidade. Clique em "Recalcular" para atualizar manualmente.',
+          });
+        }
+        
+        // Refresh lock status and history after score calculation
         fetchLockStatus();
+        fetchScoreHistory();
       }
     } catch (error) {
       console.error('Score calculation error:', error);
@@ -307,7 +350,7 @@ export function useContentScore(
     } finally {
       setLoading(false);
     }
-  }, [articleId, title, content, keyword, blogId, serpAnalysisId]);
+  }, [articleId, title, content, keyword, blogId, serpAnalysisId, fetchLockStatus, fetchScoreHistory]);
 
   // Optimize content for SERP
   const optimizeForSERP = useCallback(async (): Promise<string | null> => {
@@ -408,19 +451,21 @@ export function useContentScore(
   // Refresh all data
   const refresh = useCallback(async () => {
     await analyzeSERP();
-    await calculateScore();
+    await calculateScore(true); // User-initiated refresh
   }, [analyzeSERP, calculateScore]);
 
-  // Initial fetch of lock status
+  // Initial fetch of lock status and history
   useEffect(() => {
     fetchLockStatus();
-  }, [fetchLockStatus]);
+    fetchScoreHistory();
+  }, [fetchLockStatus, fetchScoreHistory]);
 
   return {
     score,
     serpMatrix,
     nicheInfo,
     lockStatus,
+    scoreHistory,
     loading,
     analyzing,
     optimizing,
