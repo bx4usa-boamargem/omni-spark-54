@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Flame } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ContentScoreGaugeProps {
@@ -12,6 +12,9 @@ interface ContentScoreGaugeProps {
 /**
  * Semicircular gauge with 3 color zones (red/yellow/green),
  * moving pointer, goal marker and score display as "X / 100"
+ * 
+ * CRITICAL: Score comes from database (article_content_scores.total_score)
+ * Never use hardcoded values.
  */
 export function ContentScoreGauge({ 
   score, 
@@ -20,11 +23,12 @@ export function ContentScoreGauge({
   className 
 }: ContentScoreGaugeProps) {
   const [displayScore, setDisplayScore] = useState(0);
+  const hasScore = score !== null;
   const targetScore = score ?? 0;
   
-  // Animate score
+  // Animate score changes
   useEffect(() => {
-    if (loading) return;
+    if (loading || !hasScore) return;
     
     const duration = 800;
     const steps = 40;
@@ -44,7 +48,7 @@ export function ContentScoreGauge({
     }, duration / steps);
     
     return () => clearInterval(timer);
-  }, [targetScore, loading]);
+  }, [targetScore, loading, hasScore]);
 
   // Gauge dimensions
   const width = 200;
@@ -56,7 +60,6 @@ export function ContentScoreGauge({
   
   // Arc calculation (semicircle from left to right)
   const circumference = Math.PI * radius;
-  const progress = (displayScore / 100) * circumference;
   
   // Pointer position (angle in degrees, 0 = left, 180 = right)
   const pointerAngle = (displayScore / 100) * 180;
@@ -64,34 +67,19 @@ export function ContentScoreGauge({
   const pointerX = centerX + (radius - strokeWidth / 2) * Math.cos(pointerRad);
   const pointerY = centerY - (radius - strokeWidth / 2) * Math.sin(pointerRad);
   
-  // Goal marker position (e.g., 50)
+  // Goal marker position
   const goalAngle = (goalMarker / 100) * 180;
   const goalRad = (180 - goalAngle) * (Math.PI / 180);
   const goalX = centerX + (radius + 12) * Math.cos(goalRad);
   const goalY = centerY - (radius + 12) * Math.sin(goalRad);
   
-  // Color zones angles
-  const getZoneEndX = (percentage: number) => {
-    const angle = (percentage / 100) * 180;
-    const rad = (180 - angle) * (Math.PI / 180);
-    return centerX + radius * Math.cos(rad);
-  };
-  
-  const getZoneEndY = (percentage: number) => {
-    const angle = (percentage / 100) * 180;
-    const rad = (180 - angle) * (Math.PI / 180);
-    return centerY - radius * Math.sin(rad);
-  };
-  
   // Get score color based on current value
   const getScoreColor = () => {
+    if (!hasScore) return 'hsl(var(--muted-foreground))';
     if (displayScore >= 80) return 'hsl(142, 76%, 36%)'; // green
     if (displayScore >= 60) return 'hsl(38, 92%, 50%)';  // yellow
     return 'hsl(0, 84%, 60%)'; // red
   };
-
-  // Arc path for semicircle
-  const arcPath = `M ${centerX - radius} ${centerY} A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`;
   
   // Zone arc paths
   const createZonePath = (startPct: number, endPct: number) => {
@@ -109,6 +97,9 @@ export function ContentScoreGauge({
     
     return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}`;
   };
+
+  // Arc path for semicircle background
+  const arcPath = `M ${centerX - radius} ${centerY} A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`;
 
   return (
     <div className={cn("relative flex flex-col items-center py-4", className)}>
@@ -180,8 +171,8 @@ export function ContentScoreGauge({
           {goalMarker}
         </text>
         
-        {/* Moving pointer (circle) */}
-        {!loading && (
+        {/* Moving pointer (circle) - only show when has score and not loading */}
+        {hasScore && !loading && (
           <circle
             cx={pointerX}
             cy={pointerY}
@@ -217,27 +208,47 @@ export function ContentScoreGauge({
         </text>
       </svg>
       
-      {/* Score display */}
+      {/* Score display - SAME typography weight for score and "/100" */}
       <div className="absolute inset-0 flex items-center justify-center pt-4">
         {loading ? (
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         ) : (
           <div className="flex items-baseline gap-1" style={{ marginTop: '20px' }}>
-            <span 
-              className="text-3xl font-bold tabular-nums"
-              style={{ color: getScoreColor() }}
-            >
-              {displayScore}
-            </span>
-            <span className="text-3xl font-bold text-muted-foreground/60">
-              /
-            </span>
-            <span className="text-3xl font-bold text-muted-foreground/60">
-              100
-            </span>
+            {hasScore ? (
+              <>
+                <span 
+                  className="text-3xl font-bold tabular-nums"
+                  style={{ color: getScoreColor() }}
+                >
+                  {displayScore}
+                </span>
+                <span 
+                  className="text-3xl font-bold"
+                  style={{ color: getScoreColor() }}
+                >
+                  /100
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-3xl font-bold tabular-nums text-muted-foreground">
+                  --
+                </span>
+                <span className="text-3xl font-bold text-muted-foreground">
+                  /100
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
+      
+      {/* Status text below gauge */}
+      {!hasScore && !loading && (
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Calcule o score para ver a pontuação
+        </p>
+      )}
     </div>
   );
 }

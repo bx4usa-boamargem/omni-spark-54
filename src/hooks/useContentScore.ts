@@ -107,13 +107,13 @@ export function useContentScore(
   const [analyzing, setAnalyzing] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
 
-  // Fetch existing score and SERP data
+  // Fetch existing score and SERP data from database
   const fetchExistingData = useCallback(async () => {
     if (!articleId || !blogId) return;
 
     setLoading(true);
     try {
-      // Fetch existing content score
+      // Fetch existing content score from article_content_scores table
       const { data: scoreData } = await supabase
         .from('article_content_scores')
         .select('*, serp_analysis_cache(*)')
@@ -143,9 +143,37 @@ export function useContentScore(
     }
   }, [articleId, blogId]);
 
+  // Initial data fetch
   useEffect(() => {
     fetchExistingData();
   }, [fetchExistingData]);
+
+  // Realtime subscription for score updates
+  useEffect(() => {
+    if (!articleId) return;
+
+    const channel = supabase
+      .channel(`content-score-${articleId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'article_content_scores',
+          filter: `article_id=eq.${articleId}`
+        },
+        (payload) => {
+          console.log('Content score updated via realtime:', payload);
+          // Refetch full data to ensure consistency
+          fetchExistingData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [articleId, fetchExistingData]);
 
   // Analyze SERP for keyword
   const analyzeSERP = useCallback(async () => {
@@ -247,7 +275,8 @@ export function useContentScore(
       if (error) throw error;
 
       if (data?.optimized && data?.content) {
-        setScore(prev => prev ? { ...prev, total: data.newScore } : null);
+        // Reload full score from database to ensure consistency
+        await fetchExistingData();
         
         toast({
           title: 'Conteúdo otimizado',
@@ -269,7 +298,7 @@ export function useContentScore(
     } finally {
       setOptimizing(false);
     }
-  }, [articleId, content, title, keyword, blogId]);
+  }, [articleId, content, title, keyword, blogId, fetchExistingData]);
 
   // Boost score to target
   const boostScore = useCallback(async (targetScore = 80): Promise<string | null> => {
@@ -292,7 +321,8 @@ export function useContentScore(
       if (error) throw error;
 
       if (data?.optimized && data?.content) {
-        setScore(prev => prev ? { ...prev, total: data.newScore } : null);
+        // Reload full score from database to ensure consistency
+        await fetchExistingData();
         
         toast({
           title: 'Score aumentado!',
@@ -319,7 +349,7 @@ export function useContentScore(
     } finally {
       setOptimizing(false);
     }
-  }, [articleId, content, title, keyword, blogId]);
+  }, [articleId, content, title, keyword, blogId, fetchExistingData]);
 
   // Refresh all data
   const refresh = useCallback(async () => {
