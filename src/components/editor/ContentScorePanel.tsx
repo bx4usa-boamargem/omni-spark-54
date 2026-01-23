@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useContentScore } from '@/hooks/useContentScore';
 import { useContentOptimizer } from '@/hooks/useContentOptimizer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,8 @@ import {
   Loader2,
   Info,
   Shield,
-  Lock
+  Lock,
+  Users
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -27,6 +28,7 @@ import { RecommendationsPanel } from './RecommendationsPanel';
 import { AIActionsPanel } from './AIActionsPanel';
 import { OptimizeTo100Dialog } from './OptimizeTo100Dialog';
 import { ScoreHistoryPanel } from './ScoreHistoryPanel';
+import { CompetitorAdjustModal, type Competitor } from './CompetitorAdjustModal';
 
 interface ContentScorePanelProps {
   articleId?: string;
@@ -48,6 +50,9 @@ export function ContentScorePanel({
   blogId,
   onContentUpdate
 }: ContentScorePanelProps) {
+  // V3.0: Competitor Adjust Modal state
+  const [showCompetitorModal, setShowCompetitorModal] = useState(false);
+  
   // Optimize to 100 dialog
   const [showOptimizeDialog, setShowOptimizeDialog] = useState(false);
   
@@ -67,8 +72,18 @@ export function ContentScorePanel({
     analyzeSERP,
     calculateScore,
     optimizeForSERP,
-    boostScore
+    boostScore,
+    reprocessWithCustomCompetitors
   } = useContentScore(articleId, content, title, keyword, blogId);
+  
+  // V3.0: Wrapped handler for button onClick
+  const handleAnalyzeSERP = useCallback(() => {
+    analyzeSERP(false);
+  }, [analyzeSERP]);
+  
+  const handleForceRefresh = useCallback(() => {
+    analyzeSERP(true);
+  }, [analyzeSERP]);
 
   // Content optimizer hook
   const optimizer = useContentOptimizer({
@@ -260,7 +275,7 @@ export function ContentScorePanel({
                   <Button
                     variant="outline"
                     className="w-full gap-2"
-                    onClick={analyzeSERP}
+                    onClick={handleAnalyzeSERP}
                     disabled={analyzing}
                   >
                     {analyzing ? (
@@ -271,13 +286,26 @@ export function ContentScorePanel({
                     {analyzing ? 'Analisando SERP...' : 'Analisar Concorrência'}
                   </Button>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Selecione os concorrentes para análise
+                    Detecta automaticamente os Top 10 concorrentes reais
                   </p>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-2 rounded-md">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>SERP analisada • {Math.round(serpMatrix.averages.avgWords)} palavras médias</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-2 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>SERP analisada • {Math.round(serpMatrix.averages.avgWords)} palavras médias</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-800/30"
+                      onClick={() => setShowCompetitorModal(true)}
+                    >
+                      <Users className="h-3 w-3 mr-1" />
+                      Ajustar
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -323,7 +351,7 @@ export function ContentScorePanel({
 
               {/* AI Actions Panel */}
               <AIActionsPanel
-                onAnalyze={analyzeSERP}
+                onAnalyze={handleForceRefresh}
                 onOptimize={handleOptimize}
                 onBoost={handleBoost}
                 onRunTo100={handleRunTo100}
@@ -414,6 +442,24 @@ export function ContentScorePanel({
         isRunning={optimizer.isRunning}
         onCancel={optimizer.cancelOptimization}
         scoreHistory={optimizer.scoreHistory}
+      />
+
+      {/* V3.0: Competitor Adjust Modal */}
+      <CompetitorAdjustModal
+        open={showCompetitorModal}
+        onClose={() => setShowCompetitorModal(false)}
+        competitors={((serpMatrix as any)?.competitors || []).map((c: any, i: number) => ({
+          url: c.url,
+          title: c.title || '',
+          position: c.position || i + 1,
+          isSelected: true,
+          wordCount: c.metrics?.wordCount,
+          h2Count: c.metrics?.h2Count
+        }))}
+        onSave={reprocessWithCustomCompetitors}
+        keyword={keyword}
+        territory={serpMatrix?.territory}
+        isLoading={analyzing}
       />
     </TooltipProvider>
   );

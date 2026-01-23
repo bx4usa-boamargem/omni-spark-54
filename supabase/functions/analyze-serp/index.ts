@@ -1,12 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════
-// ANALYZE-SERP: Análise de Concorrência em Tempo Real (SERP)
-// V2.0: Deterministic Engine com Firecrawl + Perplexity
+// ANALYZE-SERP: Motor Determinístico de Mercado Local
+// V3.0: Filtro Inteligente de Concorrentes + URLs Personalizados
 // 
 // ARQUITETURA DETERMINÍSTICA:
-// - Firecrawl para scraping real das páginas
+// - Firecrawl para scraping real das páginas (OBRIGATÓRIO)
 // - Perplexity para descoberta de URLs
+// - Filtro automático de diretórios/agregadores
+// - Suporte a URLs personalizados pelo usuário
 // - Perfil de Nicho dinâmico via banco de dados
-// - Filtro de termos por nicho para evitar contaminação
 // ═══════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -24,6 +25,11 @@ import {
 import { getNicheProfile, filterTermsByProfile, NicheProfile } from "../_shared/nicheProfile.ts";
 import { filterSerpTermsForNiche, logBlockedAttempt } from "../_shared/nicheGuard.ts";
 import { generateSerpHashAsync } from "../_shared/contentHashing.ts";
+import { 
+  filterRealCompetitors, 
+  isBlockedCompetitor, 
+  analyzeFilterResults 
+} from "../_shared/competitorFilter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,7 +42,8 @@ interface AnalyzeSERPRequest {
   blogId: string;
   forceRefresh?: boolean;
   articleId?: string;
-  useFirecrawl?: boolean;  // V2.0: Enable real scraping
+  useFirecrawl?: boolean;  // V2.0: Enable real scraping (default: true)
+  customCompetitorUrls?: string[];  // V3.0: User-provided competitor URLs
 }
 
 interface ScrapedCompetitor {
@@ -396,7 +403,8 @@ serve(async (req) => {
       blogId, 
       forceRefresh = false, 
       articleId,
-      useFirecrawl = true  // V2.0: Default to using Firecrawl
+      useFirecrawl = true,  // V2.0: Default to using Firecrawl
+      customCompetitorUrls  // V3.0: User-provided competitor URLs
     } = await req.json() as AnalyzeSERPRequest;
 
     if (!keyword || !blogId) {
@@ -406,15 +414,16 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[ANALYZE-SERP] V2.0 Starting for keyword: "${keyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl}`);
+    const hasCustomUrls = customCompetitorUrls && customCompetitorUrls.length > 0;
+    console.log(`[ANALYZE-SERP] V3.0 Starting for keyword: "${keyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check cache first (unless forceRefresh)
-    if (!forceRefresh) {
+    // V3.0: Skip cache if custom URLs provided
+    if (!forceRefresh && !hasCustomUrls) {
       const { data: cached } = await supabase
         .from("serp_analysis_cache")
         .select("*")
@@ -424,18 +433,28 @@ serve(async (req) => {
         .gt("expires_at", new Date().toISOString())
         .single();
 
+      // V3.0: Invalidate cache if it doesn't have real scrape data
       if (cached) {
-        console.log(`[ANALYZE-SERP] Returning cached analysis from ${cached.analyzed_at}`);
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            matrix: cached.matrix,
-            cached: true,
-            analyzedAt: cached.analyzed_at,
-            serpHash: cached.serp_hash
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        const hasRealData = cached.serp_hash && 
+                           cached.scrape_method !== 'perplexity' &&
+                           cached.keyword_frequency_map &&
+                           Object.keys(cached.keyword_frequency_map || {}).length > 0;
+        
+        if (hasRealData) {
+          console.log(`[ANALYZE-SERP] Returning cached analysis from ${cached.analyzed_at}`);
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              matrix: cached.matrix,
+              cached: true,
+              analyzedAt: cached.analyzed_at,
+              serpHash: cached.serp_hash
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          console.log(`[ANALYZE-SERP] Cache invalid (no real data) - forcing refresh`);
+        }
       }
     }
 
@@ -457,17 +476,88 @@ serve(async (req) => {
     let topTitles: string[] = [];
     const contentGaps: string[] = [];
     let keywordFrequencyMap: Record<string, KeywordFrequency> = {};
-    let scrapeMethod: 'perplexity' | 'firecrawl' | 'hybrid' = 'perplexity';
+    let scrapeMethod: 'perplexity' | 'firecrawl' | 'hybrid' | 'custom' = 'perplexity';
+    let filterStats = { originalCount: 0, filteredCount: 0, blockedUrls: [] as string[] };
 
-    // STEP 1: Discover URLs and initial data with Perplexity
-    if (PERPLEXITY_API_KEY) {
+    // ═══════════════════════════════════════════════════════════════════
+    // V3.0: CUSTOM URLS MODE - User provided specific competitors
+    // ═══════════════════════════════════════════════════════════════════
+    if (hasCustomUrls && FIRECRAWL_API_KEY) {
+      console.log(`[ANALYZE-SERP] Using ${customCompetitorUrls.length} custom competitor URLs`);
+      scrapeMethod = 'custom';
+      
+      const scrapedCompetitors: ScrapedCompetitor[] = [];
+      
+      for (let i = 0; i < customCompetitorUrls.length && i < 10; i++) {
+        const url = customCompetitorUrls[i];
+        
+        // Skip blocked URLs even in custom mode
+        const blockCheck = isBlockedCompetitor(url);
+        if (blockCheck.blocked) {
+          console.log(`[ANALYZE-SERP] Skipping blocked custom URL: ${url} (${blockCheck.reason})`);
+          filterStats.blockedUrls.push(url);
+          continue;
+        }
+        
+        const scraped = await scrapeWithFirecrawl(url, FIRECRAWL_API_KEY);
+        if (scraped) {
+          scrapedCompetitors.push(scraped);
+        }
+      }
+      
+      // Convert scraped to SERPCompetitor format
+      competitors = scrapedCompetitors.map((s, i) => ({
+        url: s.url,
+        title: s.title,
+        metaDescription: s.metaDescription,
+        position: i + 1,
+        metrics: {
+          wordCount: s.wordCount,
+          h2Count: s.h2s.length,
+          h3Count: s.h3s.length,
+          paragraphCount: 0,
+          imageCount: s.imageCount,
+          listCount: s.listCount,
+          hasSchema: s.hasSchema,
+          hasFAQ: s.hasFAQ
+        },
+        semanticTerms: Object.keys(s.termFrequency).slice(0, 10)
+      }));
+      
+      topTitles = competitors.slice(0, 5).map(c => c.title);
+      
+      // Build frequency map from custom scraped data
+      keywordFrequencyMap = buildKeywordFrequencyMap(scrapedCompetitors, []);
+      
+      // Filter to terms appearing in 2+ competitors
+      commonTerms = Object.entries(keywordFrequencyMap)
+        .filter(([_, freq]) => freq.occurrences >= 2)
+        .sort((a, b) => b[1].occurrences - a[1].occurrences)
+        .map(([term, _]) => term)
+        .slice(0, 30);
+      
+      console.log(`[ANALYZE-SERP] Custom mode: scraped ${scrapedCompetitors.length} pages, ${commonTerms.length} terms`);
+    }
+    // ═══════════════════════════════════════════════════════════════════
+    // STANDARD MODE: Perplexity discovery + Firecrawl scraping
+    // ═══════════════════════════════════════════════════════════════════
+    else if (PERPLEXITY_API_KEY) {
       console.log("[ANALYZE-SERP] Step 1: Discovering URLs with Perplexity");
       const perplexityResult = await discoverTopURLsWithPerplexity(keyword, territory || null, PERPLEXITY_API_KEY);
       competitors = perplexityResult.competitors;
       
+      // V3.0: Filter out directories and aggregators
+      filterStats.originalCount = competitors.length;
+      const filterResult = filterRealCompetitors(competitors);
+      competitors = filterResult.filtered;
+      filterStats.filteredCount = competitors.length;
+      filterStats.blockedUrls = filterResult.blocked.map(b => b.item.url);
+      
+      const analysisResult = analyzeFilterResults(filterStats.originalCount, filterStats.filteredCount);
+      console.log(`[ANALYZE-SERP] Filter: ${analysisResult.message} (quality: ${analysisResult.quality})`);
+      
       // Extract from perplexity response
-      const perplexityData = perplexityResult.competitors;
-      topTitles = perplexityData.slice(0, 5).map(c => c.title);
+      topTitles = competitors.slice(0, 5).map(c => c.title);
     }
 
     // STEP 2: If Firecrawl is available, do real scraping for enhanced data

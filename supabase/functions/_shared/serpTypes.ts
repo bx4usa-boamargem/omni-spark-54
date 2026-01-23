@@ -22,7 +22,7 @@ export interface SERPCompetitor {
     hasFAQ: boolean;
   };
   semanticTerms: string[];
-  titlePatterns: string[];
+  titlePatterns?: string[];  // V3.0: Made optional
 }
 
 /**
@@ -92,7 +92,7 @@ export interface SERPMatrix {
   metaPatterns: MetaPatterns;
   keywordPresence: KeywordPresence;
   serpHash: string;          // Hash to detect SERP changes
-  scrapeMethod: 'perplexity' | 'firecrawl' | 'hybrid';
+  scrapeMethod: 'perplexity' | 'firecrawl' | 'hybrid' | 'custom';  // V3.0: Added 'custom'
 }
 
 /**

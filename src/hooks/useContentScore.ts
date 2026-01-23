@@ -113,11 +113,12 @@ interface UseContentScoreReturn {
   serpAnalysisId: string | null;
   
   // Actions
-  analyzeSERP: () => Promise<void>;
+  analyzeSERP: (forceRefresh?: boolean) => Promise<void>;
   calculateScore: (userInitiated?: boolean) => Promise<void>;
   optimizeForSERP: () => Promise<string | null>;
   boostScore: (targetScore?: number) => Promise<string | null>;
   refresh: () => Promise<void>;
+  reprocessWithCustomCompetitors: (selectedUrls: string[], customUrls: string[]) => Promise<void>;
 }
 
 export function useContentScore(
@@ -249,8 +250,8 @@ export function useContentScore(
     };
   }, [articleId, fetchExistingData]);
 
-  // Analyze SERP for keyword
-  const analyzeSERP = useCallback(async () => {
+  // Analyze SERP for keyword - V3.0: Always use Firecrawl + forceRefresh option
+  const analyzeSERP = useCallback(async (forceRefresh = false) => {
     if (!keyword || !blogId) {
       toast({
         title: 'Erro',
@@ -263,7 +264,12 @@ export function useContentScore(
     setAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-serp', {
-        body: { keyword, blogId, forceRefresh: false }
+        body: { 
+          keyword, 
+          blogId, 
+          forceRefresh,         // V3.0: Allow forcing refresh
+          useFirecrawl: true    // V3.0: Always use Firecrawl for real scraping
+        }
       });
 
       if (error) throw error;
@@ -272,11 +278,14 @@ export function useContentScore(
         setSerpMatrix(data.matrix);
         setSerpAnalysisId(data.serpAnalysisId);
         
+        const competitorsCount = data.matrix.competitors?.length || 0;
+        const scrapeMethod = data.matrix.scrapeMethod || 'unknown';
+        
         toast({
           title: 'Análise SERP concluída',
           description: data.cached 
             ? 'Usando análise em cache' 
-            : `${data.matrix.competitors?.length || 0} concorrentes analisados`
+            : `${competitorsCount} concorrentes analisados (${scrapeMethod})`
         });
       }
     } catch (error) {
@@ -448,9 +457,57 @@ export function useContentScore(
     }
   }, [articleId, content, title, keyword, blogId, fetchExistingData]);
 
+  // V3.0: Reprocess SERP with custom competitor URLs
+  const reprocessWithCustomCompetitors = useCallback(async (
+    selectedUrls: string[],
+    customUrls: string[]
+  ) => {
+    if (!keyword || !blogId) return;
+
+    setAnalyzing(true);
+    try {
+      const allUrls = [...selectedUrls, ...customUrls];
+      
+      const { data, error } = await supabase.functions.invoke('analyze-serp', {
+        body: {
+          keyword,
+          territory: serpMatrix?.territory || null,
+          blogId,
+          forceRefresh: true,
+          useFirecrawl: true,
+          customCompetitorUrls: allUrls  // V3.0: Custom URLs
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.matrix) {
+        setSerpMatrix(data.matrix);
+        setSerpAnalysisId(data.serpAnalysisId);
+        
+        // Recalculate score with new SERP data
+        await calculateScore(true);
+        
+        toast({
+          title: 'Concorrentes atualizados!',
+          description: `${data.matrix.competitors?.length || 0} concorrentes analisados e score recalculado`
+        });
+      }
+    } catch (error) {
+      console.error('Custom competitor reprocess error:', error);
+      toast({
+        title: 'Erro ao reprocessar',
+        description: 'Não foi possível analisar os concorrentes selecionados',
+        variant: 'destructive'
+      });
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [keyword, blogId, serpMatrix?.territory, calculateScore]);
+
   // Refresh all data
   const refresh = useCallback(async () => {
-    await analyzeSERP();
+    await analyzeSERP(true);  // V3.0: Force refresh on manual refresh
     await calculateScore(true); // User-initiated refresh
   }, [analyzeSERP, calculateScore]);
 
@@ -474,6 +531,7 @@ export function useContentScore(
     calculateScore,
     optimizeForSERP,
     boostScore,
-    refresh
+    refresh,
+    reprocessWithCustomCompetitors  // V3.0: New function
   };
 }
