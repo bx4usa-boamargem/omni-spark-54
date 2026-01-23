@@ -19,7 +19,7 @@ import { ContentScorePanel } from '@/components/editor/ContentScorePanel';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { extractImageUrl, uploadImageToStorage, updateArticleImage } from '@/utils/imageUtils';
 import { ensureSingleArticle, normalizeForFingerprint } from '@/lib/articleFlowGuard';
-import { getCanonicalArticleUrl } from '@/utils/blogUrl';
+import { getCanonicalArticleUrl, getInternalArticleUrl } from '@/utils/blogUrl';
 import { 
   ArrowLeft, 
   Save, 

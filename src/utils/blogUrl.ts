@@ -18,6 +18,26 @@ export interface BlogWithDomain {
 }
 
 /**
+ * Get internal fallback URL for an article (always works, uses /blog/:slug/:article path)
+ */
+export function getInternalArticleUrl(blogSlug: string, articleSlug: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/blog/${blogSlug}/${articleSlug}`;
+  }
+  return `/blog/${blogSlug}/${articleSlug}`;
+}
+
+/**
+ * Get internal fallback URL for a blog homepage
+ */
+export function getInternalBlogUrl(blogSlug: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/blog/${blogSlug}`;
+  }
+  return `/blog/${blogSlug}`;
+}
+
+/**
  * Check if we're in a production Omniseen environment
  */
 export function isProductionEnvironment(): boolean {
