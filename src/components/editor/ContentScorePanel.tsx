@@ -445,7 +445,7 @@ export function ContentScorePanel({
         scoreHistory={optimizer.scoreHistory}
       />
 
-      {/* V3.1: Competitor Adjust Modal com Contexto da Subconta */}
+      {/* V3.2: Competitor Adjust Modal com Contexto da Subconta e Keyword Efetiva */}
       <CompetitorAdjustModal
         open={showCompetitorModal}
         onClose={() => setShowCompetitorModal(false)}
@@ -463,6 +463,7 @@ export function ContentScorePanel({
         isLoading={analyzing}
         businessName={businessContext?.companyName}
         niche={businessContext?.niche}
+        effectiveKeyword={serpMatrix?.effectiveKeyword}
       />
     </TooltipProvider>
   );

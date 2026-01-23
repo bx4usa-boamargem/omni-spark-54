@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { 
   SERPMatrix, 
   SERPCompetitor, 
@@ -19,6 +19,7 @@ import {
   MarketRanges,
   MetaPatterns,
   KeywordPresence,
+  SubaccountContext,
   calculateMarketRanges,
   calculateKeywordPresence 
 } from "../_shared/serpTypes.ts";
@@ -31,6 +32,147 @@ import {
   analyzeFilterResults,
   isValidSearchKeyword 
 } from "../_shared/competitorFilter.ts";
+
+// ═══════════════════════════════════════════════════════════════════
+// V3.2: SUBACCOUNT CONTEXT EXTRACTION
+// REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente da subconta."
+// ═══════════════════════════════════════════════════════════════════
+
+async function getSubaccountContext(
+  supabase: SupabaseClient,
+  blogId: string
+): Promise<SubaccountContext | null> {
+  try {
+    // Buscar business_profile (fonte primária do contexto)
+    const { data: bp, error } = await supabase
+      .from('business_profile')
+      .select('company_name, niche, city, services')
+      .eq('blog_id', blogId)
+      .single();
+
+    if (error || !bp) {
+      console.log(`[SUBACCOUNT] No business_profile found for blog ${blogId}`);
+      return null;
+    }
+
+    // Parsear serviços
+    let servicesList: string[] = [];
+    if (bp.services) {
+      if (typeof bp.services === 'string') {
+        servicesList = bp.services.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      } else if (Array.isArray(bp.services)) {
+        servicesList = bp.services.filter((s: string) => typeof s === 'string' && s.length > 0);
+      }
+    }
+
+    // Extrair termo-chave do nicho do primeiro serviço
+    const primaryService = servicesList[0] || bp.niche || 'serviços';
+    
+    const context: SubaccountContext = {
+      companyName: bp.company_name || 'Empresa',
+      primaryService,
+      secondaryServices: servicesList.slice(1, 4),
+      city: bp.city || '',
+      nicheSlug: bp.niche || 'servicos'
+    };
+
+    console.log(`[SUBACCOUNT] Context: ${context.companyName} | Serviço: ${context.primaryService} | Cidade: ${context.city}`);
+    return context;
+  } catch (err) {
+    console.error('[SUBACCOUNT] Error fetching context:', err);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// V3.2: KEYWORD VALIDATION AND FALLBACK
+// ═══════════════════════════════════════════════════════════════════
+
+interface KeywordValidationResult {
+  query: string;
+  source: 'input' | 'service' | 'niche';
+  wasInvalid: boolean;
+  reason?: string;
+}
+
+function buildSearchQuery(
+  inputKeyword: string,
+  context: SubaccountContext | null,
+  territory: string | null
+): KeywordValidationResult {
+  
+  // Se não temos contexto, usar input como está
+  if (!context) {
+    const city = territory || '';
+    const query = city && !inputKeyword.toLowerCase().includes(city.toLowerCase())
+      ? `${inputKeyword} ${city}`
+      : inputKeyword;
+    return { query, source: 'input', wasInvalid: false };
+  }
+
+  const city = territory || context.city;
+  
+  // Padrões de keyword INVÁLIDA (genérica/placeholder)
+  const INVALID_PATTERNS = [
+    /^artigo\s+em\s+/i,           // "Artigo em Teresina..."
+    /^artigo\s+sobre\s+/i,        // "Artigo sobre..."
+    /^post\s+sobre\s+/i,          // "Post sobre..."
+    /^conteúdo\s+sobre\s+/i,      // "Conteúdo sobre..."
+    /^artigo:\s*/i,               // "Artigo:..."
+    /^post:\s*/i,                 // "Post:..."
+    /^\d+\s+/,                    // Começa com número "10 dicas..."
+    /^como\s+criar\s+/i,          // "Como criar..." (muito genérico)
+    /^guia\s+completo\s*$/i,      // "Guia completo" sozinho
+    /^tudo\s+sobre\s+/i,          // "Tudo sobre..."
+  ];
+  
+  // Termos que indicam que a keyword é sobre a PLATAFORMA, não o cliente
+  const PLATFORM_TERMS = [
+    'omniseen', 'lovable', 'saas', 'plataforma', 'software', 
+    'marketing digital', 'seo', 'agência', 'consultoria seo',
+    'geração de conteúdo', 'ia para', 'inteligência artificial'
+  ];
+  
+  const keywordLower = inputKeyword.toLowerCase().trim();
+  
+  // Verificar se é keyword inválida por padrão
+  const matchesInvalidPattern = INVALID_PATTERNS.some(p => p.test(keywordLower));
+  
+  // Verificar se contém termos da plataforma
+  const containsPlatformTerm = PLATFORM_TERMS.some(term => keywordLower.includes(term));
+  
+  // Verificar se é muito curta ou genérica
+  const isTooShort = keywordLower.length < 5;
+  const isTooGeneric = keywordLower.split(' ').length <= 1 && keywordLower.length < 10;
+  
+  const isInvalid = matchesInvalidPattern || containsPlatformTerm || isTooShort || isTooGeneric;
+  
+  if (isInvalid) {
+    // Construir keyword usando serviço primário + cidade
+    const query = city 
+      ? `${context.primaryService} em ${city}`
+      : context.primaryService;
+    
+    let reason = 'Keyword genérica ou placeholder detectada';
+    if (containsPlatformTerm) reason = 'Keyword contém termos da plataforma, não do cliente';
+    if (matchesInvalidPattern) reason = 'Keyword é um título genérico, não uma busca local';
+    
+    return { 
+      query, 
+      source: 'service', 
+      wasInvalid: true,
+      reason
+    };
+  }
+  
+  // Keyword parece válida - adicionar cidade se não tiver
+  const hasCity = city && keywordLower.includes(city.toLowerCase());
+  const query = hasCity 
+    ? inputKeyword 
+    : (city ? `${inputKeyword} ${city}` : inputKeyword);
+  
+  return { query, source: 'input', wasInvalid: false };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -415,38 +557,70 @@ serve(async (req) => {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // V3.1: GOVERNANÇA DE SUBCONTA LOCAL
-    // REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente da subconta."
-    // ═══════════════════════════════════════════════════════════════════
-    const keywordValidation = isValidSearchKeyword(keyword);
-    if (!keywordValidation.valid) {
-      console.error(`[ANALYZE-SERP] ❌ Keyword inválida: ${keywordValidation.reason}`);
-      return new Response(
-        JSON.stringify({ 
-          error: keywordValidation.reason,
-          invalidKeyword: true,
-          suggestion: "Use termos do nicho e cidade do cliente, não termos da plataforma."
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const hasCustomUrls = customCompetitorUrls && customCompetitorUrls.length > 0;
-    console.log(`[ANALYZE-SERP] V3.1 Starting for keyword: "${keyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
-
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ═══════════════════════════════════════════════════════════════════
+    // V3.2: GOVERNANÇA DE SUBCONTA LOCAL (ENHANCED)
+    // REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente da subconta."
+    // ═══════════════════════════════════════════════════════════════════
+    
+    // 1. Buscar contexto completo da subconta
+    const subaccountContext = await getSubaccountContext(supabase, blogId);
+    
+    console.log(`[ANALYZE-SERP] 🎯 Entidade raiz: ${subaccountContext?.companyName || 'N/A'}`);
+    console.log(`[ANALYZE-SERP] 📍 Nicho: ${subaccountContext?.nicheSlug || 'N/A'}`);
+    console.log(`[ANALYZE-SERP] 🔧 Serviço primário: ${subaccountContext?.primaryService || 'N/A'}`);
+    console.log(`[ANALYZE-SERP] 🌆 Cidade: ${subaccountContext?.city || territory || 'N/A'}`);
+
+    // 2. Validar e corrigir keyword se necessário
+    let searchConfig = buildSearchQuery(keyword, subaccountContext, territory || null);
+    let effectiveKeyword = searchConfig.query;
+    
+    if (searchConfig.wasInvalid) {
+      console.log(`[ANALYZE-SERP] ⚠️ Keyword original inválida: "${keyword}"`);
+      console.log(`[ANALYZE-SERP] 📝 Motivo: ${searchConfig.reason}`);
+      console.log(`[ANALYZE-SERP] ✅ Usando keyword do nicho: "${effectiveKeyword}"`);
+    } else if (searchConfig.source === 'input' && effectiveKeyword !== keyword) {
+      console.log(`[ANALYZE-SERP] 📍 Keyword enriquecida com cidade: "${effectiveKeyword}"`);
+    }
+
+    // 3. Validação final contra termos da plataforma
+    const keywordValidation = isValidSearchKeyword(effectiveKeyword);
+    if (!keywordValidation.valid) {
+      // Se mesmo após correção ainda for inválida, tentar serviço primário puro
+      if (subaccountContext?.primaryService) {
+        effectiveKeyword = subaccountContext.city 
+          ? `${subaccountContext.primaryService} em ${subaccountContext.city}`
+          : subaccountContext.primaryService;
+        console.log(`[ANALYZE-SERP] 🔄 Fallback final para serviço: "${effectiveKeyword}"`);
+        searchConfig = { query: effectiveKeyword, source: 'niche', wasInvalid: true, reason: 'Fallback para serviço primário' };
+      } else {
+        console.error(`[ANALYZE-SERP] ❌ Keyword inválida e sem contexto de fallback: ${keywordValidation.reason}`);
+        return new Response(
+          JSON.stringify({ 
+            error: keywordValidation.reason,
+            invalidKeyword: true,
+            suggestion: "Configure o Business Profile com serviços e cidade do cliente."
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    const hasCustomUrls = customCompetitorUrls && customCompetitorUrls.length > 0;
+    console.log(`[ANALYZE-SERP] V3.2 Starting for keyword: "${effectiveKeyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
+
     // V3.0: Skip cache if custom URLs provided
     if (!forceRefresh && !hasCustomUrls) {
+      // Cache lookup uses effectiveKeyword for consistency
       const { data: cached } = await supabase
         .from("serp_analysis_cache")
         .select("*")
         .eq("blog_id", blogId)
-        .eq("keyword", keyword)
+        .eq("keyword", effectiveKeyword)
         .eq("territory", territory || null)
         .gt("expires_at", new Date().toISOString())
         .single();
@@ -466,7 +640,9 @@ serve(async (req) => {
               matrix: cached.matrix,
               cached: true,
               analyzedAt: cached.analyzed_at,
-              serpHash: cached.serp_hash
+              serpHash: cached.serp_hash,
+              effectiveKeyword,
+              subaccountContext
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -560,8 +736,8 @@ serve(async (req) => {
     // STANDARD MODE: Perplexity discovery + Firecrawl scraping
     // ═══════════════════════════════════════════════════════════════════
     else if (PERPLEXITY_API_KEY) {
-      console.log("[ANALYZE-SERP] Step 1: Discovering URLs with Perplexity");
-      const perplexityResult = await discoverTopURLsWithPerplexity(keyword, territory || null, PERPLEXITY_API_KEY);
+      console.log(`[ANALYZE-SERP] Step 1: Discovering URLs with Perplexity for: "${effectiveKeyword}"`);
+      const perplexityResult = await discoverTopURLsWithPerplexity(effectiveKeyword, territory || null, PERPLEXITY_API_KEY);
       competitors = perplexityResult.competitors;
       
       // V3.0: Filter out directories and aggregators
@@ -661,13 +837,13 @@ serve(async (req) => {
 
     // Calculate deterministic fields
     const ranges: MarketRanges = calculateMarketRanges(competitors);
-    const keywordPresence: KeywordPresence = calculateKeywordPresence(competitors, keyword);
+    const keywordPresence: KeywordPresence = calculateKeywordPresence(competitors, effectiveKeyword);
     const metaPatterns: MetaPatterns = buildMetaPatterns(competitors);
     const serpHash = await generateSerpHashAsync(competitors.map(c => c.url));
 
-    // Build SERPMatrix V2.0
+    // Build SERPMatrix V3.2
     const matrix: SERPMatrix = {
-      keyword,
+      keyword: effectiveKeyword,  // V3.2: Use effective keyword, not original
       territory: territory || null,
       analyzedAt: new Date().toISOString(),
       competitors,
@@ -688,17 +864,20 @@ serve(async (req) => {
       metaPatterns,
       keywordPresence,
       serpHash,
-      scrapeMethod
+      scrapeMethod,
+      // V3.2 fields - Local governance
+      effectiveKeyword,
+      subaccountContext: subaccountContext || undefined
     };
 
-    console.log(`[ANALYZE-SERP] Matrix built: ${competitors.length} competitors, avg ${avgWords} words, method: ${scrapeMethod}`);
+    console.log(`[ANALYZE-SERP] Matrix built: ${competitors.length} competitors, avg ${avgWords} words, method: ${scrapeMethod}, keyword: "${effectiveKeyword}"`);
 
-    // Save to cache
+    // Save to cache - use effectiveKeyword for cache key
     const { error: cacheError } = await supabase
       .from("serp_analysis_cache")
       .upsert({
         blog_id: blogId,
-        keyword,
+        keyword: effectiveKeyword,  // V3.2: Cache with effective keyword
         territory: territory || null,
         matrix,
         competitors_count: competitors.length,
@@ -742,13 +921,16 @@ serve(async (req) => {
         phase: "serp_analysis",
         model: PERPLEXITY_API_KEY ? "perplexity/sonar-pro" : "google/gemini-2.5-flash",
         source: "PromptPy",
-        keyword,
+        keyword: effectiveKeyword,  // V3.2: Log effective keyword
+        original_keyword: keyword,  // V3.2: Keep original for debugging
+        keyword_was_corrected: searchConfig.wasInvalid,
         territory,
         competitors_found: competitors.length,
         duration_ms: durationMs,
         article_id: articleId || null,
         scrape_method: scrapeMethod,
-        firecrawl_used: useFirecrawl && !!FIRECRAWL_API_KEY
+        firecrawl_used: useFirecrawl && !!FIRECRAWL_API_KEY,
+        subaccount: subaccountContext?.companyName || null
       }
     });
 
@@ -761,7 +943,10 @@ serve(async (req) => {
         cached: false,
         analyzedAt: matrix.analyzedAt,
         serpHash,
-        durationMs
+        durationMs,
+        effectiveKeyword,
+        keywordWasCorrected: searchConfig.wasInvalid,
+        subaccountContext
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

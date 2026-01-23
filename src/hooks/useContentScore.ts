@@ -75,6 +75,14 @@ export interface SERPMatrix {
   commonTerms: string[];
   topTitles: string[];
   contentGaps: string[];
+  // V3.2: Local governance fields
+  effectiveKeyword?: string;
+  subaccountContext?: {
+    companyName: string;
+    primaryService: string;
+    city: string;
+    nicheSlug: string;
+  };
 }
 
 interface NicheInfo {
@@ -153,23 +161,39 @@ export function useContentScore(
   // V3.1: Contexto da subconta local (entidade raiz)
   const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
 
-  // V3.1: Fetch business context (company, niche, city)
+  // V3.2: Fetch business context (company, niche from services, city)
   useEffect(() => {
     if (!blogId) return;
     
     const fetchBusinessContext = async () => {
       try {
-        // First try business_profile
+        // First try business_profile - include services for precise niche detection
         const { data: bp } = await supabase
           .from('business_profile')
-          .select('company_name, niche, city')
+          .select('company_name, niche, city, services')
           .eq('blog_id', blogId)
           .single();
         
         if (bp) {
+          // V3.2: Extract first service as primary niche (more precise than generic niche)
+          let primaryNiche = bp.niche || 'Geral';
+          
+          if (bp.services) {
+            let servicesList: string[] = [];
+            if (typeof bp.services === 'string') {
+              servicesList = (bp.services as string).split(',').map(s => s.trim()).filter(s => s.length > 0);
+            } else if (Array.isArray(bp.services)) {
+              servicesList = (bp.services as string[]).filter(s => typeof s === 'string' && s.length > 0);
+            }
+            
+            if (servicesList.length > 0) {
+              primaryNiche = servicesList[0];  // Use first service as primary niche
+            }
+          }
+          
           setBusinessContext({
             companyName: bp.company_name || 'Sua Empresa',
-            niche: bp.niche || 'Geral',
+            niche: primaryNiche,
             city: bp.city || ''
           });
           return;

@@ -59,6 +59,8 @@ interface CompetitorAdjustModalProps {
   // V3.1: Contexto da subconta local (entidade raiz)
   businessName?: string;
   niche?: string;
+  // V3.2: Keyword efetiva após correção
+  effectiveKeyword?: string;
 }
 
 // Blocked domain patterns (client-side validation)
@@ -109,7 +111,8 @@ export function CompetitorAdjustModal({
   territory,
   isLoading = false,
   businessName,
-  niche
+  niche,
+  effectiveKeyword
 }: CompetitorAdjustModalProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customUrl, setCustomUrl] = useState('');
@@ -232,9 +235,18 @@ export function CompetitorAdjustModal({
                 </div>
               </div>
               
-              <span className="block text-xs text-primary font-medium">
-                Busca SERP: "{keyword}"
-              </span>
+              {/* V3.2: Mostrar keyword efetiva e se foi corrigida */}
+              <div className="space-y-1">
+                <span className="block text-xs text-primary font-medium">
+                  Busca SERP: "{effectiveKeyword || keyword}"
+                </span>
+                {effectiveKeyword && effectiveKeyword !== keyword && (
+                  <span className="block text-xs text-amber-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Keyword corrigida (original: "{keyword}")
+                  </span>
+                )}
+              </div>
             </div>
           </DialogDescription>
         </DialogHeader>
