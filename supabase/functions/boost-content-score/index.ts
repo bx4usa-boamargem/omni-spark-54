@@ -98,10 +98,10 @@ serve(async (req) => {
     // Usar target do nicho se não especificado
     const effectiveTarget = targetScore || nicheProfile.targetScore;
 
-    // Fetch SERP matrix
+    // Fetch SERP matrix - try exact match first, then fuzzy match (keyword may be enriched with city)
     let serpData = await supabase
       .from("serp_analysis_cache")
-      .select("matrix, id")
+      .select("matrix, id, keyword")
       .eq("blog_id", blogId)
       .eq("keyword", keyword)
       .gt("expires_at", new Date().toISOString())
@@ -109,6 +109,25 @@ serve(async (req) => {
       .limit(1)
       .single()
       .then(res => res.data);
+
+    // If not found with exact match, try fuzzy match (keyword may have city appended by analyze-serp)
+    if (!serpData) {
+      console.log(`[BOOST-SCORE] Exact keyword match not found, trying fuzzy search...`);
+      const fuzzyResult = await supabase
+        .from("serp_analysis_cache")
+        .select("matrix, id, keyword")
+        .eq("blog_id", blogId)
+        .ilike("keyword", `${keyword}%`)
+        .gt("expires_at", new Date().toISOString())
+        .order("analyzed_at", { ascending: false })
+        .limit(1)
+        .single();
+      
+      serpData = fuzzyResult.data;
+      if (serpData) {
+        console.log(`[BOOST-SCORE] Found SERP with enriched keyword: "${serpData.keyword}"`);
+      }
+    }
 
     // Auto-trigger SERP analysis if not found or expired
     if (!serpData) {
@@ -131,17 +150,31 @@ serve(async (req) => {
           );
         }
 
-        // Refetch the newly created SERP data
+        // Refetch the newly created SERP data - use fuzzy match since analyze-serp enriches keyword with city
         const refetch = await supabase
           .from("serp_analysis_cache")
-          .select("matrix, id")
+          .select("matrix, id, keyword")
           .eq("blog_id", blogId)
-          .eq("keyword", keyword)
+          .ilike("keyword", `${keyword}%`)
           .order("analyzed_at", { ascending: false })
           .limit(1)
           .single();
           
         serpData = refetch.data;
+        
+        if (!serpData) {
+          // Last resort: get the most recent SERP for this blog
+          console.log(`[BOOST-SCORE] Fuzzy match failed, fetching most recent SERP for blog...`);
+          const latestResult = await supabase
+            .from("serp_analysis_cache")
+            .select("matrix, id, keyword")
+            .eq("blog_id", blogId)
+            .order("analyzed_at", { ascending: false })
+            .limit(1)
+            .single();
+          
+          serpData = latestResult.data;
+        }
         
         if (!serpData) {
           return new Response(
@@ -153,7 +186,7 @@ serve(async (req) => {
           );
         }
         
-        console.log(`[BOOST-SCORE] Auto-SERP analysis complete, proceeding with optimization`);
+        console.log(`[BOOST-SCORE] Auto-SERP analysis complete, using keyword: "${serpData.keyword}"`);
       } catch (serpError) {
         console.error('[BOOST-SCORE] Auto-SERP error:', serpError);
         return new Response(
