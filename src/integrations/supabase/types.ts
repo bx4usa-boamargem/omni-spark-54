@@ -3881,6 +3881,68 @@ export type Database = {
         }
         Relationships: []
       }
+      landing_pages: {
+        Row: {
+          blog_id: string
+          created_at: string
+          featured_image_url: string | null
+          generation_source: string | null
+          id: string
+          page_data: Json
+          published_at: string | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
+          slug: string
+          status: string
+          template_type: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blog_id: string
+          created_at?: string
+          featured_image_url?: string | null
+          generation_source?: string | null
+          id?: string
+          page_data?: Json
+          published_at?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
+          slug: string
+          status?: string
+          template_type?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blog_id?: string
+          created_at?: string
+          featured_image_url?: string | null
+          generation_source?: string | null
+          id?: string
+          page_data?: Json
+          published_at?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
+          slug?: string
+          status?: string
+          template_type?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_pages_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       link_click_events: {
         Row: {
           blog_id: string
