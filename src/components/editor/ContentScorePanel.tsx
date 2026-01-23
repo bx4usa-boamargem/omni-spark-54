@@ -206,173 +206,175 @@ export function ContentScorePanel({
     );
   }
 
-  // Collapsed state - just show toggle button
-  if (!isPanelVisible) {
-    return (
-      <Card className="h-full">
-        <CardContent className="flex items-center justify-center h-full p-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsPanelVisible(true)}
-            className="gap-2"
-          >
-            <BarChart3 className="h-4 w-4" />
-            <Eye className="h-4 w-4" />
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  // CSS-only toggle - NEVER unmount the main component to avoid hook order issues
   return (
     <TooltipProvider>
-      <Card className="h-full flex flex-col border-l-0 rounded-l-none">
-        {/* Header */}
-        <CardHeader className="pb-2 pt-4 px-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Pontuação de conteúdo
-              <Tooltip>
-                <TooltipTrigger>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p>Score baseado na análise dos 10 primeiros resultados do Google para sua palavra-chave.</p>
-                </TooltipContent>
-              </Tooltip>
-            </CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => calculateScore()}
-                disabled={loading}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setIsPanelVisible(false)}
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        <ScrollArea className="flex-1">
-          <CardContent className="space-y-4 px-4 pb-4">
-            {/* Score Gauge - New 3-zone design */}
-            <ContentScoreGauge 
-              score={score?.total ?? null} 
-              loading={loading}
-              goalMarker={50}
-            />
-            
-            {/* SERP Status */}
-            {!serpMatrix ? (
-              <div className="text-center">
+      {/* Main panel - visibility controlled via CSS */}
+      <div className={isPanelVisible ? "block h-full" : "hidden"}>
+        <Card className="h-full flex flex-col border-l-0 rounded-l-none">
+          {/* Header */}
+          <CardHeader className="pb-2 pt-4 px-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Pontuação de conteúdo
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>Score baseado na análise dos 10 primeiros resultados do Google para sua palavra-chave.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </CardTitle>
+              <div className="flex items-center gap-1">
                 <Button
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={analyzeSERP}
-                  disabled={analyzing}
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => calculateScore()}
+                  disabled={loading}
                 >
-                  {analyzing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                  {analyzing ? 'Analisando SERP...' : 'Analisar Concorrência'}
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Selecione os concorrentes para análise
-                </p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setIsPanelVisible(false)}
+                >
+                  <EyeOff className="h-3.5 w-3.5" />
+                </Button>
               </div>
-            ) : (
-              <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-2 rounded-md">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>SERP analisada • {Math.round(serpMatrix.averages.avgWords)} palavras médias</span>
-              </div>
-            )}
+            </div>
+          </CardHeader>
 
-            <Separator />
+          <ScrollArea className="flex-1">
+            <CardContent className="space-y-4 px-4 pb-4">
+              {/* Score Gauge - Real score from database */}
+              <ContentScoreGauge 
+                score={score?.total ?? null} 
+                loading={loading}
+                goalMarker={50}
+              />
+              
+              {/* SERP Status */}
+              {!serpMatrix ? (
+                <div className="text-center">
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={analyzeSERP}
+                    disabled={analyzing}
+                  >
+                    {analyzing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                    {analyzing ? 'Analisando SERP...' : 'Analisar Concorrência'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Selecione os concorrentes para análise
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-2 rounded-md">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>SERP analisada • {Math.round(serpMatrix.averages.avgWords)} palavras médias</span>
+                </div>
+              )}
 
-            {/* Structure Metrics Grid - New 2x2 layout with fix buttons */}
-            <StructureMetricsGrid
-              metrics={structureMetrics}
-              onFix={handleFixArea}
-              fixingArea={optimizer.fixingArea}
-              loading={loading && !score}
-            />
+              <Separator />
 
-            <Separator />
+              {/* Structure Metrics Grid */}
+              <StructureMetricsGrid
+                metrics={structureMetrics}
+                onFix={handleFixArea}
+                fixingArea={optimizer.fixingArea}
+                loading={loading && !score}
+              />
 
-            {/* Terms Tabs Panel - Fixed "Termos (0)" bug */}
-            <TermsTabsPanel
-              commonTerms={serpMatrix?.commonTerms || []}
-              topTitles={serpMatrix?.topTitles || []}
-              coveredTerms={score?.breakdown.semanticCoverage.covered || []}
-              missingTerms={score?.breakdown.semanticCoverage.missing || []}
-              coveragePercentage={score?.breakdown.semanticCoverage.percentage || 0}
-              loading={loading && !score}
-              hasAnalysis={!!serpMatrix}
-            />
+              <Separator />
 
-            <Separator />
+              {/* Terms Tabs Panel */}
+              <TermsTabsPanel
+                commonTerms={serpMatrix?.commonTerms || []}
+                topTitles={serpMatrix?.topTitles || []}
+                coveredTerms={score?.breakdown.semanticCoverage.covered || []}
+                missingTerms={score?.breakdown.semanticCoverage.missing || []}
+                coveragePercentage={score?.breakdown.semanticCoverage.percentage || 0}
+                loading={loading && !score}
+                hasAnalysis={!!serpMatrix}
+              />
 
-            {/* Recommendations Panel with auto-fix */}
-            {score && score.recommendations.length > 0 && (
-              <>
-                <RecommendationsPanel
-                  recommendations={score.recommendations}
-                  onFix={handleFixRecommendation}
-                />
-                <Separator />
-              </>
-            )}
+              <Separator />
 
-            {/* AI Actions Panel */}
-            <AIActionsPanel
-              onAnalyze={analyzeSERP}
-              onOptimize={handleOptimize}
-              onBoost={handleBoost}
-              onRunTo100={handleRunTo100}
-              analyzing={analyzing}
-              optimizing={optimizing}
-              boosting={optimizing}
-              runningTo100={optimizer.isRunning}
-              hasAnalysis={!!serpMatrix}
-            />
+              {/* Recommendations Panel */}
+              {score && score.recommendations.length > 0 && (
+                <>
+                  <RecommendationsPanel
+                    recommendations={score.recommendations}
+                    onFix={handleFixRecommendation}
+                  />
+                  <Separator />
+                </>
+              )}
 
-            {/* Quality Gate Status */}
-            {score && (
-              <div className={`text-xs p-3 rounded-md flex items-center gap-2 ${
-                score.meetsMarketStandards 
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' 
-                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-              }`}>
-                {score.meetsMarketStandards ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                    <span>Pronto para publicar</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-4 w-4 flex-shrink-0" />
-                    <span>Score mínimo: 70 para publicar</span>
-                  </>
-                )}
-              </div>
-            )}
+              {/* AI Actions Panel */}
+              <AIActionsPanel
+                onAnalyze={analyzeSERP}
+                onOptimize={handleOptimize}
+                onBoost={handleBoost}
+                onRunTo100={handleRunTo100}
+                analyzing={analyzing}
+                optimizing={optimizing}
+                boosting={optimizing}
+                runningTo100={optimizer.isRunning}
+                hasAnalysis={!!serpMatrix}
+              />
+
+              {/* Quality Gate Status */}
+              {score && (
+                <div className={`text-xs p-3 rounded-md flex items-center gap-2 ${
+                  score.meetsMarketStandards 
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' 
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  {score.meetsMarketStandards ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                      <span>Pronto para publicar</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>Score mínimo: 70 para publicar</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      </div>
+
+      {/* Collapsed toggle button - shown when panel is hidden */}
+      {!isPanelVisible && (
+        <Card className="h-full">
+          <CardContent className="flex items-center justify-center h-full p-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsPanelVisible(true)}
+              className="gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <Eye className="h-4 w-4" />
+            </Button>
           </CardContent>
-        </ScrollArea>
-      </Card>
+        </Card>
+      )}
 
       {/* Optimize to 100 Dialog */}
       <OptimizeTo100Dialog
