@@ -111,6 +111,8 @@ interface UseContentScoreReturn {
   analyzing: boolean;
   optimizing: boolean;
   serpAnalysisId: string | null;
+  // V3.1: Contexto da subconta local (entidade raiz)
+  businessContext: BusinessContext | null;
   
   // Actions
   analyzeSERP: (forceRefresh?: boolean) => Promise<void>;
@@ -119,6 +121,16 @@ interface UseContentScoreReturn {
   boostScore: (targetScore?: number) => Promise<string | null>;
   refresh: () => Promise<void>;
   reprocessWithCustomCompetitors: (selectedUrls: string[], customUrls: string[]) => Promise<void>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// V3.1: CONTEXTO DA SUBCONTA LOCAL
+// REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente."
+// ═══════════════════════════════════════════════════════════════════
+interface BusinessContext {
+  companyName: string;
+  niche: string;
+  city: string;
 }
 
 export function useContentScore(
@@ -137,6 +149,63 @@ export function useContentScore(
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  
+  // V3.1: Contexto da subconta local (entidade raiz)
+  const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
+
+  // V3.1: Fetch business context (company, niche, city)
+  useEffect(() => {
+    if (!blogId) return;
+    
+    const fetchBusinessContext = async () => {
+      try {
+        // First try business_profile
+        const { data: bp } = await supabase
+          .from('business_profile')
+          .select('company_name, niche, city')
+          .eq('blog_id', blogId)
+          .single();
+        
+        if (bp) {
+          setBusinessContext({
+            companyName: bp.company_name || 'Sua Empresa',
+            niche: bp.niche || 'Geral',
+            city: bp.city || ''
+          });
+          return;
+        }
+      } catch {
+        // Fallback to blog data
+      }
+      
+      // Fallback: try to get niche from blog
+      try {
+        const { data: blog } = await supabase
+          .from('blogs')
+          .select('name, niche_profile_id, niche_profiles(display_name, slug)')
+          .eq('id', blogId)
+          .single();
+        
+        if (blog) {
+          const nicheProfile = blog.niche_profiles as { display_name?: string; slug?: string } | null;
+          setBusinessContext({
+            companyName: blog.name || 'Sua Empresa',
+            niche: nicheProfile?.display_name || nicheProfile?.slug || 'Geral',
+            city: ''
+          });
+        }
+      } catch {
+        // Fallback to defaults
+        setBusinessContext({
+          companyName: 'Sua Empresa',
+          niche: 'Geral',
+          city: ''
+        });
+      }
+    };
+    
+    fetchBusinessContext();
+  }, [blogId]);
 
   // Fetch score change history
   const fetchScoreHistory = useCallback(async () => {
@@ -527,11 +596,12 @@ export function useContentScore(
     analyzing,
     optimizing,
     serpAnalysisId,
+    businessContext,  // V3.1: Contexto da subconta local
     analyzeSERP,
     calculateScore,
     optimizeForSERP,
     boostScore,
     refresh,
-    reprocessWithCustomCompetitors  // V3.0: New function
+    reprocessWithCustomCompetitors
   };
 }

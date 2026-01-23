@@ -65,7 +65,19 @@ const UNIVERSAL_FORBIDDEN_TERMS = [
   
   // Métricas de Marketing
   'roi', 'retorno sobre investimento', 'cac', 'custo de aquisição',
-  'ltv', 'lifetime value', 'kpi', 'métricas de marketing'
+  'ltv', 'lifetime value', 'kpi', 'métricas de marketing',
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // TERMOS DA PLATAFORMA - SEMPRE PROIBIDOS EM TODOS OS NICHOS
+  // REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente."
+  // ═══════════════════════════════════════════════════════════════════
+  'omniseen', 'plataforma omniseen', 'omniseen app',
+  'saas', 'software como serviço', 'software as a service',
+  'plataforma de conteúdo', 'gerador de conteúdo', 'content generator',
+  'ia para blogs', 'ai for blogs', 'inteligência artificial para seo',
+  'ferramenta de seo', 'seo tool', 'software de marketing',
+  'automação de blog', 'blog automation', 'cms saas',
+  'lovable', 'lovable app', 'plataforma lovable'
 ];
 
 // Nichos que PODEM usar termos de marketing
