@@ -155,13 +155,25 @@ export function DynamicTrackingScripts({
       });
     }
 
-    // Cleanup on unmount
+    // Cleanup on unmount - defensive to prevent removeChild crashes
     return () => {
       addedScripts.forEach((script) => {
-        script.parentNode?.removeChild(script);
+        try {
+          if (script.parentNode && document.contains(script)) {
+            script.parentNode.removeChild(script);
+          }
+        } catch (e) {
+          console.warn('[Tracking] Script cleanup skipped:', e);
+        }
       });
       addedElements.forEach((element) => {
-        element.parentNode?.removeChild(element);
+        try {
+          if (element.parentNode && document.contains(element)) {
+            element.parentNode.removeChild(element);
+          }
+        } catch (e) {
+          console.warn('[Tracking] Element cleanup skipped:', e);
+        }
       });
     };
   }, [trackingConfig, scriptHead, scriptBody]);
