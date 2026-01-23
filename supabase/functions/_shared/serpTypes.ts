@@ -67,6 +67,17 @@ export interface KeywordPresence {
 }
 
 /**
+ * V3.2: Subaccount business context for local governance
+ */
+export interface SubaccountContext {
+  companyName: string;
+  primaryService: string;      // Ex: "dedetização"
+  secondaryServices: string[]; // Ex: ["controle de pragas", "desratização"]
+  city: string;
+  nicheSlug: string;
+}
+
+/**
  * Aggregated SERP analysis matrix - V2.0 Deterministic
  */
 export interface SERPMatrix {
@@ -93,6 +104,10 @@ export interface SERPMatrix {
   keywordPresence: KeywordPresence;
   serpHash: string;          // Hash to detect SERP changes
   scrapeMethod: 'perplexity' | 'firecrawl' | 'hybrid' | 'custom';  // V3.0: Added 'custom'
+  
+  // V3.2: Context fields for local governance
+  effectiveKeyword?: string;   // The actual keyword used after validation/fallback
+  subaccountContext?: SubaccountContext;  // Business context for reference
 }
 
 /**
