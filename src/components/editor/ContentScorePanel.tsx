@@ -73,7 +73,8 @@ export function ContentScorePanel({
     calculateScore,
     optimizeForSERP,
     boostScore,
-    reprocessWithCustomCompetitors
+    reprocessWithCustomCompetitors,
+    businessContext  // V3.1: Contexto da subconta local
   } = useContentScore(articleId, content, title, keyword, blogId);
   
   // V3.0: Wrapped handler for button onClick
@@ -444,7 +445,7 @@ export function ContentScorePanel({
         scoreHistory={optimizer.scoreHistory}
       />
 
-      {/* V3.0: Competitor Adjust Modal */}
+      {/* V3.1: Competitor Adjust Modal com Contexto da Subconta */}
       <CompetitorAdjustModal
         open={showCompetitorModal}
         onClose={() => setShowCompetitorModal(false)}
@@ -460,6 +461,8 @@ export function ContentScorePanel({
         keyword={keyword}
         territory={serpMatrix?.territory}
         isLoading={analyzing}
+        businessName={businessContext?.companyName}
+        niche={businessContext?.niche}
       />
     </TooltipProvider>
   );

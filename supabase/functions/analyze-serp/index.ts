@@ -28,7 +28,8 @@ import { generateSerpHashAsync } from "../_shared/contentHashing.ts";
 import { 
   filterRealCompetitors, 
   isBlockedCompetitor, 
-  analyzeFilterResults 
+  analyzeFilterResults,
+  isValidSearchKeyword 
 } from "../_shared/competitorFilter.ts";
 
 const corsHeaders = {
@@ -414,8 +415,25 @@ serve(async (req) => {
       );
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // V3.1: GOVERNANÇA DE SUBCONTA LOCAL
+    // REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente da subconta."
+    // ═══════════════════════════════════════════════════════════════════
+    const keywordValidation = isValidSearchKeyword(keyword);
+    if (!keywordValidation.valid) {
+      console.error(`[ANALYZE-SERP] ❌ Keyword inválida: ${keywordValidation.reason}`);
+      return new Response(
+        JSON.stringify({ 
+          error: keywordValidation.reason,
+          invalidKeyword: true,
+          suggestion: "Use termos do nicho e cidade do cliente, não termos da plataforma."
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const hasCustomUrls = customCompetitorUrls && customCompetitorUrls.length > 0;
-    console.log(`[ANALYZE-SERP] V3.0 Starting for keyword: "${keyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
+    console.log(`[ANALYZE-SERP] V3.1 Starting for keyword: "${keyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

@@ -97,6 +97,15 @@ export const BLOCKED_DOMAINS: string[] = [
   'wix.com',
   'squarespace.com',
   
+  // === PLATAFORMA OMNISEEN (NUNCA SÃO CONCORRENTES) ===
+  // REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente da subconta."
+  'omniseen.app',
+  'omniseen.com',
+  'app.omniseen.app',
+  'lovable.app',
+  'lovable.dev',
+  'preview--lovable.app',
+  
   // === SITES GOVERNAMENTAIS ===
   'gov.br',
   'governo.br',
@@ -187,7 +196,52 @@ export const BLOCKED_URL_PATTERNS: RegExp[] = [
   /google\.com\.br\/maps/i,       // Google Maps BR
   /\/review\//i,                  // Review pages
   /\/avaliacoes\//i,              // Review pages PT
+  
+  // === PLATAFORMA OMNISEEN (subdomínios) ===
+  /\.omniseen\.app/i,             // Qualquer subdomínio Omniseen
+  /\.lovable\.app/i,              // Qualquer subdomínio Lovable
+  /omniseen/i,                    // Qualquer URL contendo omniseen
 ];
+
+// ═══════════════════════════════════════════════════════════════════
+// TERMOS DA PLATAFORMA - NUNCA devem ser usados como keyword de busca
+// ═══════════════════════════════════════════════════════════════════
+export const PLATFORM_FORBIDDEN_KEYWORDS: string[] = [
+  'omniseen',
+  'lovable',
+  'saas',
+  'plataforma de blog',
+  'gerador de artigos',
+  'gerador de conteúdo',
+  'ia para blogs',
+  'inteligência artificial para seo',
+  'ferramenta de seo',
+  'software de marketing',
+  'plataforma de conteúdo',
+  'cms saas',
+  'blog automation',
+  'content generator',
+  'ai content platform'
+];
+
+/**
+ * Valida se uma keyword é válida para busca SERP
+ * REGRA: Keywords não podem conter termos da plataforma
+ */
+export function isValidSearchKeyword(keyword: string): { valid: boolean; reason?: string } {
+  const keywordLower = keyword.toLowerCase();
+  
+  for (const forbidden of PLATFORM_FORBIDDEN_KEYWORDS) {
+    if (keywordLower.includes(forbidden)) {
+      return {
+        valid: false,
+        reason: `Keyword contém termo da plataforma: "${forbidden}". Use termos do nicho do cliente.`
+      };
+    }
+  }
+  
+  return { valid: true };
+}
 
 /**
  * Verifica se uma URL pertence a um domínio ou padrão bloqueado

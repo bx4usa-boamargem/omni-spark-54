@@ -26,7 +26,9 @@ import {
   ExternalLink,
   Globe,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Building2,
+  MapPin
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +43,11 @@ export interface Competitor {
   h2Count?: number;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// GOVERNANÇA DE SUBCONTA LOCAL
+// REGRA-MÃE: "A Omniseen não compete. Quem compete é o cliente."
+// ═══════════════════════════════════════════════════════════════════
+
 interface CompetitorAdjustModalProps {
   open: boolean;
   onClose: () => void;
@@ -49,19 +56,34 @@ interface CompetitorAdjustModalProps {
   keyword: string;
   territory?: string | null;
   isLoading?: boolean;
+  // V3.1: Contexto da subconta local (entidade raiz)
+  businessName?: string;
+  niche?: string;
 }
 
-// Blocked domain patterns (simplified client-side version)
+// Blocked domain patterns (client-side validation)
 const BLOCKED_DOMAINS = [
+  // Diretórios
   'yelp.com', 'yellowpages.com', 'tripadvisor.com', 'foursquare.com',
   'guiamais.com.br', 'apontador.com.br', 'hagah.com.br', 'kekanto.com.br',
+  // Marketplaces
   'mercadolivre.com.br', 'amazon.com', 'olx.com.br', 'getninjas.com.br',
+  // Redes sociais
   'facebook.com', 'instagram.com', 'linkedin.com', 'youtube.com',
-  'wikipedia.org', 'gov.br', 'reclameaqui.com.br'
+  // Genéricos
+  'wikipedia.org', 'gov.br', 'reclameaqui.com.br',
+  // PLATAFORMA OMNISEEN (NUNCA SÃO CONCORRENTES)
+  'omniseen.app', 'omniseen.com', 'lovable.app', 'lovable.dev'
 ];
 
 function isBlockedUrl(url: string): { blocked: boolean; reason?: string } {
   const urlLower = url.toLowerCase();
+  
+  // Verificar domínios da plataforma primeiro
+  if (urlLower.includes('omniseen') || urlLower.includes('lovable')) {
+    return { blocked: true, reason: 'URL da plataforma (não é concorrente do cliente)' };
+  }
+  
   for (const domain of BLOCKED_DOMAINS) {
     if (urlLower.includes(domain)) {
       return { blocked: true, reason: `Diretório/Agregador: ${domain}` };
@@ -85,7 +107,9 @@ export function CompetitorAdjustModal({
   onSave,
   keyword,
   territory,
-  isLoading = false
+  isLoading = false,
+  businessName,
+  niche
 }: CompetitorAdjustModalProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customUrl, setCustomUrl] = useState('');
@@ -181,11 +205,37 @@ export function CompetitorAdjustModal({
             <Filter className="h-5 w-5" />
             Ajustar Concorrentes
           </DialogTitle>
-          <DialogDescription>
-            Refine os concorrentes usados para calcular seu Content Score.
-            <span className="block text-xs mt-1 text-primary font-medium">
-              Keyword: "{keyword}" {territory && `• ${territory}`}
-            </span>
+          <DialogDescription asChild>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Refine os concorrentes usados para calcular seu Content Score.
+              </p>
+              
+              {/* V3.1: ENTIDADE RAIZ - Contexto da subconta local */}
+              <div className="bg-muted/50 p-3 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Analisando concorrência de:
+                </div>
+                <div className="mt-1 text-base font-semibold text-foreground">
+                  {businessName || 'Sua Empresa'}
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  {niche && <span>{niche}</span>}
+                  {niche && territory && <span>•</span>}
+                  {territory && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {territory}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <span className="block text-xs text-primary font-medium">
+                Busca SERP: "{keyword}"
+              </span>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
