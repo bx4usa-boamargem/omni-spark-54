@@ -26,6 +26,7 @@ import { TermsTabsPanel } from './TermsTabsPanel';
 import { RecommendationsPanel } from './RecommendationsPanel';
 import { AIActionsPanel } from './AIActionsPanel';
 import { OptimizeTo100Dialog } from './OptimizeTo100Dialog';
+import { ScoreHistoryPanel } from './ScoreHistoryPanel';
 
 interface ContentScorePanelProps {
   articleId?: string;
@@ -59,6 +60,7 @@ export function ContentScorePanel({
     serpMatrix,
     nicheInfo,
     lockStatus,
+    scoreHistory,
     loading,
     analyzing,
     optimizing,
@@ -92,7 +94,7 @@ export function ContentScorePanel({
     
     if (content && keyword && blogId && content.length > 500) {
       const timer = setTimeout(() => {
-        calculateScore();
+        calculateScore(false); // Auto-calculate is NOT user-initiated
       }, 3000); // 3s debounce to let content stabilize
       return () => clearTimeout(timer);
     }
@@ -234,8 +236,9 @@ export function ContentScorePanel({
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => calculateScore()}
+              onClick={() => calculateScore(true)}  // User-initiated recalculation
               disabled={loading}
+              title="Recalcular score (ação manual)"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             </Button>
@@ -352,13 +355,24 @@ export function ContentScorePanel({
                       Alterações apenas por ação manual
                     </div>
                   )}
-                  
-                  {lockStatus?.lastScoreChangeReason && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {lockStatus.lastScoreChangeReason}
-                    </div>
-                  )}
                 </div>
+              )}
+
+              {/* Score History Panel - V2.0 Audit Trail */}
+              {scoreHistory && scoreHistory.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Lock className="h-3 w-3" />
+                      Histórico de alterações
+                    </h4>
+                    <ScoreHistoryPanel 
+                      history={scoreHistory}
+                      lastChangeReason={lockStatus?.lastScoreChangeReason}
+                    />
+                  </div>
+                </>
               )}
 
               {/* Quality Gate Status */}

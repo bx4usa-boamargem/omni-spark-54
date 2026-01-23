@@ -24,6 +24,10 @@ export interface NicheProfile {
   allowedEntities: string[];
   forbiddenEntities: string[];
   seedKeywords: string[];
+  // V2.0: New deterministic architecture fields
+  requiredTerms: string[];    // Terms that MUST appear in content
+  tone: 'technical' | 'commercial' | 'educational' | 'professional';
+  imageStyle: 'realistic' | 'editorial' | 'documentary' | 'commercial';
 }
 
 /**
@@ -62,7 +66,11 @@ const DEFAULT_NICHE_PROFILE: NicheProfile = {
   targetScore: 70,
   allowedEntities: [],
   forbiddenEntities: ['seo', 'marketing digital', 'agência de marketing', 'tráfego pago', 'google ads', 'leads', 'funil de vendas'],
-  seedKeywords: []
+  seedKeywords: [],
+  // V2.0: New deterministic architecture fields
+  requiredTerms: [],
+  tone: 'professional',
+  imageStyle: 'documentary'
 };
 
 /**
@@ -85,7 +93,11 @@ function dbRowToNicheProfile(row: Record<string, unknown>): NicheProfile {
     targetScore: row.target_score as number,
     allowedEntities: (row.allowed_entities as string[]) || [],
     forbiddenEntities: (row.forbidden_entities as string[]) || [],
-    seedKeywords: (row.seed_keywords as string[]) || []
+    seedKeywords: (row.seed_keywords as string[]) || [],
+    // V2.0: New deterministic architecture fields
+    requiredTerms: (row.required_terms as string[]) || [],
+    tone: (row.tone as NicheProfile['tone']) || 'professional',
+    imageStyle: (row.image_style as NicheProfile['imageStyle']) || 'documentary'
   };
 }
 
@@ -316,26 +328,69 @@ function escapeRegex(str: string): string {
  */
 export function getNichePromptInstructions(nicheProfile: NicheProfile): string {
   const lines: string[] = [
-    `REGRAS DO NICHO "${nicheProfile.displayName}":`,
+    `## REGRAS INVIOLÁVEIS DO NICHO "${nicheProfile.displayName}":`,
     `- Tipo de conteúdo: ${nicheProfile.intent}`,
     `- Palavras: ${nicheProfile.minWords} - ${nicheProfile.maxWords}`,
     `- H2: ${nicheProfile.minH2} - ${nicheProfile.maxH2}`,
     `- Parágrafos mínimos: ${nicheProfile.minParagraphs}`,
     `- Imagens mínimas: ${nicheProfile.minImages}`,
-    `- Score alvo: ${nicheProfile.targetScore}`
+    `- Score alvo: ${nicheProfile.targetScore}`,
+    `- Tom do conteúdo: ${nicheProfile.tone}`,
+    `- Estilo visual: ${nicheProfile.imageStyle}`
   ];
 
+  // V2.0: Required terms that MUST appear in content
+  if (nicheProfile.requiredTerms && nicheProfile.requiredTerms.length > 0) {
+    lines.push(`\n⚠️ TERMOS OBRIGATÓRIOS (DEVEM aparecer no artigo):`);
+    lines.push(nicheProfile.requiredTerms.join(', '));
+  }
+
   if (nicheProfile.allowedEntities.length > 0) {
-    lines.push(`\nTERMOS PERMITIDOS (use preferencialmente):`);
+    lines.push(`\n✅ TERMOS PERMITIDOS (use preferencialmente):`);
     lines.push(nicheProfile.allowedEntities.slice(0, 20).join(', '));
   }
 
   if (nicheProfile.forbiddenEntities.length > 0) {
-    lines.push(`\nTERMOS PROIBIDOS (NUNCA use):`);
+    lines.push(`\n❌ TERMOS PROIBIDOS (NUNCA use - violação = artigo rejeitado):`);
     lines.push(nicheProfile.forbiddenEntities.join(', '));
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Get required terms for a niche that MUST appear in content
+ */
+export function getRequiredTerms(nicheProfile: NicheProfile): string[] {
+  return nicheProfile.requiredTerms || [];
+}
+
+/**
+ * Validate that required terms appear in content
+ */
+export function validateRequiredTerms(
+  content: string,
+  nicheProfile: NicheProfile
+): { valid: boolean; missingTerms: string[] } {
+  const requiredTerms = getRequiredTerms(nicheProfile);
+  if (requiredTerms.length === 0) {
+    return { valid: true, missingTerms: [] };
+  }
+
+  const normalizedContent = content.toLowerCase();
+  const missingTerms: string[] = [];
+
+  for (const term of requiredTerms) {
+    const normalizedTerm = term.toLowerCase();
+    if (!normalizedContent.includes(normalizedTerm)) {
+      missingTerms.push(term);
+    }
+  }
+
+  return {
+    valid: missingTerms.length === 0,
+    missingTerms
+  };
 }
 
 /**

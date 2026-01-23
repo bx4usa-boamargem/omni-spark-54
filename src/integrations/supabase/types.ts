@@ -4156,6 +4156,7 @@ export type Database = {
           display_name: string
           forbidden_entities: string[]
           id: string
+          image_style: string | null
           intent: string
           max_h2: number
           max_words: number
@@ -4165,8 +4166,10 @@ export type Database = {
           min_score: number
           min_words: number
           name: string
+          required_terms: string[] | null
           seed_keywords: string[]
           target_score: number
+          tone: string | null
           updated_at: string | null
         }
         Insert: {
@@ -4177,6 +4180,7 @@ export type Database = {
           display_name: string
           forbidden_entities?: string[]
           id?: string
+          image_style?: string | null
           intent?: string
           max_h2?: number
           max_words?: number
@@ -4186,8 +4190,10 @@ export type Database = {
           min_score?: number
           min_words?: number
           name: string
+          required_terms?: string[] | null
           seed_keywords?: string[]
           target_score?: number
+          tone?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -4198,6 +4204,7 @@ export type Database = {
           display_name?: string
           forbidden_entities?: string[]
           id?: string
+          image_style?: string | null
           intent?: string
           max_h2?: number
           max_words?: number
@@ -4207,8 +4214,10 @@ export type Database = {
           min_score?: number
           min_words?: number
           name?: string
+          required_terms?: string[] | null
           seed_keywords?: string[]
           target_score?: number
+          tone?: string | null
           updated_at?: string | null
         }
         Relationships: []

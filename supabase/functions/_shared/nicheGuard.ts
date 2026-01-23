@@ -285,6 +285,45 @@ export async function logBlockedAttempt(
 }
 
 /**
+ * Registra mudança de score no log de auditoria
+ * V2.0: Tabela score_change_log para histórico completo
+ */
+export async function logScoreChange(
+  supabase: SupabaseClient,
+  articleId: string,
+  oldScore: number,
+  newScore: number,
+  changeReason: string,
+  triggeredBy: 'user' | 'system' | 'auto-fix' | 'boost' | 'recalculate',
+  userId?: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  try {
+    // Get current content version
+    const { data: article } = await supabase
+      .from('articles')
+      .select('content_version')
+      .eq('id', articleId)
+      .single();
+
+    await supabase.from('score_change_log').insert({
+      article_id: articleId,
+      old_score: oldScore,
+      new_score: newScore,
+      change_reason: changeReason,
+      triggered_by: triggeredBy,
+      content_version: article?.content_version || 1,
+      user_id: userId || null,
+      metadata: metadata || {}
+    });
+
+    console.log(`[NICHE-GUARD] Logged score change: ${oldScore} → ${newScore} (${changeReason})`);
+  } catch (error) {
+    console.error(`[NICHE-GUARD] Failed to log score change:`, error);
+  }
+}
+
+/**
  * Atualiza o motivo da última mudança de score no artigo
  */
 export async function updateLastScoreChangeReason(

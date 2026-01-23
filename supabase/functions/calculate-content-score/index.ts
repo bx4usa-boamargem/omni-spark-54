@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { calculateContentScore, validateForPublication, extractArticleMetrics } from "../_shared/contentScoring.ts";
 import { SERPMatrix, ContentScore, QualityGateResult } from "../_shared/serpTypes.ts";
 import { getNicheProfile, applyScoreFloor, NicheProfile } from "../_shared/nicheProfile.ts";
+import { canChangeScore, logScoreChange, updateLastScoreChangeReason, type TriggeredBy } from "../_shared/nicheGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,9 @@ interface CalculateScoreRequest {
   saveScore?: boolean;
   validateForPublish?: boolean;
   minimumScore?: number;
+  // V2.0: Deterministic score control
+  userInitiated?: boolean;  // If true, allows score changes; if false (system), blocks decreases
+  userId?: string;          // For audit trail
 }
 
 serve(async (req) => {
@@ -42,7 +46,9 @@ serve(async (req) => {
       serpAnalysisId,
       saveScore = true,
       validateForPublish = false,
-      minimumScore = 70
+      minimumScore = 70,
+      userInitiated = false,
+      userId
     } = request;
 
     if (!content || !keyword || !blogId) {
@@ -124,7 +130,81 @@ serve(async (req) => {
     }
 
     // Save score to database if articleId provided
+    let scoreBlocked = false;
+    let blockReason: string | undefined;
+
     if (saveScore && articleId) {
+      // V2.0: Check if score change is allowed (deterministic control)
+      const { data: existingScore } = await supabase
+        .from("article_content_scores")
+        .select("total_score")
+        .eq("article_id", articleId)
+        .maybeSingle();
+
+      const currentScore = existingScore?.total_score || 0;
+      const triggeredBy: TriggeredBy = userInitiated ? 'user' : 'system';
+
+      // Check if we can change the score
+      const scoreGuard = await canChangeScore(
+        supabase,
+        articleId,
+        triggeredBy,
+        contentScore.total,
+        currentScore
+      );
+
+      if (!scoreGuard.allowed) {
+        console.log(`[CONTENT-SCORE] Score change blocked: ${scoreGuard.reason}`);
+        scoreBlocked = true;
+        blockReason = scoreGuard.reason;
+        
+        // Return the current score, not the new calculated one
+        return new Response(
+          JSON.stringify({
+            success: true,
+            score: { ...contentScore, total: currentScore },
+            rawScore: rawScore.total,
+            metrics,
+            serpAnalyzed: !!serpMatrix,
+            serpAnalysisId: serpId,
+            qualityGate: qualityGateResult,
+            nicheProfile: {
+              id: nicheProfile.id,
+              name: nicheProfile.displayName,
+              minScore: nicheProfile.minScore,
+              floorApplied,
+              floorReason
+            },
+            scoreBlocked: true,
+            blockReason: scoreGuard.reason,
+            message: 'Score não pode ser alterado automaticamente. Use "Recalcular" para atualizar.'
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Log the score change
+      const changeReason = userInitiated 
+        ? 'Recálculo manual pelo usuário' 
+        : 'Cálculo automático do sistema';
+      
+      await logScoreChange(
+        supabase,
+        articleId,
+        currentScore,
+        contentScore.total,
+        changeReason,
+        userInitiated ? 'recalculate' : 'system',
+        userId
+      );
+
+      // Update the article with last score change reason
+      await updateLastScoreChangeReason(
+        supabase,
+        articleId,
+        changeReason
+      );
+
       const { error: saveError } = await supabase
         .from("article_content_scores")
         .upsert({
@@ -165,7 +245,9 @@ serve(async (req) => {
           minScore: nicheProfile.minScore,
           floorApplied,
           floorReason
-        }
+        },
+        scoreBlocked,
+        blockReason
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

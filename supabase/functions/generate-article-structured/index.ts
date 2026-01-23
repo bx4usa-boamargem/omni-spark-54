@@ -5,6 +5,9 @@ import { resolveStrategy } from '../_shared/strategyResolver.ts';
 import { validateArticleQuality, validateGeoArticleQuality, generateCorrectionInstructions } from '../_shared/qualityValidator.ts';
 import { generateAutoKeywords, mergeKeywords } from '../_shared/keywordGenerator.ts';
 import { sanitizeTitle, sanitizeTitleInContent, validateTitleForPublication, TITLE_RULES_PROMPT } from '../_shared/titleValidator.ts';
+// V2.0: Import niche profile and guard for deterministic architecture
+import { getNicheProfile, getNichePromptInstructions, validateRequiredTerms, type NicheProfile } from '../_shared/nicheProfile.ts';
+import { validateAndSanitize, logBlockedAttempt } from '../_shared/nicheGuard.ts';
 import { 
   GEO_WRITER_IDENTITY,
   GEO_WRITER_RULES,
@@ -251,7 +254,8 @@ async function persistArticleToDb(
   articleData: ArticleData,
   autoPublish: boolean = true,
   inferredCategory?: string,
-  inferredTags?: string[]
+  inferredTags?: string[],
+  nicheProfileId?: string | null  // V2.0: Niche profile linkage
 ): Promise<{ id: string; slug: string; status: string; title: string }> {
   console.log(`[PERSIST] Preparing to save article: "${articleData.title}" for blog ${blogId}`);
   
@@ -353,6 +357,10 @@ async function persistArticleToDb(
     generation_source: 'form',
     featured_image_url: articleData.featured_image_url || null,
     featured_image_alt: articleData.featured_image_alt || null,
+    // V2.0: Niche Deterministic Architecture fields
+    niche_profile_id: nicheProfileId || null,
+    niche_locked: true,   // Always lock niche on generation
+    score_locked: true,   // Protect score from automatic changes
   };
   
   console.log(`[PERSIST] Inserting article with slug: ${uniqueSlug}, status: ${insertData.status}`);
