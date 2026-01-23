@@ -26,6 +26,12 @@ import {
   getNichePromptInstructions,
   NicheProfile
 } from "../_shared/nicheProfile.ts";
+import { 
+  validateAndSanitize, 
+  canChangeScore, 
+  logBlockedAttempt,
+  updateLastScoreChangeReason 
+} from "../_shared/nicheGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -346,7 +352,28 @@ Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
     }
 
     const aiData = await aiResponse.json();
-    const optimizedContent = aiData.choices?.[0]?.message?.content || content;
+    let optimizedContent = aiData.choices?.[0]?.message?.content || content;
+
+    // =========================================================================
+    // NICHE GUARD: Validar e sanitizar conteúdo otimizado
+    // =========================================================================
+    const guardResult = await validateAndSanitize(supabase, optimizedContent, blogId, 'boost-content-score');
+    
+    if (!guardResult.allowed) {
+      console.log(`[BOOST-SCORE] Niche Guard blocked ${guardResult.blockedTerms.length} terms: ${guardResult.blockedTerms.join(', ')}`);
+      
+      // Registrar bloqueio
+      await logBlockedAttempt(supabase, articleId, blogId, 'term_blocked', 'boost-content-score', {
+        blockedTerms: guardResult.blockedTerms,
+        blockedReason: guardResult.reason,
+        nicheProfileId: guardResult.nicheProfile?.id
+      });
+      
+      // Usar conteúdo sanitizado
+      if (guardResult.sanitizedContent) {
+        optimizedContent = guardResult.sanitizedContent;
+      }
+    }
 
     // Calculate new score with niche floor
     const newMetrics = extractArticleMetrics(optimizedContent);
@@ -362,20 +389,55 @@ Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
     const validationResult = validateContentForNiche(optimizedContent, nicheProfile);
     if (!validationResult.valid) {
       console.warn(`[BOOST-SCORE] Niche violations detected: ${validationResult.violations.join(', ')}`);
-      // Log mas não bloqueia - apenas avisa
+    }
+
+    // =========================================================================
+    // SCORE GUARD: Verificar se o score pode ser alterado
+    // =========================================================================
+    const triggeredBy = userInitiated ? 'user' : 'system';
+    const scoreGuard = await canChangeScore(supabase, articleId, triggeredBy, newScore.total, currentScore.total);
+    
+    if (!scoreGuard.allowed) {
+      console.log(`[BOOST-SCORE] Score change blocked: ${scoreGuard.reason}`);
+      
+      await logBlockedAttempt(supabase, articleId, blogId, 'score_blocked', 'boost-content-score', {
+        blockedReason: scoreGuard.reason,
+        originalValue: { proposedScore: newScore.total, currentScore: currentScore.total }
+      });
+      
+      // Retornar conteúdo otimizado mas manter score anterior
+      return new Response(
+        JSON.stringify({
+          success: true,
+          optimized: true,
+          content: optimizedContent,
+          previousScore: currentScore.total,
+          newScore: currentScore.total, // Manter score anterior
+          scoreBlocked: true,
+          scoreBlockedReason: scoreGuard.reason,
+          message: "Conteúdo otimizado, mas score mantido (alteração bloqueada)"
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Save updated score if articleId provided
     if (articleId) {
+      // Registrar motivo da mudança de score
+      const changeReason = userInitiated 
+        ? `Usuário clicou em "Aumentar Score" (${optimizationType})` 
+        : `Sistema otimizou automaticamente (${optimizationType})`;
+      await updateLastScoreChangeReason(supabase, articleId, changeReason);
+
       // Se versionamento ativo, registrar log de score
       if (versionedContentEnabled) {
-        const changeReason = newFloorApplied ? floorReason : `boost_${optimizationType}`;
+        const floorReasonFinal = newFloorApplied ? floorReason : `boost_${optimizationType}`;
         await logScoreChange(
           supabase,
           articleId,
           currentScore.total,
           newScore.total,
-          changeReason || `boost_${optimizationType}`,
+          floorReasonFinal || `boost_${optimizationType}`,
           userInitiated ? 'user' : 'system',
           currentVersion
         );

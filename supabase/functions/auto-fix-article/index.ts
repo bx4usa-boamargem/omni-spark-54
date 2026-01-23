@@ -7,6 +7,11 @@ import {
   createSuggestionResponse,
   type ChangeSource 
 } from "../_shared/contentGuard.ts";
+import { 
+  validateAndSanitize, 
+  logBlockedAttempt,
+  updateLastScoreChangeReason
+} from "../_shared/nicheGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,10 +159,32 @@ serve(async (req) => {
     }
 
     const aiResult = await aiResponse.json();
-    const fixedContent = aiResult.choices?.[0]?.message?.content;
+    let fixedContent = aiResult.choices?.[0]?.message?.content;
 
     if (!fixedContent) {
       throw new Error("AI did not return fixed content");
+    }
+
+    // =========================================================================
+    // NICHE GUARD: Validar e sanitizar conteúdo corrigido
+    // =========================================================================
+    const guardResult = await validateAndSanitize(supabase, fixedContent, blogId, 'auto-fix-article');
+    
+    if (!guardResult.allowed) {
+      console.log(`[AUTO-FIX] Niche Guard blocked ${guardResult.blockedTerms.length} terms`);
+      
+      // Registrar bloqueio
+      await logBlockedAttempt(supabase, articleId, blogId, 'term_blocked', 'auto-fix-article', {
+        blockedTerms: guardResult.blockedTerms,
+        blockedReason: guardResult.reason,
+        nicheProfileId: guardResult.nicheProfile?.id
+      });
+      
+      // Usar conteúdo sanitizado
+      if (guardResult.sanitizedContent) {
+        fixedContent = guardResult.sanitizedContent;
+        console.log(`[AUTO-FIX] Using sanitized content (removed ${guardResult.blockedTerms.length} marketing terms)`);
+      }
     }
 
     // Validate fix didn't reduce content too much (max 15% reduction)

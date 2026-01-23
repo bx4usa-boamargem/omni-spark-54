@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SERPMatrix, SERPCompetitor } from "../_shared/serpTypes.ts";
 import { getNicheProfile, filterTermsByProfile, NicheProfile } from "../_shared/nicheProfile.ts";
+import { filterSerpTermsForNiche, logBlockedAttempt } from "../_shared/nicheGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
