@@ -38,8 +38,10 @@ import {
   ExternalLink,
   BookOpen,
   BarChart3,
-  Upload
+  Upload,
+  Unplug
 } from 'lucide-react';
+import { CMSIntegrationsTab } from '@/components/blog-editor/CMSIntegrationsTab';
 import { cn } from '@/lib/utils';
 import { ArticlePdfDownload } from '@/components/articles/ArticlePdfDownload';
 
@@ -132,6 +134,7 @@ export default function ClientArticleEditor() {
   
   // CMS Publishing state
   const [isPublishingCMS, setIsPublishingCMS] = useState(false);
+  const [showCMSSetupSheet, setShowCMSSetupSheet] = useState(false);
   const { integrations, publishArticle, getActiveIntegration } = useCMSIntegrations(blog?.id || '');
   const activeIntegration = getActiveIntegration();
   
@@ -1309,48 +1312,72 @@ export default function ClientArticleEditor() {
               </Button>
             )}
             
-            {/* Publish to CMS Button (WordPress/Wix) */}
-            {existingArticleId && activeIntegration && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (!existingArticleId || !activeIntegration) return;
-                  
-                  setIsPublishingCMS(true);
-                  const result = await publishArticle(activeIntegration.id, existingArticleId);
-                  
-                  if (result.success) {
-                    toast.success(`Publicado com sucesso!`, {
-                      description: result.externalUrl ? `Artigo disponível em ${activeIntegration.platform === 'wordpress' ? 'WordPress' : 'Wix'}` : undefined,
-                      action: result.externalUrl ? {
-                        label: 'Abrir',
-                        onClick: () => window.open(result.externalUrl, '_blank')
-                      } : undefined
-                    });
-                    if (result.externalUrl) {
-                      window.open(result.externalUrl, '_blank');
+            {/* CMS Integration - Publish or Connect */}
+            {existingArticleId && (
+              activeIntegration ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!existingArticleId || !activeIntegration) return;
+                    
+                    setIsPublishingCMS(true);
+                    const result = await publishArticle(activeIntegration.id, existingArticleId);
+                    
+                    if (result.success) {
+                      toast.success(`Publicado com sucesso!`, {
+                        description: result.externalUrl ? `Artigo disponível em ${activeIntegration.platform === 'wordpress' ? 'WordPress' : 'Wix'}` : undefined,
+                        action: result.externalUrl ? {
+                          label: 'Abrir',
+                          onClick: () => window.open(result.externalUrl, '_blank')
+                        } : undefined
+                      });
+                      if (result.externalUrl) {
+                        window.open(result.externalUrl, '_blank');
+                      }
+                    } else {
+                      toast.error(result.message || 'Erro ao publicar no CMS');
                     }
-                  } else {
-                    toast.error(result.message || 'Erro ao publicar no CMS');
-                  }
-                  setIsPublishingCMS(false);
-                }}
-                disabled={isPublishingCMS}
-                className="gap-2 border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-500/10"
-              >
-                {isPublishingCMS ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Publicando...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Publicar no {activeIntegration.platform === 'wordpress' ? 'WordPress' : 'Wix'}
-                  </>
-                )}
-              </Button>
+                    setIsPublishingCMS(false);
+                  }}
+                  disabled={isPublishingCMS}
+                  className="gap-2 border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-500/10"
+                >
+                  {isPublishingCMS ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Publicando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      Publicar no {activeIntegration.platform === 'wordpress' ? 'WordPress' : 'Wix'}
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Sheet open={showCMSSetupSheet} onOpenChange={setShowCMSSetupSheet}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-orange-500/30 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                    >
+                      <Unplug className="h-4 w-4" />
+                      Conectar CMS
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[420px] sm:w-[540px] overflow-y-auto">
+                    <div className="py-4">
+                      <h2 className="text-lg font-semibold mb-2">Conectar seu site</h2>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Conecte seu WordPress ou Wix para publicar artigos diretamente no seu site.
+                      </p>
+                      <CMSIntegrationsTab blogId={blog?.id || ''} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              )
             )}
             
             {/* PDF Download Button */}
