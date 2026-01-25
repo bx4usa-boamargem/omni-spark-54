@@ -140,6 +140,13 @@ export default function ClientArticleEditor() {
   const { integrations, publishArticle, getActiveIntegration, refetch: refetchIntegrations } = useCMSIntegrations(blog?.id || '');
   const activeIntegration = getActiveIntegration();
   
+  // CORRECTION #5: Force refetch integrations when CMS Center closes to ensure state sync
+  useEffect(() => {
+    if (!showCMSCenter && blog?.id) {
+      refetchIntegrations();
+    }
+  }, [showCMSCenter, blog?.id, refetchIntegrations]);
+  
   // Check if can publish directly (active + tested with success)
   const canPublishDirectly = activeIntegration && 
     activeIntegration.is_active && 
