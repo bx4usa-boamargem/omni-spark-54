@@ -32,7 +32,7 @@ export interface ScoreChangeResult {
 }
 
 export type TriggeredBy = 'user' | 'system' | 'background';
-export type ActionType = 'term_blocked' | 'score_blocked' | 'content_blocked' | 'image_blocked';
+export type ActionType = 'term_blocked' | 'score_blocked' | 'content_blocked' | 'image_blocked' | 'score_regression';
 
 // ============================================================================
 // TERMOS UNIVERSALMENTE PROIBIDOS PARA NICHOS NÃO-MARKETING

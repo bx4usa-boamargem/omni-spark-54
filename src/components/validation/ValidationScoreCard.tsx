@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, AlertTriangle, CheckCircle, Sparkles } from "lucide-react";
+import { getScoreThreshold } from "@/lib/scoreThresholds";
 
 interface ValidationScoreCardProps {
   score: number;
@@ -22,30 +23,7 @@ export function ValidationScoreCard({
   isFixing = false,
   canAutoFix = false,
 }: ValidationScoreCardProps) {
-  const getScoreColor = (s: number) => {
-    if (s >= 85) return 'text-green-600';
-    if (s >= 70) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getScoreBgColor = (s: number) => {
-    if (s >= 85) return 'bg-green-100 dark:bg-green-900/30';
-    if (s >= 70) return 'bg-yellow-100 dark:bg-yellow-900/30';
-    return 'bg-red-100 dark:bg-red-900/30';
-  };
-
-  const getScoreRingColor = (s: number) => {
-    if (s >= 85) return 'stroke-green-500';
-    if (s >= 70) return 'stroke-yellow-500';
-    return 'stroke-red-500';
-  };
-
-  const getScoreLabel = (s: number) => {
-    if (s >= 85) return 'Excelente';
-    if (s >= 70) return 'Bom';
-    if (s >= 50) return 'Regular';
-    return 'Precisa Melhorar';
-  };
+  const threshold = getScoreThreshold(score);
 
   // Calculate SVG circle properties
   const radius = 45;
@@ -53,7 +31,7 @@ export function ValidationScoreCard({
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    <Card className={`${getScoreBgColor(score)} border-0`}>
+    <Card className={`${threshold.bgLightClass} border-0`}>
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           {/* Circular Score */}
@@ -80,18 +58,19 @@ export function ValidationScoreCard({
                   strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={offset}
-                  className={`${getScoreRingColor(score)} transition-all duration-500`}
+                  stroke={threshold.color}
+                  className="transition-all duration-500"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-3xl font-bold ${getScoreColor(score)}`}>{score}</span>
+                <span className={`text-3xl font-bold ${threshold.textClass}`}>{score}</span>
                 <span className="text-xs text-muted-foreground">/ 100</span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <p className={`text-lg font-semibold ${getScoreColor(score)}`}>
-                {getScoreLabel(score)}
+              <p className={`text-lg font-semibold ${threshold.textClass}`}>
+                {threshold.label}
               </p>
               <p className="text-sm text-muted-foreground">
                 Score de qualidade

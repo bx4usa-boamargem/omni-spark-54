@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { OptimizationStep } from '@/components/editor/OptimizeTo100Dialog';
+import { validateScoreImprovement } from '@/lib/scoreThresholds';
 
 interface UseContentOptimizerProps {
   articleId?: string;
@@ -39,10 +40,7 @@ const OPTIMIZATION_STEPS: Omit<OptimizationStep, 'status'>[] = [
   { id: 'serp', label: 'Analisando concorrência (SERP)...' },
   { id: 'words', label: 'Expandindo conteúdo (palavras)...' },
   { id: 'h2', label: 'Criando/ajustando H2...' },
-  { id: 'paragraphs', label: 'Melhorando estrutura de parágrafos...' },
   { id: 'terms', label: 'Inserindo termos semânticos...' },
-  { id: 'images', label: 'Verificando imagens...' },
-  { id: 'meta', label: 'Otimizando title/meta description...' },
   { id: 'cta', label: 'Fortalecendo CTA (Próximo passo)...' },
 ];
 
@@ -62,7 +60,7 @@ export function useContentOptimizer({
   const [isRunning, setIsRunning] = useState(false);
   const [fixingArea, setFixingArea] = useState<string | null>(null);
   const [scoreHistory, setScoreHistory] = useState<number[]>([]);
-  const [cancelled, setCancelled] = useState(false);
+  const cancelledRef = useRef(false);
 
   // Helper to ensure SERP analysis exists before optimization
   const ensureSERPAnalysis = useCallback(async (): Promise<boolean> => {
@@ -107,10 +105,12 @@ export function useContentOptimizer({
   }, [blogId, keyword]);
 
   // Helper to call boost edge function with specific optimization type
+  // CRITICAL: Agora valida que o score não cai
   const callBoost = useCallback(async (
     optimizationType: 'words' | 'h2' | 'structure' | 'terms' | 'rewrite' | 'full',
-    currentContent: string
-  ): Promise<{ content: string | null; newScore: number | null }> => {
+    currentContent: string,
+    previousScore: number
+  ): Promise<{ content: string | null; newScore: number | null; rejected: boolean; message?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('boost-content-score', {
         body: {
@@ -120,88 +120,118 @@ export function useContentOptimizer({
           keyword,
           blogId,
           optimizationType,
-          targetScore: 100
+          targetScore: 100,
+          userInitiated: true,
+          previousScore // Passar score anterior para validação
         }
       });
 
       if (error) throw error;
 
+      // Verificar se foi rejeitado por regressão de score
+      if (data?.rejected) {
+        console.warn(`[OPTIMIZER] Optimization rejected: ${data.message}`);
+        return { 
+          content: null, 
+          newScore: data.previousScore || previousScore, 
+          rejected: true,
+          message: data.message 
+        };
+      }
+
+      // Validar melhoria de score no cliente também (double-check)
+      if (data?.newScore && data.newScore < previousScore) {
+        console.warn(`[OPTIMIZER] Score regression detected client-side: ${previousScore} → ${data.newScore}`);
+        return { 
+          content: null, 
+          newScore: previousScore, 
+          rejected: true,
+          message: `Score cairia de ${previousScore} para ${data.newScore}. Mudança bloqueada.`
+        };
+      }
+
       if (data?.optimized && data?.content) {
-        return { content: data.content, newScore: data.newScore };
+        return { 
+          content: data.content, 
+          newScore: data.newScore,
+          rejected: false 
+        };
       }
       
-      return { content: null, newScore: data?.newScore || null };
+      return { content: null, newScore: data?.newScore || null, rejected: false };
     } catch (error) {
       console.error('Boost error:', error);
-      return { content: null, newScore: null };
+      return { content: null, newScore: null, rejected: false };
     }
   }, [articleId, title, keyword, blogId]);
 
-  // Individual fix functions - all ensure SERP analysis first
-  const fixWords = useCallback(async (): Promise<string | null> => {
-    setFixingArea('words');
-    try {
-      // Ensure SERP analysis exists before boost
-      const serpReady = await ensureSERPAnalysis();
-      if (!serpReady) {
-        toast({
-          title: 'Análise SERP necessária',
-          description: 'Execute a análise de concorrência primeiro',
-          variant: 'destructive'
+  // Individual fix functions with regression protection
+  const createFixFunction = (
+    area: string,
+    optimizationType: 'words' | 'h2' | 'structure' | 'terms' | 'rewrite'
+  ) => {
+    return async (): Promise<string | null> => {
+      setFixingArea(area);
+      try {
+        // Ensure SERP analysis exists before boost
+        const serpReady = await ensureSERPAnalysis();
+        if (!serpReady) {
+          toast({
+            title: 'Análise SERP necessária',
+            description: 'Execute a análise de concorrência primeiro',
+            variant: 'destructive'
+          });
+          return null;
+        }
+        
+        // Obter score atual para validação
+        const { data: scoreData } = await supabase.functions.invoke('calculate-content-score', {
+          body: { content, title, keyword, blogId, saveScore: false }
         });
-        return null;
+        const currentScore = scoreData?.score?.total || 0;
+        
+        const result = await callBoost(optimizationType, content, currentScore);
+        
+        if (result.rejected) {
+          toast({
+            title: 'Otimização bloqueada',
+            description: result.message || 'Esta mudança reduziria o score. Operação cancelada.',
+            variant: 'destructive'
+          });
+          return null;
+        }
+        
+        if (result.content && onContentUpdate) {
+          onContentUpdate(result.content);
+        }
+        if (result.newScore && onScoreUpdate) {
+          onScoreUpdate(result.newScore);
+          
+          // Mostrar melhoria
+          const improvement = result.newScore - currentScore;
+          if (improvement > 0) {
+            toast({
+              title: `Score melhorou +${improvement}`,
+              description: `${currentScore} → ${result.newScore}`,
+            });
+          }
+        }
+        return result.content;
+      } finally {
+        setFixingArea(null);
       }
-      
-      const result = await callBoost('words', content);
-      if (result.content && onContentUpdate) {
-        onContentUpdate(result.content);
-      }
-      if (result.newScore && onScoreUpdate) {
-        onScoreUpdate(result.newScore);
-      }
-      return result.content;
-    } finally {
-      setFixingArea(null);
-    }
-  }, [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
+    };
+  };
 
-  const fixH2 = useCallback(async (): Promise<string | null> => {
-    setFixingArea('h2');
-    try {
-      const result = await callBoost('h2', content);
-      if (result.content && onContentUpdate) {
-        onContentUpdate(result.content);
-      }
-      if (result.newScore && onScoreUpdate) {
-        onScoreUpdate(result.newScore);
-      }
-      return result.content;
-    } finally {
-      setFixingArea(null);
-    }
-  }, [content, callBoost, onContentUpdate, onScoreUpdate]);
-
-  const fixParagraphs = useCallback(async (): Promise<string | null> => {
-    setFixingArea('paragraphs');
-    try {
-      const result = await callBoost('structure', content);
-      if (result.content && onContentUpdate) {
-        onContentUpdate(result.content);
-      }
-      if (result.newScore && onScoreUpdate) {
-        onScoreUpdate(result.newScore);
-      }
-      return result.content;
-    } finally {
-      setFixingArea(null);
-    }
-  }, [content, callBoost, onContentUpdate, onScoreUpdate]);
+  const fixWords = useCallback(createFixFunction('words', 'words'), [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
+  const fixH2 = useCallback(createFixFunction('h2', 'h2'), [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
+  const fixParagraphs = useCallback(createFixFunction('paragraphs', 'structure'), [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
+  const fixTerms = useCallback(createFixFunction('terms', 'terms'), [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
+  const fixCTA = useCallback(createFixFunction('cta', 'rewrite'), [content, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis]);
 
   const fixImages = useCallback(async (): Promise<string | null> => {
     setFixingArea('images');
     try {
-      // Images require special handling - for now just mark as done
-      // In a full implementation, this would generate/select images
       toast({
         title: 'Imagens',
         description: 'Adicione imagens manualmente para melhorar o score'
@@ -212,43 +242,9 @@ export function useContentOptimizer({
     }
   }, []);
 
-  const fixTerms = useCallback(async (): Promise<string | null> => {
-    setFixingArea('terms');
-    try {
-      const result = await callBoost('terms', content);
-      if (result.content && onContentUpdate) {
-        onContentUpdate(result.content);
-      }
-      if (result.newScore && onScoreUpdate) {
-        onScoreUpdate(result.newScore);
-      }
-      return result.content;
-    } finally {
-      setFixingArea(null);
-    }
-  }, [content, callBoost, onContentUpdate, onScoreUpdate]);
-
-  const fixCTA = useCallback(async (): Promise<string | null> => {
-    setFixingArea('cta');
-    try {
-      const result = await callBoost('rewrite', content);
-      if (result.content && onContentUpdate) {
-        onContentUpdate(result.content);
-      }
-      if (result.newScore && onScoreUpdate) {
-        onScoreUpdate(result.newScore);
-      }
-      return result.content;
-    } finally {
-      setFixingArea(null);
-    }
-  }, [content, callBoost, onContentUpdate, onScoreUpdate]);
-
   const fixMeta = useCallback(async (): Promise<void> => {
     setFixingArea('meta');
     try {
-      // Meta optimization would update article metadata
-      // For now, this is a placeholder
       toast({
         title: 'Meta Tags',
         description: 'Revise title e meta description manualmente'
@@ -258,10 +254,10 @@ export function useContentOptimizer({
     }
   }, []);
 
-  // Run to 100 - sequential optimization
+  // Run to 100 - sequential optimization with REGRESSION PROTECTION
   const runTo100 = useCallback(async () => {
     setIsRunning(true);
-    setCancelled(false);
+    cancelledRef.current = false;
     setProgress(0);
     setScoreHistory([]);
     
@@ -269,10 +265,9 @@ export function useContentOptimizer({
     setSteps(OPTIMIZATION_STEPS.map(s => ({ ...s, status: 'pending' })));
 
     let currentContent = content;
-    let iterationCount = 0;
-    const maxIterations = 5;
+    let stepsCompleted = 0;
     
-    // STEP 1: Ensure SERP analysis exists (first step in the list)
+    // STEP 1: Ensure SERP analysis exists
     setSteps(prev => prev.map((s, idx) => 
       idx === 0 ? { ...s, status: 'running' } : s
     ));
@@ -294,9 +289,10 @@ export function useContentOptimizer({
     setSteps(prev => prev.map((s, idx) => 
       idx === 0 ? { ...s, status: 'done' } : s
     ));
-    setProgress((1 / OPTIMIZATION_STEPS.length) * 100);
+    stepsCompleted++;
+    setProgress((stepsCompleted / OPTIMIZATION_STEPS.length) * 100);
     
-    // Get initial score (now that SERP exists)
+    // Get initial score
     const { data: initialData } = await supabase.functions.invoke('calculate-content-score', {
       body: { content, title, keyword, blogId, saveScore: false }
     });
@@ -304,35 +300,17 @@ export function useContentOptimizer({
     let currentScore = initialData?.score?.total || 0;
     setScoreHistory([currentScore]);
 
-    const stepFunctions: Record<string, () => Promise<string | null>> = {
-      serp: async () => null, // Already handled above
-      words: async () => {
-        const result = await callBoost('words', currentContent);
-        return result.content;
-      },
-      h2: async () => {
-        const result = await callBoost('h2', currentContent);
-        return result.content;
-      },
-      paragraphs: async () => {
-        const result = await callBoost('structure', currentContent);
-        return result.content;
-      },
-      terms: async () => {
-        const result = await callBoost('terms', currentContent);
-        return result.content;
-      },
-      images: async () => null, // Skip for now
-      meta: async () => null, // Skip for now
-      cta: async () => {
-        const result = await callBoost('rewrite', currentContent);
-        return result.content;
-      },
-    };
+    const stepFunctions: { id: string; fn: () => Promise<{ content: string | null; newScore: number | null; rejected: boolean; message?: string }> }[] = [
+      { id: 'serp', fn: async () => ({ content: null, newScore: null, rejected: false }) }, // Already handled
+      { id: 'words', fn: async () => callBoost('words', currentContent, currentScore) },
+      { id: 'h2', fn: async () => callBoost('h2', currentContent, currentScore) },
+      { id: 'terms', fn: async () => callBoost('terms', currentContent, currentScore) },
+      { id: 'cta', fn: async () => callBoost('rewrite', currentContent, currentScore) },
+    ];
 
-    // Start from step 1 (step 0 is SERP which we already did)
-    for (let i = 1; i < OPTIMIZATION_STEPS.length && !cancelled && iterationCount < maxIterations; i++) {
-      const step = OPTIMIZATION_STEPS[i];
+    // Execute each step with regression protection
+    for (let i = 1; i < stepFunctions.length && !cancelledRef.current; i++) {
+      const step = stepFunctions[i];
       
       // Update step status to running
       setSteps(prev => prev.map((s, idx) => 
@@ -340,59 +318,89 @@ export function useContentOptimizer({
       ));
       
       try {
-        const stepFn = stepFunctions[step.id];
-        if (stepFn) {
-          const newContent = await stepFn();
-          
-          if (newContent) {
-            currentContent = newContent;
-            onContentUpdate?.(newContent);
-            
-            // Calculate new score
-            const { data: scoreData } = await supabase.functions.invoke('calculate-content-score', {
-              body: { 
-                content: newContent, 
-                title, 
-                keyword, 
-                blogId, 
-                saveScore: !!articleId,
-                articleId 
-              }
-            });
-            
-            if (scoreData?.score?.total) {
-              const newScore = scoreData.score.total;
-              const scoreDiff = newScore - currentScore;
-              currentScore = newScore;
-              
-              setScoreHistory(prev => [...prev, newScore]);
-              onScoreUpdate?.(newScore);
-              
-              // Update step with score improvement
-              setSteps(prev => prev.map((s, idx) => 
-                idx === i ? { ...s, status: 'done', scoreAfter: scoreDiff > 0 ? scoreDiff : undefined } : s
-              ));
-              
-              // Check if we reached 100
-              if (newScore >= 100) {
-                // Mark remaining steps as skipped
-                setSteps(prev => prev.map((s, idx) => 
-                  idx > i ? { ...s, status: 'skipped' } : s
-                ));
-                break;
-              }
-            } else {
-              setSteps(prev => prev.map((s, idx) => 
-                idx === i ? { ...s, status: 'done' } : s
-              ));
+        // CRITICAL: Guardar estado anterior
+        const previousContent = currentContent;
+        const previousScore = currentScore;
+        
+        const result = await step.fn();
+        
+        // Verificar se foi rejeitado
+        if (result.rejected) {
+          console.log(`[OPTIMIZER] Step ${step.id} rejected: ${result.message}`);
+          setSteps(prev => prev.map((s, idx) => 
+            idx === i ? { ...s, status: 'skipped' } : s
+          ));
+          stepsCompleted++;
+          setProgress((stepsCompleted / OPTIMIZATION_STEPS.length) * 100);
+          continue;
+        }
+        
+        if (result.content) {
+          // VALIDATION: Verificar se o score realmente subiu
+          const { data: newScoreData } = await supabase.functions.invoke('calculate-content-score', {
+            body: { 
+              content: result.content, 
+              title, 
+              keyword, 
+              blogId, 
+              saveScore: false
             }
-          } else {
-            // No content change, mark as skipped
+          });
+          
+          const calculatedScore = newScoreData?.score?.total || previousScore;
+          const validation = validateScoreImprovement(previousScore, calculatedScore);
+          
+          if (!validation.valid) {
+            // ROLLBACK: Score caiu, reverter para conteúdo anterior
+            console.warn(`[OPTIMIZER] Step ${step.id} caused regression: ${validation.message}`);
+            currentContent = previousContent;
+            currentScore = previousScore;
+            
             setSteps(prev => prev.map((s, idx) => 
               idx === i ? { ...s, status: 'skipped' } : s
             ));
+          } else {
+            // SUCCESS: Score subiu ou manteve, aplicar mudança
+            currentContent = result.content;
+            currentScore = calculatedScore;
+            
+            onContentUpdate?.(result.content);
+            setScoreHistory(prev => [...prev, calculatedScore]);
+            onScoreUpdate?.(calculatedScore);
+            
+            // Salvar score se temos articleId
+            if (articleId) {
+              await supabase.functions.invoke('calculate-content-score', {
+                body: { 
+                  content: result.content, 
+                  title, 
+                  keyword, 
+                  blogId, 
+                  saveScore: true,
+                  articleId 
+                }
+              });
+            }
+            
+            setSteps(prev => prev.map((s, idx) => 
+              idx === i ? { 
+                ...s, 
+                status: 'done', 
+                scoreAfter: validation.improvement > 0 ? validation.improvement : undefined 
+              } : s
+            ));
+            
+            // Check if we reached 100
+            if (calculatedScore >= 100) {
+              // Mark remaining steps as skipped
+              setSteps(prev => prev.map((s, idx) => 
+                idx > i ? { ...s, status: 'skipped' } : s
+              ));
+              break;
+            }
           }
         } else {
+          // No content change, mark as skipped
           setSteps(prev => prev.map((s, idx) => 
             idx === i ? { ...s, status: 'skipped' } : s
           ));
@@ -404,12 +412,12 @@ export function useContentOptimizer({
         ));
       }
       
-      // Update progress
-      setProgress(((i + 1) / steps.length) * 100);
-      iterationCount++;
+      stepsCompleted++;
+      setProgress((stepsCompleted / OPTIMIZATION_STEPS.length) * 100);
     }
 
     setIsRunning(false);
+    setProgress(100);
     
     if (currentScore >= 100) {
       toast({
@@ -417,15 +425,19 @@ export function useContentOptimizer({
         description: `Score chegou a ${currentScore}`
       });
     } else {
+      const initialScore = scoreHistory[0] || initialData?.score?.total || 0;
+      const improvement = currentScore - initialScore;
       toast({
         title: 'Otimização concluída',
-        description: `Score final: ${currentScore}`
+        description: improvement > 0 
+          ? `Score: ${initialScore} → ${currentScore} (+${improvement})`
+          : `Score final: ${currentScore}`
       });
     }
-  }, [content, title, keyword, blogId, articleId, callBoost, onContentUpdate, onScoreUpdate, cancelled, ensureSERPAnalysis]);
+  }, [content, title, keyword, blogId, articleId, callBoost, onContentUpdate, onScoreUpdate, ensureSERPAnalysis, scoreHistory]);
 
   const cancelOptimization = useCallback(() => {
-    setCancelled(true);
+    cancelledRef.current = true;
     setIsRunning(false);
   }, []);
 
