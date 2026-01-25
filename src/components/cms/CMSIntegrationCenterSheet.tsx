@@ -1,0 +1,731 @@
+import { useState } from "react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useCMSIntegrations, type CMSPlatform, type CMSIntegration } from "@/hooks/useCMSIntegrations";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  Plus,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Globe,
+  ExternalLink,
+  RefreshCw,
+  Unplug,
+  Trash2,
+  AlertCircle,
+  Send,
+  Pencil,
+  PlugZap,
+} from "lucide-react";
+
+interface CMSIntegrationCenterSheetProps {
+  blogId: string;
+  articleId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPublishSuccess?: (url: string) => void;
+}
+
+interface PlatformConfig {
+  id: CMSPlatform;
+  name: string;
+  description: string;
+  icon: string;
+  authType: "application-password" | "oauth" | "api-key";
+  fields: Array<{
+    key: string;
+    label: string;
+    type: "text" | "password";
+    placeholder: string;
+    required: boolean;
+    helpText?: string;
+  }>;
+  helpLink?: string;
+  oauthButton?: boolean;
+}
+
+const PLATFORMS: PlatformConfig[] = [
+  {
+    id: "wordpress",
+    name: "WordPress.org",
+    description: "Para sites WordPress auto-hospedados",
+    icon: "🔵",
+    authType: "application-password",
+    fields: [
+      { key: "siteUrl", label: "URL do Site", type: "text", placeholder: "https://meusite.com.br", required: true },
+      { key: "username", label: "Usuário", type: "text", placeholder: "admin", required: true, helpText: "Usuário do WordPress com permissão de publicação" },
+      { key: "apiKey", label: "Senha de Aplicativo", type: "password", placeholder: "xxxx xxxx xxxx xxxx", required: true, helpText: "Gere em Usuários → Perfil → Senhas de Aplicativo" },
+    ],
+    helpLink: "https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/",
+  },
+  {
+    id: "wordpress-com",
+    name: "WordPress.com",
+    description: "Para sites hospedados no WordPress.com",
+    icon: "🌐",
+    authType: "oauth",
+    oauthButton: true,
+    fields: [],
+    helpLink: "https://wordpress.com/support/",
+  },
+  {
+    id: "wix",
+    name: "Wix",
+    description: "Conecte seu site Wix para publicação automática",
+    icon: "🟡",
+    authType: "api-key",
+    fields: [
+      { key: "siteUrl", label: "URL do Site", type: "text", placeholder: "https://meusite.wixsite.com/blog", required: true },
+      { key: "apiKey", label: "API Key", type: "password", placeholder: "IST.xxx...", required: true, helpText: "Gere em Wix Dev Center → API Keys" },
+    ],
+    helpLink: "https://dev.wix.com/docs/rest/getting-started/api-keys",
+  },
+];
+
+export function CMSIntegrationCenterSheet({
+  blogId,
+  articleId,
+  open,
+  onOpenChange,
+  onPublishSuccess,
+}: CMSIntegrationCenterSheetProps) {
+  const {
+    integrations,
+    loading,
+    testing,
+    addIntegration,
+    updateIntegration,
+    deleteIntegration,
+    testConnection,
+    publishArticle,
+    initiateWordPressComOAuth,
+  } = useCMSIntegrations(blogId);
+
+  // Dialog states
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState<CMSIntegration | null>(null);
+  
+  // Form states
+  const [selectedPlatform, setSelectedPlatform] = useState<CMSPlatform | null>(null);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  
+  // Action states
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  // Get platform config
+  const getPlatformConfig = (platformId: string) => {
+    return PLATFORMS.find((p) => p.id === platformId);
+  };
+
+  // Get status badge
+  const getStatusBadge = (integration: CMSIntegration) => {
+    if (!integration.is_active) {
+      return (
+        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400">
+          <Unplug className="h-3 w-3 mr-1" />
+          Desconectado
+        </Badge>
+      );
+    }
+    switch (integration.last_sync_status) {
+      case "connected":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Conectado
+          </Badge>
+        );
+      case "error":
+        return (
+          <Badge variant="destructive">
+            <XCircle className="h-3 w-3 mr-1" />
+            Erro
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Não testado
+          </Badge>
+        );
+    }
+  };
+
+  // Check if can publish directly
+  const activeIntegrations = integrations.filter((i) => i.is_active);
+  const testedIntegrations = activeIntegrations.filter((i) => i.last_sync_status === "connected");
+  const canPublishDirectly = testedIntegrations.length === 1;
+  const publishableIntegration = canPublishDirectly ? testedIntegrations[0] : null;
+
+  // Handle WordPress.com OAuth
+  const handleWordPressComOAuth = async () => {
+    setOauthLoading(true);
+    try {
+      const result = await initiateWordPressComOAuth();
+      if (result.success && result.authUrl) {
+        window.open(result.authUrl, "_blank", "width=600,height=700");
+        toast.info("Complete a autorização na janela do WordPress.com");
+        setAddDialogOpen(false);
+      } else {
+        toast.error(result.message || "Erro ao iniciar autenticação");
+      }
+    } catch (err) {
+      console.error("OAuth error:", err);
+      toast.error("Erro ao iniciar autenticação");
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  // Handle add integration
+  const handleAddIntegration = async () => {
+    if (!selectedPlatform) return;
+
+    const platform = PLATFORMS.find((p) => p.id === selectedPlatform);
+    if (!platform) return;
+
+    for (const field of platform.fields) {
+      if (field.required && !formData[field.key]) {
+        toast.error(`Campo obrigatório: ${field.label}`);
+        return;
+      }
+    }
+
+    setSaving(true);
+    const result = await addIntegration(selectedPlatform, formData.siteUrl || "", {
+      username: formData.username,
+      apiKey: formData.apiKey,
+      apiSecret: formData.apiSecret,
+    });
+
+    if (result.success) {
+      toast.success("Integração adicionada! Testando conexão...");
+      setAddDialogOpen(false);
+      setFormData({});
+      setSelectedPlatform(null);
+
+      if (result.integrationId) {
+        const testResult = await testConnection(result.integrationId);
+        if (testResult.success) {
+          toast.success(testResult.message);
+        } else {
+          toast.error(testResult.message);
+        }
+      }
+    } else {
+      toast.error(result.message || "Erro ao adicionar integração");
+    }
+    setSaving(false);
+  };
+
+  // Handle edit/reconnect
+  const handleEditIntegration = async () => {
+    if (!editingIntegration) return;
+
+    setSaving(true);
+    const updates: Record<string, unknown> = { is_active: true };
+    if (formData.siteUrl) updates.site_url = formData.siteUrl;
+    if (formData.username) updates.username = formData.username;
+    if (formData.apiKey) updates.api_key = formData.apiKey;
+
+    const success = await updateIntegration(editingIntegration.id, updates as Parameters<typeof updateIntegration>[1]);
+
+    if (success) {
+      toast.success("Credenciais atualizadas! Testando conexão...");
+      const testResult = await testConnection(editingIntegration.id);
+      if (testResult.success) {
+        toast.success(testResult.message);
+      } else {
+        toast.error(testResult.message);
+      }
+      setEditDialogOpen(false);
+      setEditingIntegration(null);
+      setFormData({});
+    } else {
+      toast.error("Erro ao atualizar integração");
+    }
+    setSaving(false);
+  };
+
+  // Handle test connection
+  const handleTestConnection = async (integrationId: string) => {
+    const result = await testConnection(integrationId);
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+  };
+
+  // Handle disconnect
+  const handleDisconnect = async (integrationId: string) => {
+    setDisconnecting(integrationId);
+    const success = await updateIntegration(integrationId, { is_active: false });
+    if (success) {
+      toast.success("Integração desconectada. Você pode reconectar a qualquer momento.");
+    }
+    setDisconnecting(null);
+  };
+
+  // Handle delete
+  const handleDelete = async (integrationId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta integração permanentemente?")) return;
+    setDeleting(integrationId);
+    await deleteIntegration(integrationId);
+    setDeleting(null);
+  };
+
+  // Handle publish
+  const handlePublish = async () => {
+    if (!publishableIntegration) return;
+
+    setPublishing(true);
+    try {
+      const result = await publishArticle(publishableIntegration.id, articleId);
+
+      if (result.success) {
+        toast.success("Publicado com sucesso!", {
+          description: result.externalUrl ? `Artigo disponível no ${getPlatformConfig(publishableIntegration.platform)?.name}` : undefined,
+          action: result.externalUrl
+            ? {
+                label: "Abrir",
+                onClick: () => window.open(result.externalUrl, "_blank"),
+              }
+            : undefined,
+        });
+        if (result.externalUrl) {
+          onPublishSuccess?.(result.externalUrl);
+          window.open(result.externalUrl, "_blank");
+        }
+        onOpenChange(false);
+      } else {
+        toast.error(`Erro ao publicar: ${result.message || "Erro desconhecido"}`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro inesperado ao publicar";
+      console.error("Publish error:", e);
+      toast.error(msg);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // Open edit dialog for reconnection
+  const openEditDialog = (integration: CMSIntegration) => {
+    setEditingIntegration(integration);
+    setFormData({
+      siteUrl: integration.site_url,
+      username: integration.username || "",
+      apiKey: "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[420px] sm:w-[540px] p-0 flex flex-col">
+        <SheetHeader className="p-6 pb-4 border-b">
+          <SheetTitle className="flex items-center gap-2">
+            <Globe className="h-5 w-5" />
+            Central de Publicação
+          </SheetTitle>
+          <SheetDescription>
+            Gerencie suas integrações CMS e publique seu artigo
+          </SheetDescription>
+        </SheetHeader>
+
+        <ScrollArea className="flex-1">
+          <div className="p-6 space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : integrations.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Globe className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="font-semibold mb-2">Nenhuma integração configurada</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Conecte seu WordPress ou Wix para publicar artigos automaticamente
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {integrations.map((integration) => {
+                  const platform = getPlatformConfig(integration.platform);
+                  const isTesting = testing === integration.id;
+                  const isDeleting = deleting === integration.id;
+                  const isDisconnecting = disconnecting === integration.id;
+
+                  return (
+                    <Card
+                      key={integration.id}
+                      className={!integration.is_active ? "opacity-70 border-dashed" : ""}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{platform?.icon || "🔗"}</span>
+                            <div>
+                              <CardTitle className="text-sm font-medium">
+                                {platform?.name || integration.platform}
+                              </CardTitle>
+                              <CardDescription className="flex items-center gap-1 text-xs">
+                                <Globe className="h-3 w-3" />
+                                {integration.site_url}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          {getStatusBadge(integration)}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-2 space-y-3">
+                        {integration.last_sync_at && (
+                          <p className="text-xs text-muted-foreground">
+                            Última verificação:{" "}
+                            {formatDistanceToNow(new Date(integration.last_sync_at), {
+                              addSuffix: true,
+                              locale: ptBR,
+                            })}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Test Connection */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTestConnection(integration.id)}
+                            disabled={isTesting}
+                            className="gap-1"
+                          >
+                            {isTesting ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            Testar
+                          </Button>
+
+                          {/* Disconnect (only if active) */}
+                          {integration.is_active && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDisconnect(integration.id)}
+                              disabled={isDisconnecting}
+                              className="gap-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-200"
+                            >
+                              {isDisconnecting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Unplug className="h-3 w-3" />
+                              )}
+                              Desconectar
+                            </Button>
+                          )}
+
+                          {/* Reconnect (only if inactive) */}
+                          {!integration.is_active && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(integration)}
+                              className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+                            >
+                              <PlugZap className="h-3 w-3" />
+                              Reconectar
+                            </Button>
+                          )}
+
+                          {/* Edit */}
+                          {integration.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(integration)}
+                              className="gap-1"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Editar
+                            </Button>
+                          )}
+
+                          {/* Delete */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(integration.id)}
+                            disabled={isDeleting}
+                            className="text-destructive hover:text-destructive ml-auto"
+                            title="Excluir permanentemente"
+                          >
+                            {isDeleting ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add Integration Dialog */}
+            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full gap-2 mt-4">
+                  <Plus className="h-4 w-4" />
+                  Adicionar Integração
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Adicionar Integração CMS</DialogTitle>
+                  <DialogDescription>
+                    Conecte uma plataforma externa para publicar seus artigos automaticamente
+                  </DialogDescription>
+                </DialogHeader>
+
+                <Tabs
+                  value={selectedPlatform || undefined}
+                  onValueChange={(v) => setSelectedPlatform(v as CMSPlatform)}
+                >
+                  <TabsList className="grid grid-cols-3 w-full">
+                    {PLATFORMS.map((platform) => (
+                      <TabsTrigger key={platform.id} value={platform.id} className="gap-1 text-xs sm:text-sm">
+                        <span>{platform.icon}</span>
+                        {platform.name}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  {PLATFORMS.map((platform) => (
+                    <TabsContent key={platform.id} value={platform.id} className="space-y-4 mt-4">
+                      <p className="text-sm text-muted-foreground">{platform.description}</p>
+
+                      {platform.helpLink && (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            <a
+                              href={platform.helpLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-primary"
+                            >
+                              Veja como obter suas credenciais →
+                            </a>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {platform.oauthButton ? (
+                        <Button
+                          onClick={handleWordPressComOAuth}
+                          disabled={oauthLoading}
+                          className="w-full gap-2"
+                        >
+                          {oauthLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Conectando...
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="h-4 w-4" />
+                              Conectar com WordPress.com
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <>
+                          {platform.fields.map((field) => (
+                            <div key={field.key} className="space-y-2">
+                              <Label htmlFor={field.key}>{field.label}</Label>
+                              <Input
+                                id={field.key}
+                                type={field.type}
+                                placeholder={field.placeholder}
+                                value={formData[field.key] || ""}
+                                onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
+                              />
+                              {field.helpText && (
+                                <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                              )}
+                            </div>
+                          ))}
+
+                          <Button onClick={handleAddIntegration} disabled={saving} className="w-full">
+                            {saving ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Conectando...
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Conectar {platform.name}
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </DialogContent>
+            </Dialog>
+
+            {/* Edit/Reconnect Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingIntegration?.is_active ? "Editar Credenciais" : "Reconectar Integração"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {editingIntegration?.is_active
+                      ? "Atualize as credenciais da integração"
+                      : "Atualize as credenciais para reconectar"}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {editingIntegration && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>URL do Site</Label>
+                      <Input
+                        value={formData.siteUrl || ""}
+                        onChange={(e) => setFormData({ ...formData, siteUrl: e.target.value })}
+                        placeholder="https://meusite.com.br"
+                      />
+                    </div>
+
+                    {editingIntegration.platform !== "wordpress-com" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Usuário</Label>
+                          <Input
+                            value={formData.username || ""}
+                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                            placeholder="admin"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Senha de Aplicativo / API Key</Label>
+                          <Input
+                            type="password"
+                            value={formData.apiKey || ""}
+                            onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                            placeholder="Nova senha/key (deixe vazio para manter)"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Deixe em branco para manter a credencial atual
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    <Button onClick={handleEditIntegration} disabled={saving} className="w-full">
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          {editingIntegration.is_active ? "Salvar e Testar" : "Reconectar e Testar"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
+        </ScrollArea>
+
+        {/* Footer with Publish Button */}
+        <div className="p-6 pt-4 border-t bg-background">
+          {canPublishDirectly && publishableIntegration ? (
+            <Button
+              onClick={handlePublish}
+              disabled={publishing}
+              className="w-full gap-2 bg-green-600 hover:bg-green-700"
+              size="lg"
+            >
+              {publishing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Publicando...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Publicar no {getPlatformConfig(publishableIntegration.platform)?.name}
+                </>
+              )}
+            </Button>
+          ) : activeIntegrations.length === 0 ? (
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Nenhuma integração ativa para publicar
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Adicione ou ative uma integração para publicar
+              </p>
+            </div>
+          ) : activeIntegrations.length > 1 ? (
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Múltiplas integrações ativas ({activeIntegrations.length})
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Desative as integrações que não deseja usar para publicar
+              </p>
+            </div>
+          ) : testedIntegrations.length === 0 ? (
+            <div className="text-center space-y-2">
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Integração não testada
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Teste a conexão antes de publicar
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

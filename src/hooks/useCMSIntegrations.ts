@@ -273,6 +273,31 @@ export function useCMSIntegrations(blogId: string) {
     }
   };
 
+  // Reconnect integration with updated credentials and auto-test
+  const reconnectIntegration = async (
+    integrationId: string,
+    updates: { site_url?: string; username?: string; api_key?: string }
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Update credentials and reactivate
+      const success = await updateIntegration(integrationId, {
+        ...updates,
+        is_active: true,
+      } as Parameters<typeof updateIntegration>[1]);
+
+      if (!success) {
+        return { success: false, message: "Erro ao atualizar credenciais" };
+      }
+
+      // Auto-test the new configuration
+      const testResult = await testConnection(integrationId);
+      return testResult;
+    } catch (err) {
+      console.error("Error reconnecting integration:", err);
+      return { success: false, message: "Erro ao reconectar integração" };
+    }
+  };
+
   return {
     integrations,
     loading,
@@ -285,6 +310,7 @@ export function useCMSIntegrations(blogId: string) {
     getPublishLogs,
     getActiveIntegration,
     initiateWordPressComOAuth,
+    reconnectIntegration,
     refetch: fetchIntegrations,
   };
 }
