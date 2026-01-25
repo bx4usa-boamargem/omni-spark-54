@@ -43,16 +43,14 @@ function getAuthorizationUrl(blogId: string): string {
     "your_client_id",
     "placeholder",
     "example",
-    "xxx",
-    "000000",
   ];
   
   const isPlaceholder = placeholderPatterns.some(
     (pattern) => clientId.toLowerCase().includes(pattern)
-  ) || clientId.length < 8;
+  ) || clientId.length < 10 || !/^\d+$/.test(clientId);
   
   if (isPlaceholder) {
-    console.error(`[OAuth BLOCKED] Invalid Client ID detected: "${clientId.substring(0, 20)}..."`);
+    console.error(`[OAuth BLOCKED] Invalid Client ID: length=${clientId.length}, isNumeric=${/^\d+$/.test(clientId)}`);
     throw new Error(
       "WORDPRESS_COM_CLIENT_ID contém valor de exemplo. " +
       "Registre um app real em https://developer.wordpress.com/apps/ e atualize os secrets."
