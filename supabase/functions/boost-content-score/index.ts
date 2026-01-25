@@ -48,6 +48,8 @@ interface BoostRequest {
   optimizationType?: 'full' | 'terms' | 'structure' | 'expansion' | 'words' | 'h2' | 'rewrite';
   // Novo: indica que o usuário iniciou a ação
   userInitiated?: boolean;
+  // Score anterior para validação de não-regressão
+  previousScore?: number;
 }
 
 serve(async (req) => {
@@ -67,7 +69,8 @@ serve(async (req) => {
       blogId,
       targetScore = 80,
       optimizationType = 'full',
-      userInitiated = true  // Default: assumir que veio do usuário
+      userInitiated = true,  // Default: assumir que veio do usuário
+      previousScore = 0      // Score anterior para validação
     } = request;
 
     if (!content || !keyword || !blogId) {
@@ -283,42 +286,52 @@ serve(async (req) => {
     // Build optimization prompt with niche instructions
     const nicheInstructions = getNichePromptInstructions(nicheProfile);
 
-    const optimizePrompt = `Você é um editor SEO especialista. Otimize este artigo para melhorar seu Content Score.
+    // =========================================================================
+    // PROMPT INCREMENTAL: Micro-ajustes em vez de reescrita completa
+    // REGRA: Máximo 10% do texto pode ser alterado
+    // =========================================================================
+    const optimizePrompt = `Você é um editor SEO de PRECISÃO CIRÚRGICA.
 
-## ARTIGO ATUAL
+## ⚠️ REGRA ABSOLUTA - NÃO VIOLAR
+Você NÃO PODE reescrever o artigo. Você APENAS:
+1. INSERE termos faltantes nas frases JÁ EXISTENTES
+2. EXPANDE parágrafos fracos com +1-2 sentenças SE necessário
+3. AJUSTA H2 existentes ou adiciona 1 novo H2 SE faltando
+4. MELHORA o CTA existente SE necessário
+
+LIMITE MÁXIMO: 10% do texto pode ser alterado. 90% DEVE permanecer IDÊNTICO.
+
+## ${nicheInstructions}
+
+## ARTIGO ATUAL (95% deve permanecer IDÊNTICO)
 Título: ${title}
 Palavras: ${currentMetrics.wordCount}
 H2s: ${currentMetrics.h2Count}
 Score atual: ${currentScore.total}/100
 
-## ${nicheInstructions}
-
-## CONTEÚDO
 ${content}
 
 ## MÉTRICAS DO MERCADO (SERP)
 - Média de palavras: ${serpMatrix.averages.avgWords}
 - Média de H2s: ${serpMatrix.averages.avgH2}
-- Termos dominantes (JÁ FILTRADOS PARA O NICHO): ${serpMatrix.commonTerms.slice(0, 15).join(', ')}
-- Gaps de conteúdo: ${serpMatrix.contentGaps.slice(0, 5).join(', ')}
+- Termos dominantes: ${serpMatrix.commonTerms.slice(0, 10).join(', ')}
 
-## OTIMIZAÇÕES NECESSÁRIAS
+## MICRO-AJUSTES PERMITIDOS (escolha apenas o necessário)
 ${optimizations.map((o, i) => `${i + 1}. ${o}`).join('\n')}
 
-## TERMOS FALTANTES (INCLUIR OBRIGATORIAMENTE)
-${filteredMissingTerms.slice(0, 10).join(', ')}
+## TERMOS A INSERIR (nas frases JÁ existentes, não criar parágrafos novos)
+${filteredMissingTerms.slice(0, 5).join(', ')}
 
-## INSTRUÇÕES
-1. Mantenha a estrutura geral do artigo
-2. Adicione conteúdo para atingir a média de palavras do mercado
-3. Inclua TODOS os termos faltantes de forma natural
-4. Adicione seções H2 se necessário
-5. Garanta um CTA claro no final
-6. Use o padrão Answer-First na introdução se não tiver
-7. Mantenha o tom e estilo originais
-8. NÃO insira termos de marketing genérico se o nicho não for marketing
+## INSTRUÇÕES CRÍTICAS
+1. NÃO reescreva parágrafos inteiros
+2. NÃO mude o tom ou estilo do autor
+3. NÃO adicione conteúdo genérico de marketing
+4. APENAS faça ajustes cirúrgicos mínimos
+5. Se não conseguir melhorar sem reescrever, retorne o artigo ORIGINAL
+6. Priorize inserir os termos faltantes nas frases existentes
 
-Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
+Retorne APENAS o artigo com as mínimas alterações em HTML/Markdown.
+Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem alterações.`;
 
     // Call AI for optimization with retry logic
     console.log(`[BOOST-SCORE] Calling AI for optimization...`);
@@ -417,6 +430,33 @@ Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
     console.log(`[BOOST-SCORE] New score: ${newScore.total}/100 (raw: ${rawNewScore.total}, floor: ${newFloorApplied}, was ${currentScore.total})`);
 
     // =========================================================================
+    // PROTEÇÃO ABSOLUTA: BLOQUEAR REGRESSÃO DE SCORE
+    // REGRA: Se newScore < currentScore, REJEITAR a mudança completamente
+    // =========================================================================
+    if (newScore.total < currentScore.total) {
+      console.error(`[BOOST-SCORE] ❌ SCORE REGRESSION BLOCKED: ${currentScore.total} → ${newScore.total}`);
+      
+      await logBlockedAttempt(supabase, articleId, blogId, 'score_regression', 'boost-content-score', {
+        blockedReason: 'Score regression not allowed',
+        originalValue: { proposedScore: newScore.total, currentScore: currentScore.total, scoreDrop: currentScore.total - newScore.total }
+      });
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          optimized: false,
+          rejected: true,
+          reason: 'score_regression_blocked',
+          content: content, // Retornar conteúdo ORIGINAL, não o otimizado
+          previousScore: currentScore.total,
+          newScore: currentScore.total, // Manter score anterior
+          message: `Otimização rejeitada: score cairia de ${currentScore.total} para ${newScore.total}. Nenhuma mudança aplicada.`
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // =========================================================================
     // VALIDAÇÃO DE NICHO: Verificar se o conteúdo otimizado não foi contaminado
     // =========================================================================
     const validationResult = validateContentForNiche(optimizedContent, nicheProfile);
@@ -425,7 +465,7 @@ Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
     }
 
     // =========================================================================
-    // SCORE GUARD: Verificar se o score pode ser alterado
+    // SCORE GUARD: Verificar se o score pode ser alterado (regras adicionais)
     // =========================================================================
     const triggeredBy = userInitiated ? 'user' : 'system';
     const scoreGuard = await canChangeScore(supabase, articleId, triggeredBy, newScore.total, currentScore.total);
@@ -438,17 +478,19 @@ Retorne APENAS o artigo otimizado em HTML/Markdown, sem explicações.`;
         originalValue: { proposedScore: newScore.total, currentScore: currentScore.total }
       });
       
-      // Retornar conteúdo otimizado mas manter score anterior
+      // Retornar conteúdo original (não aplicar mudanças destrutivas)
       return new Response(
         JSON.stringify({
-          success: true,
-          optimized: true,
-          content: optimizedContent,
+          success: false,
+          optimized: false,
+          rejected: true,
+          reason: 'score_guard_blocked',
+          content: content, // ORIGINAL, não otimizado
           previousScore: currentScore.total,
-          newScore: currentScore.total, // Manter score anterior
+          newScore: currentScore.total,
           scoreBlocked: true,
           scoreBlockedReason: scoreGuard.reason,
-          message: "Conteúdo otimizado, mas score mantido (alteração bloqueada)"
+          message: "Alteração bloqueada pelo Score Guard"
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
