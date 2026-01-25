@@ -28,6 +28,7 @@ interface WordPressSite {
 }
 
 // Generate OAuth authorization URL
+// CORRECTION #4: Generate unique state to prevent OAuth reuse and CSRF attacks
 function getAuthorizationUrl(blogId: string): string {
   const clientId = Deno.env.get("WORDPRESS_COM_CLIENT_ID");
   const redirectUri = Deno.env.get("WORDPRESS_COM_REDIRECT_URI");
@@ -36,13 +37,19 @@ function getAuthorizationUrl(blogId: string): string {
     throw new Error("WordPress.com OAuth not configured. Missing WORDPRESS_COM_CLIENT_ID or WORDPRESS_COM_REDIRECT_URI");
   }
   
+  // Generate unique state: blogId_timestamp_randomString
+  // This prevents reuse of OAuth attempts and protects against CSRF
+  const uniqueState = `${blogId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: "global",
-    state: blogId, // Pass blogId as state for callback
+    state: uniqueState, // Unique state per OAuth attempt
   });
+  
+  console.log(`OAuth state generated: ${uniqueState.substring(0, 50)}...`);
   
   return `https://public-api.wordpress.com/oauth2/authorize?${params.toString()}`;
 }
@@ -158,12 +165,23 @@ Deno.serve(async (req) => {
 
     // Handle OAuth callback - exchange code for tokens and save integration
     if (action === "callback") {
-      if (!code || !blogId) {
+      if (!code) {
         return new Response(
-          JSON.stringify({ success: false, message: "code and blogId are required" }),
+          JSON.stringify({ success: false, message: "code is required" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
         );
       }
+      
+      // CORRECTION #4: Extract blogId from unique state (format: blogId_timestamp_random)
+      const extractedBlogId = blogId?.split('_')[0];
+      if (!extractedBlogId) {
+        return new Response(
+          JSON.stringify({ success: false, message: "Invalid or missing state parameter" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        );
+      }
+      
+      console.log(`OAuth callback: extracted blogId=${extractedBlogId} from state=${blogId?.substring(0, 50)}...`);
 
       try {
         // Exchange code for tokens
@@ -195,11 +213,11 @@ Deno.serve(async (req) => {
 
         console.log("Target site:", targetSite.URL, "ID:", targetSite.ID);
 
-        // Check for existing integration
+        // Check for existing integration - use extractedBlogId
         const { data: existing } = await supabase
           .from("cms_integrations")
           .select("id")
-          .eq("blog_id", blogId)
+          .eq("blog_id", extractedBlogId)
           .eq("platform", "wordpress-com")
           .maybeSingle();
 
@@ -239,11 +257,11 @@ Deno.serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
-          // Create new integration
+          // Create new integration - use extractedBlogId
           const { data: newIntegration, error: insertError } = await supabase
             .from("cms_integrations")
             .insert({
-              blog_id: blogId,
+              blog_id: extractedBlogId,
               platform: "wordpress-com",
               site_url: targetSite.URL,
               auth_type: "oauth",

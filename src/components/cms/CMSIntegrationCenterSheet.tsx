@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -136,6 +136,14 @@ export function CMSIntegrationCenterSheet({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
+
+  // CORRECTION #1: Reset form state when add dialog opens to prevent dirty state
+  useEffect(() => {
+    if (addDialogOpen) {
+      setSelectedPlatform(null);
+      setFormData({});
+    }
+  }, [addDialogOpen]);
 
   // Get platform config
   const getPlatformConfig = (platformId: string) => {
@@ -590,72 +598,95 @@ export function CMSIntegrationCenterSheet({
                     <TabsContent key={platform.id} value={platform.id} className="space-y-4 mt-4">
                       <p className="text-sm text-muted-foreground">{platform.description}</p>
 
-                      {platform.helpLink && (
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            <a
-                              href={platform.helpLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline hover:text-primary"
-                            >
-                              Veja como obter suas credenciais →
-                            </a>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
+                      {/* CORRECTION #3: WordPress.com OAuth with explanation BEFORE action */}
                       {platform.oauthButton ? (
-                        <Button
-                          onClick={handleWordPressComOAuth}
-                          disabled={oauthLoading}
-                          className="w-full gap-2"
-                        >
-                          {oauthLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Conectando...
-                            </>
-                          ) : (
-                            <>
-                              <ExternalLink className="h-4 w-4" />
-                              Conectar com WordPress.com
-                            </>
-                          )}
-                        </Button>
-                      ) : (
-                        <>
-                          {platform.fields.map((field) => (
-                            <div key={field.key} className="space-y-2">
-                              <Label htmlFor={field.key}>{field.label}</Label>
-                              <Input
-                                id={field.key}
-                                type={field.type}
-                                placeholder={field.placeholder}
-                                value={formData[field.key] || ""}
-                                onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
-                              />
-                              {field.helpText && (
-                                <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                              )}
-                            </div>
-                          ))}
-
-                          <Button onClick={handleAddIntegration} disabled={saving} className="w-full">
-                            {saving ? (
+                        <div className="space-y-4">
+                          {/* Explanation of OAuth flow - user must consciously click */}
+                          <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+                            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <AlertDescription className="text-sm space-y-2">
+                              <p className="font-medium text-blue-900 dark:text-blue-100">
+                                Autenticação Segura WordPress.com
+                              </p>
+                              <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-disc">
+                                <li>Você será redirecionado para WordPress.com</li>
+                                <li>Autorize o OmniSeen a publicar em seu site</li>
+                                <li>Após autorizar, a conexão será salva automaticamente</li>
+                              </ul>
+                            </AlertDescription>
+                          </Alert>
+                          
+                          {/* OAuth Button - conscious action */}
+                          <Button
+                            onClick={handleWordPressComOAuth}
+                            disabled={oauthLoading}
+                            className="w-full gap-2"
+                            size="lg"
+                          >
+                            {oauthLoading ? (
                               <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Conectando...
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Abrindo WordPress.com...
                               </>
                             ) : (
                               <>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Conectar {platform.name}
+                                <ExternalLink className="h-4 w-4" />
+                                Conectar com WordPress.com
                               </>
                             )}
                           </Button>
-                        </>
+                        </div>
+                      ) : (
+                        /* CORRECTION #2: Credential platforms - Fields FIRST, help link AFTER */
+                        <div className="space-y-4">
+                          {/* Fields in highlighted box - PRIMARY ACTION */}
+                          <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
+                            {platform.fields.map((field) => (
+                              <div key={field.key} className="space-y-2">
+                                <Label htmlFor={field.key} className="font-semibold">{field.label}</Label>
+                                <Input
+                                  id={field.key}
+                                  type={field.type}
+                                  placeholder={field.placeholder}
+                                  value={formData[field.key] || ""}
+                                  onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })}
+                                />
+                                {field.helpText && (
+                                  <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                                )}
+                              </div>
+                            ))}
+
+                            <Button onClick={handleAddIntegration} disabled={saving} className="w-full" size="lg">
+                              {saving ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Conectando...
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Conectar {platform.name}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+
+                          {/* Help link - SECONDARY, after fields */}
+                          {platform.helpLink && (
+                            <div className="text-center">
+                              <a
+                                href={platform.helpLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-muted-foreground hover:text-primary underline inline-flex items-center gap-1"
+                              >
+                                <AlertCircle className="h-3 w-3" />
+                                Como obter credenciais do {platform.name}
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </TabsContent>
                   ))}
