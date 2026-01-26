@@ -462,13 +462,10 @@ Regras:
 
 // Função para injetar dados de pesquisa no prompt
 export function buildResearchInjection(researchData: GeoResearchData | null): string {
+  // SECURITY/GOVERNANCE: Do NOT allow "generic" research. If research is missing,
+  // the pipeline must abort upstream.
   if (!researchData) {
-    return `
-## DADOS DE PESQUISA (GENÉRICO)
-Use dados e estatísticas plausíveis para 2026.
-Cite tendências de mercado atuais.
-Mencione fontes como Sebrae, IBGE, Google quando aplicável.
-`;
+    return `\n## DADOS DE PESQUISA\n\n⛔ Pesquisa real não disponível. O pipeline deve BLOQUEAR a geração.\n`;
   }
 
   return `
