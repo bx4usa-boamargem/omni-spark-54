@@ -216,24 +216,21 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
 
     setPageData(prev => {
       if (!prev) return prev;
-
       const updated = { ...prev };
       
-      if (data.index !== undefined) {
-        // Array update
-        const arr = updated[blockType as keyof LandingPageData] as any[];
-        if (arr && arr[data.index]) {
-          arr[data.index] = { ...arr[data.index], [data.field]: data.value };
+      // Lógica de edição direta por caminho do objeto
+      if (blockType.includes('.')) {
+        const parts = blockType.split('.');
+        let target: any = updated;
+        for (let i = 0; i < parts.length - 1; i++) {
+          target = target[parts[i]];
         }
+        target[parts[parts.length - 1]] = data.value;
       } else {
-        // Object update
-        const obj = updated[blockType as keyof LandingPageData] as any;
-        if (obj) {
-          (updated as any)[blockType] = { ...obj, [data.field]: data.value };
-        }
+        (updated as any)[blockType] = data.value;
       }
 
-      return updated;
+      return { ...updated };
     });
   };
 

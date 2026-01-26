@@ -1184,6 +1184,21 @@ function generateHash(text: string): string {
   return Math.abs(hash).toString(36);
 }
 
+function cleanAndFormatContent(content: string): string {
+  // 1. Quebrar parágrafos excessivamente longos (baseado em pontos finais seguidos de muito texto)
+  // Divide o texto em parágrafos e processa cada um
+  const paragraphs = content.split('\n\n');
+  const refinedParagraphs = paragraphs.map(p => {
+    // Se o parágrafo tiver mais de 400 caracteres, tenta quebrar no meio
+    if (p.length > 400 && !p.startsWith('#') && !p.startsWith('>')) {
+      return p.replace(/([.!?])\s+(?=[A-Z])/g, '$1\n\n');
+    }
+    return p;
+  });
+
+  return refinedParagraphs.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   if (req.method === 'OPTIONS') {
@@ -1675,96 +1690,6 @@ serve(async (req) => {
       console.error(`[${requestId}] PERSIST_ERROR:`, persistError);
       throw new Error(`DB_PERSIST_FAILED: Não foi possível salvar o artigo no banco. ${persistError instanceof Error ? persistError.message : 'Erro desconhecido'}`);
     }
-
-    // ========================================================================
-    // FASE SERP: Análise Automática Pós-Geração (Non-blocking)
-    // Executa analyze-serp e calculate-content-score para o artigo recém-criado
-    // ========================================================================
-    const serpServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const primaryKeywordForScore = Array.isArray(keywords) && keywords.length > 0 ? keywords[0] : theme;
-
-    console.log(`[SERP] Starting automatic SERP analysis for keyword: "${primaryKeywordForScore}"`);
-    
-    // Run SERP analysis in background (don't block the response)
-    (async () => {
-      try {
-        // 1. Analyze SERP via Perplexity
-        const serpResponse = await fetch(`${supabaseUrl}/functions/v1/analyze-serp`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${serpServiceKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            keyword: primaryKeywordForScore,
-            territory: territoryData?.official_name || null,
-            blogId: blog_id,
-            forceRefresh: true,      // V3.0: Force fresh analysis for new articles
-            useFirecrawl: true       // V3.0: ALWAYS use real scraping
-          }),
-        });
-
-        if (serpResponse.ok) {
-          const serpData = await serpResponse.json();
-          console.log(`[SERP] Analysis complete: ${serpData.matrix?.averages?.avgWords || 0} avg words from market`);
-          
-          // 2. Calculate Content Score
-          const scoreResponse = await fetch(`${supabaseUrl}/functions/v1/calculate-content-score`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${serpServiceKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              articleId: persistedArticle.id,
-              title: article.title,
-              content: article.content,
-              keyword: primaryKeywordForScore,
-              blogId: blog_id,
-              serpAnalysisId: serpData.serpAnalysisId,
-              saveScore: true
-            }),
-          });
-
-          if (scoreResponse.ok) {
-            const scoreData = await scoreResponse.json();
-            console.log(`[SERP] Content Score calculated: ${scoreData.score?.total || 0}/100`);
-          }
-          
-          // 3. Log phases to ai_usage_logs
-          await supabase.from('ai_usage_logs').insert([
-            {
-              blog_id,
-              provider: 'perplexity',
-              endpoint: 'analyze-serp',
-              cost_usd: 0.02,
-              success: true,
-              metadata: { 
-                phase: 'serp_analysis', 
-                source: 'auto_post_generation',
-                keyword: primaryKeywordForScore,
-                article_id: persistedArticle.id
-              }
-            },
-            {
-              blog_id,
-              provider: 'internal',
-              endpoint: 'calculate-content-score',
-              cost_usd: 0,
-              success: true,
-              metadata: { 
-                phase: 'score_calc', 
-                article_id: persistedArticle.id
-              }
-            }
-          ]);
-        } else {
-          console.warn(`[SERP] Analysis failed with status: ${serpResponse.status}`);
-        }
-      } catch (serpError) {
-        console.warn('[SERP] Background analysis failed (non-blocking):', serpError);
-      }
-    })();
 
     // OmniCore metadata - reuse existing textModel from generation
     const writerModelUsed = 'google/gemini-2.5-flash'; // Model used for writing
