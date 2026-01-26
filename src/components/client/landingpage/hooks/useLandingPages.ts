@@ -143,6 +143,13 @@ export function useLandingPages(): UseLandingPagesReturn {
           data: { user },
         } = await supabase.auth.getUser();
 
+        if (!user) throw new Error("Usuário não autenticado");
+
+        // Garantir que page_data seja um objeto limpo antes de enviar
+        const cleanPageData = typeof page.page_data === 'string' 
+          ? JSON.parse(page.page_data) 
+          : JSON.parse(JSON.stringify(page.page_data || {}));
+
         const slug =
           page.slug ||
           page.title
@@ -155,20 +162,29 @@ export function useLandingPages(): UseLandingPagesReturn {
 
         const insertData = {
           blog_id: page.blog_id,
-          user_id: user?.id || null,
+          user_id: user.id,
           title: page.title || "Nova Landing Page",
           slug,
-          page_data: page.page_data || {},
+          page_data: cleanPageData, // Enviar como objeto puro para o SDK do Supabase
           status: page.status || "draft",
-          seo_title: page.seo_title,
-          seo_description: page.seo_description,
+          seo_title: page.seo_title || page.title,
+          seo_description: page.seo_description || "",
           template_type: page.template_type || "service_page",
           generation_source: page.generation_source || "ai",
         };
 
-        const { data, error } = await supabase.from("landing_pages").insert(insertData).select().single();
+        console.log("[useLandingPages] Attempting save with data:", insertData);
 
-        if (error) throw error;
+        const { data, error } = await supabase
+          .from("landing_pages")
+          .insert(insertData)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("[useLandingPages] Supabase Insert Error:", error);
+          throw error;
+        }
 
         toast.success("Landing page salva!");
         await fetchPages(page.blog_id);

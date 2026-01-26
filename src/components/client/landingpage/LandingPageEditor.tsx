@@ -213,23 +213,32 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
   const handleEditBlock = (blockType: string, data: any) => {
     if (!pageData) return;
 
+    // Usar atualização funcional para garantir que o React veja a mudança de estado como uma nova árvore
     setPageData(prev => {
       if (!prev) return prev;
-      const updated = { ...prev };
       
-      // Lógica de edição direta por caminho do objeto
+      // Deep clone para evitar mutação direta que quebra o DOM virtual
+      const updated = JSON.parse(JSON.stringify(prev));
+      
       if (blockType.includes('.')) {
         const parts = blockType.split('.');
         let target: any = updated;
         for (let i = 0; i < parts.length - 1; i++) {
+          if (!target[parts[i]]) target[parts[i]] = {};
           target = target[parts[i]];
         }
         target[parts[parts.length - 1]] = data.value;
+      } else if (data.index !== undefined) {
+        // Suporte para arrays (ex: serviços, depoimentos)
+        const arr = updated[blockType as keyof LandingPageData] as any[];
+        if (arr && arr[data.index]) {
+          arr[data.index] = { ...arr[data.index], [data.field]: data.value };
+        }
       } else {
-        (updated as any)[blockType] = data.value;
+        (updated as any)[blockType] = { ...updated[blockType], [data.field]: data.value };
       }
 
-      return { ...updated };
+      return updated;
     });
   };
 

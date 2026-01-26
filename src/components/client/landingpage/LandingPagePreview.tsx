@@ -13,6 +13,7 @@ import {
   ProcessStepsBlock,
   CTABannerBlock,
 } from "./blocks";
+import { useMemo } from "react";
 
 interface LandingPagePreviewProps {
   pageData: LandingPageData;
@@ -33,29 +34,42 @@ export function LandingPagePreview({
 }: LandingPagePreviewProps) {
   const whatsapp = pageData.contact?.whatsapp || pageData.contact?.phone;
 
+  // Gerar uma chave de renderização baseada na versão dos dados para evitar conflitos de DOM
+  const renderKey = useMemo(() => {
+    try {
+      return Math.random().toString(36).substring(7);
+    } catch (e) {
+      return 'static-key';
+    }
+  }, [pageData]);
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full" key={renderKey}>
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
         {visibility.hero && pageData.hero && (
-          <HeroBlock
-            data={pageData.hero}
-            whatsapp={whatsapp}
-            primaryColor={primaryColor}
-            isEditing={isEditing}
-            onEdit={(field, value) => onEditBlock?.('hero', { field, value })}
-          />
+          <div key="block-hero">
+            <HeroBlock
+              data={pageData.hero}
+              whatsapp={whatsapp}
+              primaryColor={primaryColor}
+              isEditing={isEditing}
+              onEdit={(field, value) => onEditBlock?.('hero', { field, value })}
+            />
+          </div>
         )}
 
         {/* Service Cards */}
         {visibility.services && pageData.services?.length > 0 && (
-          <ServiceCardsBlock
-            services={pageData.services}
-            phone={pageData.contact?.phone || ""}
-            primaryColor={primaryColor}
-            isEditing={isEditing}
-            onEdit={(index, field, value) => onEditBlock?.('services', { index, field, value })}
-          />
+          <div key="block-services">
+            <ServiceCardsBlock
+              services={pageData.services}
+              phone={pageData.contact?.phone || ""}
+              primaryColor={primaryColor}
+              isEditing={isEditing}
+              onEdit={(index, field, value) => onEditBlock?.('services', { index, field, value })}
+            />
+          </div>
         )}
 
         {/* Emergency Banner */}
