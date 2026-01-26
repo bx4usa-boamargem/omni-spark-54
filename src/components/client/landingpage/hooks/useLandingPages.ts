@@ -63,36 +63,18 @@ function buildHeroPrompt(pageData: LandingPageData, profile?: any): string {
 
   return (
     pageData.hero?.background_image_prompt ||
-    `Professional, realistic hero photograph for a service landing page.
-Company: ${companyName}
-Service: ${services}${city}
-Headline: ${title}
-Context: ${subtitle}
-
-Requirements:
-- Realistic photography, natural lighting
-- Modern, clean composition
-- No text, no logos, no watermarks
-- 16:9 aspect ratio`
+    `Professional, realistic hero photograph for a service landing page.\nCompany: ${companyName}\nService: ${services}${city}\nHeadline: ${title}\nContext: ${subtitle}\n\nRequirements:\n- Realistic photography, natural lighting\n- Modern, clean composition\n- No text, no logos, no watermarks\n- 16:9 aspect ratio`
   );
 }
 
 function buildServiceDetailPrompt(detail: any, profile?: any): string {
   const companyName = profile?.company_name || "empresa";
   const services = profile?.services || profile?.niche || "serviços";
-  const city = profile?.city ? ` in ${profile.city}` : "";
+  const city = profile?.city ? ` em ${profile.city}` : "";
 
   return (
     detail.image_prompt ||
-    `Professional realistic photo illustrating "${detail.title}".
-Company: ${companyName}
-Industry: ${services}${city}
-
-Requirements:
-- Realistic photography
-- No text, no logos, no watermarks
-- Editorial quality, clean composition
-- 16:9 aspect ratio`
+    `Professional realistic photo illustrating "${detail.title}".\nCompany: ${companyName}\nIndustry: ${services}${city}\n\nRequirements:\n- Realistic photography\n- No text, no logos, no watermarks\n- Editorial quality, clean composition\n- 16:9 aspect ratio`
   );
 }
 
@@ -113,7 +95,6 @@ export function useLandingPages(): UseLandingPagesReturn {
 
       if (error) throw error;
 
-      // Cast the data to LandingPage type
       setPages((data || []) as unknown as LandingPage[]);
     } catch (error) {
       console.error("[useLandingPages] Fetch error:", error);
@@ -162,7 +143,6 @@ export function useLandingPages(): UseLandingPagesReturn {
           data: { user },
         } = await supabase.auth.getUser();
 
-        // Generate slug from title if not provided
         const slug =
           page.slug ||
           page.title
@@ -216,7 +196,6 @@ export function useLandingPages(): UseLandingPagesReturn {
         updated_at: new Date().toISOString(),
       };
 
-      // Copy allowed fields
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.slug !== undefined) updateData.slug = updates.slug;
       if (updates.page_data !== undefined) updateData.page_data = updates.page_data as unknown;
@@ -276,18 +255,15 @@ export function useLandingPages(): UseLandingPagesReturn {
       const pageData: LandingPageData =
         typeof pageRow.page_data === "string" ? JSON.parse(pageRow.page_data) : (pageRow.page_data as any);
 
-      // Fetch business context (public table)
       const { data: profile } = await supabase
         .from("business_profile")
         .select("company_name, services, niche, city")
         .eq("blog_id", blogId)
         .maybeSingle();
 
-      // Ensure images (hero + service details)
       let mutated = false;
-      const nextData: LandingPageData = structuredClone(pageData);
+      const nextData: LandingPageData = JSON.parse(JSON.stringify(pageData));
 
-      // HERO
       if (!nextData.hero?.background_image_url) {
         const heroUrl = await generateLandingPageImage({
           prompt: buildHeroPrompt(nextData, profile),
@@ -304,7 +280,6 @@ export function useLandingPages(): UseLandingPagesReturn {
         }
       }
 
-      // SECTIONS (service_details)
       if (Array.isArray(nextData.service_details)) {
         const updatedDetails = [...nextData.service_details];
 
@@ -334,23 +309,28 @@ export function useLandingPages(): UseLandingPagesReturn {
       const featuredImageUrl =
         (pageRow.featured_image_url as string | null) || nextData.hero?.background_image_url || null;
 
-      const { error } = await supabase
-        .from("landing_pages")
-        .update({
-          page_data: mutated ? (nextData as any) : undefined,
-          featured_image_url: featuredImageUrl,
-          status: "published",
-          published_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
+      const updatePayload: Record<string, unknown> = {
+        featured_image_url: featuredImageUrl,
+        status: "published",
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (mutated) updatePayload.page_data = nextData as any;
+
+      const { error } = await supabase.from("landing_pages").update(updatePayload).eq("id", id);
 
       if (error) throw error;
 
       setPages((prev) =>
         prev.map((p) =>
           p.id === id
-            ? { ...p, status: "published" as const, published_at: new Date().toISOString(), featured_image_url: featuredImageUrl || undefined }
+            ? {
+                ...p,
+                status: "published" as const,
+                published_at: new Date().toISOString(),
+                featured_image_url: featuredImageUrl || undefined,
+              }
             : p
         )
       );
