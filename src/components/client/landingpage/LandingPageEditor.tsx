@@ -73,6 +73,7 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
   const [seoDescription, setSeoDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("preview");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Fetch business profile for generation context
   const [businessProfile, setBusinessProfile] = useState<any>(null);
@@ -127,70 +128,51 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
     }
   };
 
+  const handleSave = async (dataToSave?: any) => {
+    const finalData = dataToSave || pageData;
+    if (!blog?.id || !finalData) {
+      toast.error("Dados incompletos para salvar.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await savePage({
+        blog_id: blog.id,
+        title: title || finalData.hero?.headline || "Nova Super Página",
+        slug: slug || "super-pagina-" + Date.now(),
+        page_data: finalData,
+        status: 'draft'
+      });
+
+      if (result) {
+        setPage(result);
+        navigate(`/client/landing-pages/${result.id}`, { replace: true });
+        toast.success("Página salva no banco!");
+      }
+    } catch (err) {
+      console.error("[Editor] Save Error:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!blog?.id) return;
 
     const result = await generatePage({
       blog_id: blog.id,
       company_name: businessProfile?.company_name,
-      niche: businessProfile?.services?.split(",")[0]?.trim(),
+      niche: businessProfile?.niche,
       city: businessProfile?.city,
-      services: businessProfile?.services?.split(",").map((s: string) => s.trim()),
-      phone: businessProfile?.phone,
-      whatsapp: businessProfile?.whatsapp || businessProfile?.phone,
-      address: businessProfile?.address,
-      differentiator: businessProfile?.differentiator,
-      target_audience: businessProfile?.target_audience,
+      services: businessProfile?.services?.split(',')
     });
 
     if (result) {
+      console.log("[Editor] Received resolved data:", result);
       setPageData(result);
-      // Auto-save após gerar com imagens resolvidas
-      const newPage = await savePage({
-        blog_id: blog.id,
-        title: result.hero?.headline || "Nova Super Página",
-        slug: result.brand?.service?.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + result.brand?.city?.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        page_data: result,
-        status: 'draft'
-      });
-      
-      if (newPage) {
-        setPage(newPage);
-        navigate(`/client/landing-pages/${newPage.id}`, { replace: true });
-      }
-      setActiveTab("preview");
-    }
-  };
-
-  const handleSave = async () => {
-    if (!blog?.id || !pageData) return;
-
-    if (page?.id) {
-      // Update existing
-      const success = await updatePage(page.id, {
-        title,
-        slug,
-        page_data: pageData,
-        seo_title: seoTitle,
-        seo_description: seoDescription,
-      });
-      if (success) {
-        toast.success("Página atualizada!");
-      }
-    } else {
-      // Create new
-      const newPage = await savePage({
-        blog_id: blog.id,
-        title,
-        slug,
-        page_data: pageData,
-        seo_title: seoTitle,
-        seo_description: seoDescription,
-      });
-      if (newPage) {
-        setPage(newPage);
-        navigate(`/client/landing-pages/${newPage.id}`, { replace: true });
-      }
+      // Salva imediatamente após a resolução bem-sucedida das imagens
+      await handleSave(result);
     }
   };
 

@@ -20,18 +20,25 @@ export function ServiceAuthorityLayout({
   isEditing = false,
   onEditBlock,
 }: ServiceAuthorityLayoutProps) {
-  // Extract data with fallbacks to avoid crashes during transitions
+  // Debug log para confirmar que o layout novo está sendo montado
+  console.log("[ServiceAuthorityLayout] Rendering with template:", pageData.template);
+
   const hero = pageData.hero || {};
   const services = pageData.services || [];
   const emergency = pageData.emergency || {};
-  const authorityContent = pageData.authority_content || {};
+  const authorityContent = pageData.authority_content || ""; // Agora pode ser string direta ou html
   const brand = pageData.brand || {};
 
   return (
-    <div className="w-full bg-white text-slate-900 font-sans selection:bg-blue-100">
+    <div className="w-full bg-white text-slate-900 font-sans selection:bg-blue-100 border border-slate-200">
+      {/* Marcador visual de que o layout novo está ativo */}
+      <div className="bg-slate-900 text-white text-[10px] px-2 py-1 uppercase tracking-widest font-bold">
+        Service Authority Template v1.0
+      </div>
+
       {/* 1. Authority Hero */}
       <AuthorityHero 
-        data={hero} 
+        data={{...hero, phone: brand.phone}} 
         primaryColor={primaryColor} 
         isEditing={isEditing}
         onEdit={(field, value) => onEditBlock?.('hero', { field, value })}
@@ -59,11 +66,17 @@ export function ServiceAuthorityLayout({
         onEdit={(field, value) => onEditBlock?.('emergency', { field, value })}
       />
 
-      {/* 5. Authority Content Block (The Core SEO Long-form) */}
-      <AuthorityContentBlock 
-        data={authorityContent} 
-        primaryColor={primaryColor}
-      />
+      {/* 5. Authority Content Block */}
+      <section className="py-24 px-6 bg-slate-50 border-y border-slate-200">
+        <div className="container max-w-4xl mx-auto">
+          <div className="prose prose-slate prose-lg max-w-none 
+            prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-950
+            prose-h2:text-4xl prose-h2:border-b-4 prose-h2:pb-4 prose-h2:mb-8
+            prose-p:text-slate-700 prose-p:leading-relaxed">
+            <ArticleContent content={typeof authorityContent === 'string' ? authorityContent : (authorityContent.html || "")} />
+          </div>
+        </div>
+      </section>
 
       {/* 6. FAQ Section */}
       <FAQSection 

@@ -116,60 +116,50 @@ export function useLandingPages(): UseLandingPagesReturn {
         body: request,
       });
 
-      if (error) throw error;
+      if (error || !data.success) throw error || new Error(data.error);
 
-      if (data?.success && data?.page_data) {
-        const pageData = data.page_data as any;
-        const pageTitle = pageData.hero?.headline || "Landing Page";
-        
-        toast.info("Resolvendo imagens fotográficas...");
+      const pageData = data.page_data;
+      
+      // LOG DE RESOLUÇÃO
+      console.log("[ImagePipeline] Starting resolution for prompts:", {
+        hero: pageData.hero?.image_prompt,
+        servicesCount: pageData.services?.length
+      });
 
-        // 1. Resolver Hero Image
-        if (pageData.hero?.image_prompt) {
-          const url = await generateLandingPageImage({
-            prompt: pageData.hero.image_prompt,
-            context: 'hero',
-            pageTitle,
-            userId: user?.id,
-            blogId: request.blog_id,
-            fileName: `lp-hero-${Date.now()}.png`
-          });
-          if (url) pageData.hero.image_url = url;
-        }
+      toast.info("Gerando imagens fotográficas reais...");
 
-        // 2. Resolver Service Images
-        if (Array.isArray(pageData.services)) {
-          for (let i = 0; i < pageData.services.length; i++) {
-            const service = pageData.services[i];
-            if (service.image_prompt) {
-              const url = await generateLandingPageImage({
-                prompt: service.image_prompt,
-                context: `service_${i}`,
-                pageTitle: service.title,
-                userId: user?.id,
-                blogId: request.blog_id,
-                fileName: `lp-service-${i}-${Date.now()}.png`
-              });
-              if (url) service.image_url = url;
-            }
+      // RESOLUÇÃO SEQUENCIAL COM RETRY
+      if (pageData.hero?.image_prompt) {
+        pageData.hero.image_url = await generateLandingPageImage({
+          prompt: pageData.hero.image_prompt,
+          context: 'hero',
+          pageTitle: pageData.hero.headline,
+          userId: user?.id,
+          blogId: request.blog_id,
+          fileName: `hero-${Date.now()}.png`
+        });
+      }
+
+      if (Array.isArray(pageData.services)) {
+        for (let i = 0; i < pageData.services.length; i++) {
+          if (pageData.services[i].image_prompt) {
+            pageData.services[i].image_url = await generateLandingPageImage({
+              prompt: pageData.services[i].image_prompt,
+              context: `service-${i}`,
+              pageTitle: pageData.services[i].title,
+              userId: user?.id,
+              blogId: request.blog_id,
+              fileName: `service-${i}-${Date.now()}.png`
+            });
           }
         }
-
-        toast.success("Landing page e imagens geradas!");
-        return pageData;
-      } else {
-        throw new Error(data?.error || "Falha ao gerar landing page");
       }
-    } catch (error: any) {
-      console.error("[useLandingPages] Generate error:", error);
 
-      if (error.message?.includes("Rate limit")) {
-        toast.error("Limite de requisições excedido. Tente novamente em alguns minutos.");
-      } else if (error.message?.includes("Payment required")) {
-        toast.error("Créditos insuficientes. Adicione créditos para continuar.");
-      } else {
-        toast.error("Erro ao gerar landing page");
-      }
+      toast.success("Imagens resolvidas com sucesso!");
+      return pageData;
+    } catch (err: any) {
+      console.error("[useLandingPages] Generation Pipeline Error:", err);
+      toast.error("Erro no pipeline de geração: " + err.message);
       return null;
     } finally {
       setGenerating(false);
