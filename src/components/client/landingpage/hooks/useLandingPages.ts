@@ -112,82 +112,106 @@ export function useLandingPages(): UseLandingPagesReturn {
     setGenerating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
       
       // 1. GERAÇÃO DO JSON ESTRUTURAL
       const { data, error } = await supabase.functions.invoke("generate-landing-page", {
         body: request,
       });
 
-      if (error || !data.success) throw error || new Error(data.error);
+      if (error || !data.success) {
+        console.error("[useLandingPages] Edge Function Error:", error || data?.error);
+        throw new Error(data?.error || "IA generation failed");
+      }
+      
       const pageData = data.page_data;
       
+      // Inicializar URLs como null para evitar erros de render
+      if (pageData.hero) pageData.hero.image_url = null;
+      if (Array.isArray(pageData.services)) {
+        pageData.services = pageData.services.map((s: any) => ({ ...s, image_url: null }));
+      }
+
       toast.info("Geração de Imagens Fotográficas em andamento...");
 
-      // 2. RESOLUÇÃO REAL DE IMAGENS (PIPELINE IDÊNTICO AO ARTIGO)
-      // Resolve Hero
+      // 2. RESOLUÇÃO DE IMAGENS (Pipeline idêntico ao Artigo)
+      // Resolve Hero - Usando prompt limpo e curto
       if (pageData.hero?.image_prompt) {
-        const { data: heroImg } = await supabase.functions.invoke("generate-image", {
-          body: {
-            prompt: pageData.hero.image_prompt,
-            context: 'hero',
-            articleTitle: pageData.hero.headline,
-            blog_id: request.blog_id,
-            user_id: user?.id
-          }
-        });
-        if (heroImg?.publicUrl) pageData.hero.image_url = heroImg.publicUrl;
+        try {
+          const { data: heroImg } = await supabase.functions.invoke("generate-image", {
+            body: {
+              prompt: pageData.hero.image_prompt,
+              context: 'hero',
+              blog_id: request.blog_id,
+              user_id: user.id
+            }
+          });
+          if (heroImg?.publicUrl) pageData.hero.image_url = heroImg.publicUrl;
+        } catch (e) {
+          console.warn("[Pipeline] Hero image resolution failed, continuing...");
+        }
       }
 
       // Resolve Service Cards
       if (Array.isArray(pageData.services)) {
         for (let i = 0; i < pageData.services.length; i++) {
           if (pageData.services[i].image_prompt) {
-            const { data: svcImg } = await supabase.functions.invoke("generate-image", {
-              body: {
-                prompt: pageData.services[i].image_prompt,
-                context: `service_${i}`,
-                articleTitle: pageData.services[i].title,
-                blog_id: request.blog_id,
-                user_id: user?.id
-              }
-            });
-            if (svcImg?.publicUrl) pageData.services[i].image_url = svcImg.publicUrl;
+            try {
+              const { data: svcImg } = await supabase.functions.invoke("generate-image", {
+                body: {
+                  prompt: pageData.services[i].image_prompt,
+                  context: `service_${i}`,
+                  blog_id: request.blog_id,
+                  user_id: user.id
+                }
+              });
+              if (svcImg?.publicUrl) pageData.services[i].image_url = svcImg.publicUrl;
+            } catch (e) {
+              console.warn(`[Pipeline] Service ${i} image resolution failed, continuing...`);
+            }
           }
         }
       }
 
       // 3. PERSISTÊNCIA OBRIGATÓRIA ANTES DO RENDER
-      const slug = (pageData.hero?.headline || "lp")
+      // Usar um slug robusto e único
+      const timestamp = Date.now();
+      const baseSlug = (pageData.hero?.headline || "lp")
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") + "-" + Date.now();
+        .replace(/(^-|-$)/g, "");
+      const finalSlug = `${baseSlug}-${timestamp}`;
+
+      const insertPayload = {
+        blog_id: request.blog_id,
+        user_id: user.id,
+        title: pageData.hero?.headline || "Nova Super Página",
+        slug: finalSlug,
+        page_data: pageData,
+        status: 'published',
+        published_at: new Date().toISOString()
+      };
+
+      console.log("[Pipeline] Attempting final insert:", insertPayload);
 
       const { data: savedPage, error: saveError } = await supabase
         .from("landing_pages")
-        .insert({
-          blog_id: request.blog_id,
-          user_id: user?.id,
-          title: pageData.hero?.headline || "Nova Super Página",
-          slug: slug,
-          page_data: pageData,
-          status: 'published', // Forçar publicado para o preview público funcionar
-          published_at: new Date().toISOString()
-        })
+        .insert([insertPayload])
         .select()
         .single();
 
       if (saveError) {
-        console.error("[Pipeline] Save Error:", saveError);
-        throw saveError;
+        console.error("[Pipeline] Save Error Detail:", saveError);
+        throw new Error(`Database save failed: ${saveError.message}`);
       }
 
-      toast.success("Super Página gerada, resolvida e publicada!");
+      toast.success("Super Página gerada e publicada!");
       return pageData;
     } catch (err: any) {
-      console.error("[useLandingPages] Critical Pipeline Failure:", err);
-      toast.error("Falha na criação da Super Página");
+      console.error("[useLandingPages] CRITICAL FAILURE:", err);
+      toast.error(err.message || "Falha na criação da Super Página");
       return null;
     } finally {
       setGenerating(false);
