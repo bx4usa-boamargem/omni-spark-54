@@ -1185,18 +1185,23 @@ function generateHash(text: string): string {
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
-
+    const authHeader = req.headers.get('Authorization')!;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
+    // Client com o token do usuário para pegar o user.id real do JWT
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    
+    // Client admin para persistência controlada
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const {
@@ -1640,23 +1645,34 @@ serve(async (req) => {
     // O frontend espera id, slug e status válidos para confirmar sucesso
     const autoPublish = true; // Fluxo de subconta sempre auto-publica
     
-    console.log('[PERSIST] Starting article persistence to database...');
+    console.log(`[${requestId}] Starting persistence: blog_id=${blog_id}, user_id=${user?.id}`);
     
-    let persistedArticle: { id: string; slug: string; status: string; title: string };
-    
+    let persistedArticle;
     try {
-      persistedArticle = await persistArticleToDb(
-        supabase,
-        blog_id!,
-        article,
-        autoPublish,
-        inferredCategory,  // Pass category
-        inferredTags       // Pass tags
-      );
-      
-      console.log(`[PERSIST] ✅ Article saved successfully: id=${persistedArticle.id}, slug=${persistedArticle.slug}, status=${persistedArticle.status}`);
+      const insertData = {
+        blog_id: blog_id,
+        user_id: user?.id, // Derivado do JWT
+        title: article.title,
+        slug: article.slug, // assumindo slug já gerado ou gerar no persist
+        content: article.content,
+        status: 'draft',
+        // ... other fields
+      };
+
+      const { data, error: insertError } = await supabase
+        .from('articles')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error(`[${requestId}] INSERT_ERROR:`, insertError);
+        throw insertError;
+      }
+      persistedArticle = data;
+      console.log(`[${requestId}] SUCCESS: id=${data.id}`);
     } catch (persistError) {
-      console.error('[PERSIST] ❌ Failed to save article to database:', persistError);
+      console.error(`[${requestId}] PERSIST_ERROR:`, persistError);
       throw new Error(`DB_PERSIST_FAILED: Não foi possível salvar o artigo no banco. ${persistError instanceof Error ? persistError.message : 'Erro desconhecido'}`);
     }
 
