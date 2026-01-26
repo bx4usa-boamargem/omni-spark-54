@@ -9,18 +9,22 @@ interface AuthorityHeroProps {
 }
 
 export function AuthorityHero({ data, primaryColor, isEditing, onEdit }: AuthorityHeroProps) {
-  // Placeholder for real image generation logic - will use Unsplash fallback in next step
-  const heroImageUrl = data.image_url || "https://images.unsplash.com/photo-1635424710928-0544e8512eae?q=80&w=2071&auto=format&fit=crop";
+  // Agora usamos APENAS a URL que já vem resolvida no page_data
+  const heroImageUrl = data.image_url;
 
   return (
     <section className="relative min-h-[600px] flex items-center bg-slate-900 overflow-hidden">
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src={heroImageUrl} 
-          alt="Service Hero" 
-          className="w-full h-full object-cover opacity-40"
-        />
+        {heroImageUrl ? (
+          <img 
+            src={heroImageUrl} 
+            alt="Service Hero" 
+            className="w-full h-full object-cover opacity-40"
+          />
+        ) : (
+          <div className="w-full h-full bg-slate-800 animate-pulse" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
       </div>
 

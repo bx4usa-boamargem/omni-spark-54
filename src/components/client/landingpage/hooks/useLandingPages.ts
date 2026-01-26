@@ -28,26 +28,30 @@ async function generateLandingPageImage(params: {
 }): Promise<string | null> {
   const { prompt, context, pageTitle, userId, blogId, fileName } = params;
 
-  const { data, error } = await supabase.functions.invoke("generate-image", {
-    body: {
-      prompt,
-      context,
-      articleTitle: pageTitle,
-      articleTheme: pageTitle,
-      user_id: userId,
-      blog_id: blogId,
-    },
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke("generate-image", {
+      body: {
+        prompt: `Photorealistic professional photography, ${prompt}, natural lighting, high detail, no text, no logos, no cartoon, no 3D, no anime.`,
+        context,
+        articleTitle: pageTitle,
+        articleTheme: pageTitle,
+        user_id: userId,
+        blog_id: blogId,
+      },
+    });
 
-  if (error) {
-    console.error("[useLandingPages] generate-image error:", error);
-    return null;
-  }
+    if (error) throw error;
 
-  if (data?.publicUrl) return data.publicUrl as string;
+    if (data?.publicUrl) return data.publicUrl as string;
 
-  if (data?.imageBase64) {
-    return await uploadImageToStorage(data.imageBase64 as string, fileName, "article-images");
+    if (data?.imageBase64) {
+      return await uploadImageToStorage(data.imageBase64 as string, fileName, "article-images");
+    }
+  } catch (err) {
+    console.error(`[ImagePipeline] Generation failed for ${context}, falling back to Unsplash:`, err);
+    // Fallback para Unsplash usando o prompt simplificado
+    const query = encodeURIComponent(prompt.split(',')[0]);
+    return `https://source.unsplash.com/featured/?${query},professional,service`;
   }
 
   return null;
@@ -107,6 +111,7 @@ export function useLandingPages(): UseLandingPagesReturn {
   const generatePage = useCallback(async (request: GenerateLandingPageRequest): Promise<LandingPageData | null> => {
     setGenerating(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase.functions.invoke("generate-landing-page", {
         body: request,
       });
@@ -114,8 +119,44 @@ export function useLandingPages(): UseLandingPagesReturn {
       if (error) throw error;
 
       if (data?.success && data?.page_data) {
-        toast.success("Landing page gerada com sucesso!");
-        return data.page_data as LandingPageData;
+        const pageData = data.page_data as any;
+        const pageTitle = pageData.hero?.headline || "Landing Page";
+        
+        toast.info("Resolvendo imagens fotográficas...");
+
+        // 1. Resolver Hero Image
+        if (pageData.hero?.image_prompt) {
+          const url = await generateLandingPageImage({
+            prompt: pageData.hero.image_prompt,
+            context: 'hero',
+            pageTitle,
+            userId: user?.id,
+            blogId: request.blog_id,
+            fileName: `lp-hero-${Date.now()}.png`
+          });
+          if (url) pageData.hero.image_url = url;
+        }
+
+        // 2. Resolver Service Images
+        if (Array.isArray(pageData.services)) {
+          for (let i = 0; i < pageData.services.length; i++) {
+            const service = pageData.services[i];
+            if (service.image_prompt) {
+              const url = await generateLandingPageImage({
+                prompt: service.image_prompt,
+                context: `service_${i}`,
+                pageTitle: service.title,
+                userId: user?.id,
+                blogId: request.blog_id,
+                fileName: `lp-service-${i}-${Date.now()}.png`
+              });
+              if (url) service.image_url = url;
+            }
+          }
+        }
+
+        toast.success("Landing page e imagens geradas!");
+        return pageData;
       } else {
         throw new Error(data?.error || "Falha ao gerar landing page");
       }

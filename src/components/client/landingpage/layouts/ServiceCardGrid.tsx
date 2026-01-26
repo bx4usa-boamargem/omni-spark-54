@@ -27,11 +27,17 @@ export function ServiceCardGrid({ services, primaryColor, isEditing, onEdit }: S
             >
               {/* Card Image */}
               <div className="h-56 overflow-hidden bg-slate-100">
-                <img 
-                  src={service.image_url || "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=2070&auto=format&fit=crop"} 
-                  alt={service.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
+                {service.image_url ? (
+                  <img 
+                    src={service.image_url} 
+                    alt={service.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-slate-200 animate-pulse flex items-center justify-center">
+                    <span className="text-slate-400 text-xs italic">Resolvendo imagem...</span>
+                  </div>
+                )}
               </div>
 
               <div className="p-8">

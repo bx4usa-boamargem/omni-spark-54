@@ -145,7 +145,19 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
 
     if (result) {
       setPageData(result);
-      setTitle(`${businessProfile?.services?.split(",")[0]?.trim() || "Serviços"} em ${businessProfile?.city || "sua cidade"}`);
+      // Auto-save após gerar com imagens resolvidas
+      const newPage = await savePage({
+        blog_id: blog.id,
+        title: result.hero?.headline || "Nova Super Página",
+        slug: result.brand?.service?.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + result.brand?.city?.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        page_data: result,
+        status: 'draft'
+      });
+      
+      if (newPage) {
+        setPage(newPage);
+        navigate(`/client/landing-pages/${newPage.id}`, { replace: true });
+      }
       setActiveTab("preview");
     }
   };
