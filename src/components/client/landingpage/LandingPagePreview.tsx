@@ -34,17 +34,17 @@ export function LandingPagePreview({
   onEditBlock,
 }: LandingPagePreviewProps) {
   // CRITICAL: Removendo qualquer uso de refs ou DOM direto para evitar insertBefore error
-  const whatsapp = pageData.contact?.whatsapp || pageData.contact?.phone;
+  const whatsapp = pageData?.contact?.whatsapp || pageData?.contact?.phone;
 
-  // Se pageData estiver incompleto, não renderiza nada para evitar quebra de árvore
-  if (!pageData || !pageData.hero) {
+  // Graceful fallback for incomplete or minimal pages
+  if (!pageData) {
     return <div className="p-10 text-center text-muted-foreground">Carregando estrutura da página...</div>;
   }
 
   return (
     <div className="w-full bg-background isolate">
-      {/* Cada bloco em um Fragment para não poluir a árvore DOM */}
-      {visibility.hero && (
+      {/* Hero block - only render if exists and visible */}
+      {visibility.hero && pageData.hero && (
         <section id="lp-hero" className="relative z-10">
           <HeroBlock
             data={pageData.hero}

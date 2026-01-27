@@ -46,6 +46,7 @@ import { SpecialistAuthorityLayout } from "./layouts/SpecialistAuthorityLayout";
 import { TemplateSelector, LandingPageTemplate } from "./TemplateSelector";
 import { LandingPageSEOPanel } from "./LandingPageSEOPanel";
 import { LandingPageData, BlockVisibility, DEFAULT_BLOCK_VISIBILITY, LandingPage } from "./types/landingPageTypes";
+import { normalizePageDataForSave, inferVisibilityFromPageData } from "./utils/pageDataNormalizer";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getCanonicalBlogUrl } from "@/utils/blogUrl";
@@ -129,7 +130,17 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
       setSeoTitle(landingPage.seo_title || "");
       setSeoDescription(landingPage.seo_description || "");
       setSeoKeywords(landingPage.seo_keywords || []);
-      setSeoDescription(landingPage.seo_description || "");
+
+      // Restore visibility from meta or infer from existing data
+      if (landingPage.page_data?.meta?.block_visibility) {
+        setVisibility({
+          ...DEFAULT_BLOCK_VISIBILITY,
+          ...landingPage.page_data.meta.block_visibility
+        });
+      } else {
+        // Infer visibility based on which blocks have data
+        setVisibility(inferVisibilityFromPageData(landingPage.page_data));
+      }
     } catch (error) {
       console.error("Error loading page:", error);
       toast.error("Erro ao carregar página");
@@ -147,11 +158,14 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
 
     setIsSaving(true);
     try {
+      // Normalize page data before saving - removes hidden blocks and persists visibility
+      const normalizedData = normalizePageDataForSave(finalData, visibility);
+
       const result = await savePage({
         blog_id: blog.id,
-        title: title || finalData.hero?.headline || "Nova Super Página",
+        title: title || normalizedData.hero?.title || "Nova Super Página",
         slug: slug || "super-pagina-" + Date.now(),
-        page_data: finalData,
+        page_data: normalizedData,
         status: 'draft'
       });
 
@@ -194,11 +208,14 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
   const handlePublish = async () => {
     if (!page?.id || !pageData) return;
 
+    // Normalize page data before publishing - removes hidden blocks and persists visibility
+    const normalizedData = normalizePageDataForSave(pageData, visibility);
+
     // Always persist current editor state before toggling publish
     await updatePage(page.id, {
       title,
       slug,
-      page_data: pageData,
+      page_data: normalizedData,
       seo_title: seoTitle,
       seo_description: seoDescription,
     });

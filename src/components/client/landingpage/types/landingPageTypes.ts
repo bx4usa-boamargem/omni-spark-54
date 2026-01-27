@@ -103,30 +103,35 @@ export interface CTABanner {
   background_color?: string;
 }
 
+// Landing page meta with block visibility
+export interface LandingPageMeta {
+  primary_color?: string;
+  secondary_color?: string;
+  font_family?: string;
+  block_visibility?: BlockVisibility;
+}
+
 export interface LandingPageData {
-  hero: HeroSection;
-  services: ServiceCard[];
-  service_details: ServiceDetail[];
+  // All blocks are now optional to allow minimal pages
+  hero?: HeroSection;
+  services?: ServiceCard[];
+  service_details?: ServiceDetail[];
   emergency_banner?: EmergencyBanner;
   materials?: MaterialsSection;
   process_steps?: ProcessStep[];
   why_choose_us?: WhyChooseUsItem[];
-  testimonials: Testimonial[];
-  areas_served: AreasServed;
-  faq: FAQItem[];
-  contact: ContactInfo;
+  testimonials?: Testimonial[];
+  areas_served?: AreasServed;
+  faq?: FAQItem[];
+  contact?: ContactInfo;
   cta_banner?: CTABanner;
   
   // New fields for service_authority_v1 template
   template?: string;
   authority_content?: string;
   
-  // Meta
-  meta?: {
-    primary_color?: string;
-    secondary_color?: string;
-    font_family?: string;
-  };
+  // Meta with block visibility
+  meta?: LandingPageMeta;
 }
 
 export interface LandingPage {
