@@ -1,84 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useLandingPage, useAgentConfig } from "@/hooks/useContentApi";
 import { LandingPagePreview } from "@/components/client/landingpage/LandingPagePreview";
 import { SEOHead } from "@/components/public/SEOHead";
 import { BrandSalesAgentWidget } from "@/components/public/BrandSalesAgentWidget";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCanonicalBlogUrl } from "@/utils/blogUrl";
 
-export default function CustomDomainLandingPage({ blogId }: { blogId: string }) {
-  const { pageSlug } = useParams();
+interface CustomDomainLandingPageProps {
+  blogId: string;
+}
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [blog, setBlog] = useState<any>(null);
-  const [page, setPage] = useState<any>(null);
-  const [agentConfig, setAgentConfig] = useState<any>(null);
-  const [businessProfile, setBusinessProfile] = useState<any>(null);
+export default function CustomDomainLandingPage({ blogId }: CustomDomainLandingPageProps) {
+  const { pageSlug } = useParams();
+  const { blog, page, loading, error } = useLandingPage(pageSlug);
+  const { agentConfig, businessProfile } = useAgentConfig();
 
   const primaryColor = useMemo(() => blog?.primary_color || "#6366f1", [blog?.primary_color]);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!blogId || !pageSlug) return;
-      setLoading(true);
-      setError(null);
-
-      try {
-        const { data: blogRow } = await supabase
-          .from("blogs")
-          .select("id, name, slug, platform_subdomain, primary_color, secondary_color, custom_domain, domain_verified")
-          .eq("id", blogId)
-          .maybeSingle();
-
-        setBlog(blogRow);
-
-        const [pageRes, agentRes, profileRes] = await Promise.all([
-          supabase
-            .from("landing_pages")
-            .select("*")
-            .eq("blog_id", blogId)
-            .eq("slug", pageSlug)
-            .eq("status", "published")
-            .maybeSingle(),
-          supabase
-            .from("brand_agent_config")
-            .select("is_enabled, agent_name, agent_avatar_url, welcome_message, proactive_delay_seconds")
-            .eq("blog_id", blogId)
-            .maybeSingle(),
-          supabase
-            .from("business_profile")
-            .select("company_name, logo_url, services, niche, city")
-            .eq("blog_id", blogId)
-            .maybeSingle(),
-        ]);
-
-        if (!pageRes.data) {
-          setError("Página não encontrada");
-          return;
-        }
-
-        const normalizedPage = {
-          ...pageRes.data,
-          page_data:
-            typeof pageRes.data.page_data === "string"
-              ? JSON.parse(pageRes.data.page_data)
-              : pageRes.data.page_data,
-        };
-
-        setPage(normalizedPage);
-        setAgentConfig(agentRes.data);
-        setBusinessProfile(profileRes.data);
-      } catch (e) {
-        setError("Erro ao carregar página");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, [blogId, pageSlug]);
 
   if (loading) {
     return (
@@ -92,7 +30,7 @@ export default function CustomDomainLandingPage({ blogId }: { blogId: string }) 
     );
   }
 
-  if (error || !blogId || !page?.page_data) {
+  if (error || !blog || !page?.page_data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-sm text-muted-foreground">{error || "Não encontrado"}</p>
@@ -100,26 +38,40 @@ export default function CustomDomainLandingPage({ blogId }: { blogId: string }) 
     );
   }
 
-  const canonicalBase = blog ? getCanonicalBlogUrl(blog) : undefined;
+  const canonicalBase = getCanonicalBlogUrl({
+    custom_domain: blog.custom_domain,
+    domain_verified: true,
+    platform_subdomain: blog.platform_subdomain,
+    slug: blog.slug
+  });
   const canonicalUrl = canonicalBase ? `${canonicalBase}/p/${pageSlug}` : undefined;
+
+  // Ensure page_data is an object
+  const pageData = typeof page.page_data === "string" 
+    ? JSON.parse(page.page_data) 
+    : page.page_data;
 
   return (
     <>
       <SEOHead
         title={page.seo_title || page.title}
         description={page.seo_description || undefined}
-        ogImage={page.featured_image_url || page.page_data?.hero?.background_image_url || undefined}
+        ogImage={page.featured_image_url || (pageData as any)?.hero?.background_image_url || undefined}
         canonicalUrl={canonicalUrl}
       />
 
-      {/* LandingPagePreview usa ScrollArea(h-full) — precisamos garantir altura */}
+      {/* LandingPagePreview uses ScrollArea(h-full) - ensure proper height */}
       <div className="h-[100dvh]">
-        <LandingPagePreview pageData={page.page_data} blogId={blogId} primaryColor={primaryColor} />
+        <LandingPagePreview 
+          pageData={pageData} 
+          blogId={blog.id} 
+          primaryColor={primaryColor} 
+        />
       </div>
 
       {agentConfig?.is_enabled && (
         <BrandSalesAgentWidget
-          blogId={blogId}
+          blogId={blog.id}
           agentConfig={agentConfig}
           businessProfile={businessProfile}
           primaryColor={primaryColor}

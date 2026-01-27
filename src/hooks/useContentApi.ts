@@ -1,0 +1,349 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { getCurrentHostname } from "@/utils/blogUrl";
+
+// Types for Content API responses
+export interface BlogMeta {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  dark_primary_color: string | null;
+  dark_secondary_color: string | null;
+  author_name: string | null;
+  author_bio: string | null;
+  author_photo_url: string | null;
+  author_linkedin: string | null;
+  banner_enabled: boolean | null;
+  banner_title: string | null;
+  banner_description: string | null;
+  banner_image_url: string | null;
+  header_cta_text: string | null;
+  header_cta_url: string | null;
+  footer_text: string | null;
+  show_powered_by: boolean | null;
+  layout_template: string | null;
+  theme_mode: string | null;
+  custom_domain: string | null;
+  platform_subdomain: string | null;
+}
+
+export interface ArticleSummary {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featured_image_url: string | null;
+  featured_image_alt: string | null;
+  category: string | null;
+  tags: string[] | null;
+  published_at: string | null;
+  reading_time: number | null;
+}
+
+export interface ArticleFull extends ArticleSummary {
+  content: string | null;
+  meta_description: string | null;
+  keywords: string[] | null;
+  view_count: number | null;
+  updated_at: string | null;
+  faq: { question: string; answer: string }[] | null;
+  highlights: unknown | null;
+}
+
+export interface LandingPage {
+  id: string;
+  title: string;
+  slug: string;
+  page_data: unknown;
+  seo_title: string | null;
+  seo_description: string | null;
+  featured_image_url: string | null;
+  published_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AgentConfig {
+  is_enabled: boolean;
+  agent_name: string | null;
+  agent_avatar_url: string | null;
+  welcome_message: string | null;
+  proactive_delay_seconds: number | null;
+}
+
+export interface BusinessProfile {
+  company_name: string | null;
+  logo_url: string | null;
+  services: unknown | null;
+  niche: string | null;
+  city: string | null;
+}
+
+export interface TenantInfo {
+  blog_id: string;
+  tenant_id: string | null;
+  domain: string;
+  domain_type: "subdomain" | "custom";
+}
+
+interface ContentApiResponse<T> {
+  tenant: TenantInfo;
+  blog: BlogMeta | null;
+  data: T;
+}
+
+type ContentRoute = 
+  | "blog.home"
+  | "blog.article"
+  | "blog.category"
+  | "blog.tag"
+  | "blog.search"
+  | "page.landing"
+  | "sitemap.urls"
+  | "agent.config";
+
+/**
+ * Core function to call the content-api Edge Function
+ */
+export async function fetchContentApi<T>(
+  route: ContentRoute,
+  params: Record<string, unknown> = {},
+  host?: string
+): Promise<ContentApiResponse<T> | null> {
+  const hostname = host || getCurrentHostname();
+  
+  if (!hostname) {
+    console.error("[useContentApi] No hostname available");
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("content-api", {
+      body: { host: hostname, route, params },
+    });
+
+    if (error) {
+      console.error("[useContentApi] Edge function error:", error);
+      return null;
+    }
+
+    return data as ContentApiResponse<T>;
+  } catch (err) {
+    console.error("[useContentApi] Fetch error:", err);
+    return null;
+  }
+}
+
+// ============================================================
+// HOOK: useBlogHome - Fetch blog home with articles
+// ============================================================
+
+interface BlogHomeData {
+  articles: ArticleSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface UseBlogHomeResult {
+  blog: BlogMeta | null;
+  articles: ArticleSummary[];
+  total: number;
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export function useBlogHome(limit = 12, offset = 0): UseBlogHomeResult {
+  const [blog, setBlog] = useState<BlogMeta | null>(null);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchContentApi<BlogHomeData>("blog.home", { limit, offset });
+
+    if (!result) {
+      setError("Falha ao carregar blog");
+      setLoading(false);
+      return;
+    }
+
+    setBlog(result.blog);
+    setArticles(result.data.articles || []);
+    setTotal(result.data.total || 0);
+    setLoading(false);
+  }, [limit, offset]);
+
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { blog, articles, total, loading, error, refetch: fetch };
+}
+
+// ============================================================
+// HOOK: useBlogArticle - Fetch single article
+// ============================================================
+
+interface BlogArticleData {
+  article: ArticleFull | null;
+  related: ArticleSummary[];
+  error?: string;
+}
+
+interface UseBlogArticleResult {
+  blog: BlogMeta | null;
+  article: ArticleFull | null;
+  related: ArticleSummary[];
+  loading: boolean;
+  error: string | null;
+}
+
+export function useBlogArticle(slug: string | undefined): UseBlogArticleResult {
+  const [blog, setBlog] = useState<BlogMeta | null>(null);
+  const [article, setArticle] = useState<ArticleFull | null>(null);
+  const [related, setRelated] = useState<ArticleSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!slug) {
+      setLoading(false);
+      setError("Slug não fornecido");
+      return;
+    }
+
+    const fetch = async () => {
+      setLoading(true);
+      setError(null);
+
+      const result = await fetchContentApi<BlogArticleData>("blog.article", { slug });
+
+      if (!result) {
+        setError("Falha ao carregar artigo");
+        setLoading(false);
+        return;
+      }
+
+      if (result.data.error) {
+        setError(result.data.error);
+        setLoading(false);
+        return;
+      }
+
+      setBlog(result.blog);
+      setArticle(result.data.article);
+      setRelated(result.data.related || []);
+      setLoading(false);
+    };
+
+    fetch();
+  }, [slug]);
+
+  return { blog, article, related, loading, error };
+}
+
+// ============================================================
+// HOOK: useLandingPage - Fetch landing page
+// ============================================================
+
+interface LandingPageData {
+  page: LandingPage | null;
+  error?: string;
+}
+
+interface UseLandingPageResult {
+  blog: BlogMeta | null;
+  page: LandingPage | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export function useLandingPage(slug: string | undefined): UseLandingPageResult {
+  const [blog, setBlog] = useState<BlogMeta | null>(null);
+  const [page, setPage] = useState<LandingPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!slug) {
+      setLoading(false);
+      setError("Slug não fornecido");
+      return;
+    }
+
+    const fetch = async () => {
+      setLoading(true);
+      setError(null);
+
+      const result = await fetchContentApi<LandingPageData>("page.landing", { slug });
+
+      if (!result) {
+        setError("Falha ao carregar página");
+        setLoading(false);
+        return;
+      }
+
+      if (result.data.error) {
+        setError(result.data.error);
+        setLoading(false);
+        return;
+      }
+
+      setBlog(result.blog);
+      setPage(result.data.page);
+      setLoading(false);
+    };
+
+    fetch();
+  }, [slug]);
+
+  return { blog, page, loading, error };
+}
+
+// ============================================================
+// HOOK: useAgentConfig - Fetch agent configuration
+// ============================================================
+
+interface AgentConfigData {
+  agent: AgentConfig | null;
+  business: BusinessProfile | null;
+}
+
+interface UseAgentConfigResult {
+  agentConfig: AgentConfig | null;
+  businessProfile: BusinessProfile | null;
+  loading: boolean;
+}
+
+export function useAgentConfig(): UseAgentConfigResult {
+  const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const result = await fetchContentApi<AgentConfigData>("agent.config");
+
+      if (result) {
+        setAgentConfig(result.data.agent);
+        setBusinessProfile(result.data.business);
+      }
+
+      setLoading(false);
+    };
+
+    fetch();
+  }, []);
+
+  return { agentConfig, businessProfile, loading };
+}

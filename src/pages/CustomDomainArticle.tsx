@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { isBlogDomainAccess, getCurrentHostname, getCanonicalArticleUrl } from "@/utils/blogUrl";
-import { Loader2 } from "lucide-react";
+import { useBlogArticle, useAgentConfig } from "@/hooks/useContentApi";
+import { getCanonicalArticleUrl } from "@/utils/blogUrl";
+import { Loader2, Calendar, Clock, ChevronDown } from "lucide-react";
 
-// Import components from PublicArticle
 import { SEOHead } from "@/components/public/SEOHead";
 import { BlogHeader } from "@/components/public/BlogHeader";
 import { ArticleContent } from "@/components/public/ArticleContent";
@@ -15,79 +14,10 @@ import { ReadingTracker } from "@/components/public/ReadingTracker";
 import { FloatingShareBar } from "@/components/public/FloatingShareBar";
 import { TableOfContents } from "@/components/public/TableOfContents";
 import { FocusedReadingMode } from "@/components/public/FocusedReadingMode";
-import { ArticleLanguageSelector } from "@/components/public/ArticleLanguageSelector";
 import { BrandSalesAgentWidget } from "@/components/public/BrandSalesAgentWidget";
-import { useBrandAgentConfig } from "@/hooks/useBrandAgentConfig";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, ChevronDown } from "lucide-react";
 
-interface Blog {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  logo_url: string | null;
-  logo_negative_url: string | null;
-  favicon_url: string | null;
-  primary_color: string | null;
-  author_name: string | null;
-  author_bio: string | null;
-  author_photo_url: string | null;
-  author_linkedin: string | null;
-  banner_title: string | null;
-  banner_description: string | null;
-  cta_text: string | null;
-  cta_url: string | null;
-  cta_type: string | null;
-  custom_domain: string | null;
-  domain_verified: boolean | null;
-  brand_display_mode: string | null;
-  platform_subdomain: string | null;
-}
-
-interface ContentImage {
-  context: string;
-  url: string;
-  after_section: number;
-}
-
-interface Article {
-  id: string;
-  title: string;
-  excerpt: string | null;
-  content: string | null;
-  slug: string;
-  category: string | null;
-  keywords: string[] | null;
-  meta_description: string | null;
-  featured_image_url: string | null;
-  featured_image_alt: string | null;
-  published_at: string | null;
-  reading_time: number | null;
-  faq: { question: string; answer: string }[] | null;
-  content_images: ContentImage[] | null;
-}
-
-
-interface RelatedArticle {
-  id: string;
-  title: string;
-  excerpt: string | null;
-  slug: string;
-  category: string | null;
-  published_at: string | null;
-  featured_image_url: string | null;
-}
-
-interface Translation {
-  language_code: string;
-  title: string;
-  content: string | null;
-  excerpt: string | null;
-  meta_description: string | null;
-  faq: { question: string; answer: string }[] | null;
-}
-
+// FAQ Item component
 const FAQItem = ({ question, answer }: { question: string; answer: string }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -125,150 +55,17 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
   const { articleSlug } = useParams<{ articleSlug?: string }>();
   const navigate = useNavigate();
   
-  const [blog, setBlog] = useState<Blog | null>(null);
-  const [article, setArticle] = useState<Article | null>(null);
-  const [relatedArticles, setRelatedArticles] = useState<RelatedArticle[]>([]);
-  const [translations, setTranslations] = useState<Translation[]>([]);
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Brand Sales Agent
-  const { agentConfig, businessProfile } = useBrandAgentConfig(blog?.id || null);
+  const { blog, article, related, loading, error } = useBlogArticle(articleSlug);
+  const { agentConfig, businessProfile } = useAgentConfig();
+  const [isFocusedMode, setIsFocusedMode] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      console.log('[CustomDomainArticle] Fetching data...', { blogId, propBlogSlug, articleSlug });
-      
-      // If no article slug, redirect to blog home
-      if (!articleSlug || articleSlug === "") {
-        navigate("/", { replace: true });
-        return;
-      }
+  const primaryColor = useMemo(() => blog?.primary_color || "#6366f1", [blog?.primary_color]);
 
-      let blogData: Blog | null = null;
-      
-      // If we have blogId from routing, use it directly
-      if (blogId) {
-        const { data, error: fetchError } = await supabase
-          .from("blogs")
-          .select("*")
-          .eq("id", blogId)
-          .maybeSingle();
-        
-        if (fetchError) {
-          console.error('[CustomDomainArticle] Error fetching by ID:', fetchError);
-        } else {
-          blogData = data;
-        }
-      }
-      
-      // Fallback: try to find by hostname using RPC resolve_domain
-      if (!blogData) {
-        const hostname = getCurrentHostname();
-        console.log('[CustomDomainArticle] Trying hostname lookup via RPC:', hostname);
-        
-        // Use RPC resolve_domain as single source of truth
-        const { data: domainData, error: rpcError } = await supabase.rpc('resolve_domain', {
-          p_hostname: hostname
-        });
-        
-        if (rpcError) {
-          console.error('[CustomDomainArticle] RPC error:', rpcError);
-        } else if (domainData && domainData.length > 0 && domainData[0].blog_id) {
-          // Fetch blog by resolved blog_id
-          const { data, error: fetchError } = await supabase
-            .from("blogs")
-            .select("*")
-            .eq("id", domainData[0].blog_id)
-            .maybeSingle();
-          
-          if (fetchError) {
-            console.error('[CustomDomainArticle] Error fetching by resolved blog_id:', fetchError);
-          } else {
-            blogData = data;
-          }
-        } else {
-          console.log('[CustomDomainArticle] No domain found via RPC for:', hostname);
-        }
-      }
-
-      if (!blogData) {
-        console.log('[CustomDomainArticle] No blog found');
-        setError("Blog não encontrado");
-        setLoading(false);
-        return;
-      }
-
-      console.log('[CustomDomainArticle] Blog found:', blogData.id);
-      setBlog(blogData);
-
-      // Fetch article by slug and blog_id
-      const { data: articleData, error: articleError } = await supabase
-        .from("articles")
-        .select("*")
-        .eq("blog_id", blogData.id)
-        .eq("slug", articleSlug)
-        .eq("status", "published")
-        .maybeSingle();
-
-      if (articleError || !articleData) {
-        console.log('[CustomDomainArticle] Article not found');
-        setError("Artigo não encontrado");
-        setLoading(false);
-        return;
-      }
-
-      console.log('[CustomDomainArticle] Article found:', articleData.id);
-
-      // Parse content_images and faq
-      const parsedArticle = {
-        ...articleData,
-        content_images: typeof articleData.content_images === 'string' 
-          ? JSON.parse(articleData.content_images) 
-          : articleData.content_images,
-        faq: typeof articleData.faq === 'string' 
-          ? JSON.parse(articleData.faq) 
-          : articleData.faq
-      } as Article;
-
-      setArticle(parsedArticle);
-
-      // Increment view count
-      await supabase.rpc("increment_view_count", { article_id: articleData.id });
-
-      // Fetch translations
-      const { data: translationData } = await supabase
-        .from("article_translations")
-        .select("*")
-        .eq("article_id", articleData.id);
-
-      if (translationData) {
-        setTranslations(translationData.map(t => ({
-          ...t,
-          faq: typeof t.faq === 'string' ? JSON.parse(t.faq) : t.faq
-        })));
-      }
-
-      // Fetch related articles
-      const { data: relatedData } = await supabase
-        .from("articles")
-        .select("id, title, excerpt, slug, category, published_at, featured_image_url")
-        .eq("blog_id", blogData.id)
-        .eq("status", "published")
-        .neq("id", articleData.id)
-        .order("published_at", { ascending: false })
-        .limit(3);
-
-      if (relatedData) {
-        setRelatedArticles(relatedData);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [articleSlug, navigate, blogId, propBlogSlug]);
+  // Redirect to home if no slug
+  if (!articleSlug) {
+    navigate("/", { replace: true });
+    return null;
+  }
 
   if (loading) {
     return (
@@ -293,53 +90,31 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
     );
   }
 
-  // Get content based on selected language
-  const selectedTranslation = selectedLanguage 
-    ? translations.find(t => t.language_code === selectedLanguage) 
-    : null;
-  
-  const displayTitle = selectedTranslation?.title || article.title;
-  const displayContent = selectedTranslation?.content || article.content;
-  const displayExcerpt = selectedTranslation?.excerpt || article.excerpt;
-  const displayMetaDescription = selectedTranslation?.meta_description || article.meta_description;
-  
-  // Parse FAQ from translation (pode vir como string JSON)
-  const displayFaq = (() => {
-    if (selectedTranslation?.faq) {
-      return typeof selectedTranslation.faq === 'string' 
-        ? JSON.parse(selectedTranslation.faq) 
-        : selectedTranslation.faq;
-    }
-    return article.faq;
-  })();
+  const readingTime = article.reading_time || calculateReadingTime(article.content);
+  const canonicalUrl = getCanonicalArticleUrl({
+    custom_domain: blog.custom_domain,
+    domain_verified: true,
+    platform_subdomain: blog.platform_subdomain,
+    slug: blog.slug
+  }, article.slug);
 
-  const readingTime = calculateReadingTime(displayContent);
-  const canonicalUrl = getCanonicalArticleUrl(blog, article.slug);
-  const primaryColor = blog.primary_color || "#6366f1";
-  
-  // State for focused reading mode
-  const [isFocusedMode, setIsFocusedMode] = useState(false);
-
-  // Get available language codes for language selector
-  const availableLanguages = translations.map(t => t.language_code);
-  const currentLanguage = selectedLanguage || 'pt-BR';
-
+  // Parse FAQ if needed
+  const faq = Array.isArray(article.faq) ? article.faq : null;
 
   return (
     <>
       <SEOHead
-        title={displayTitle}
-        description={displayMetaDescription || displayExcerpt || ""}
+        title={article.title}
+        description={article.meta_description || article.excerpt || ""}
         ogImage={article.featured_image_url || undefined}
         ogType="article"
         canonicalUrl={canonicalUrl}
         articlePublishedTime={article.published_at || undefined}
         articleAuthor={blog.author_name || undefined}
         keywords={article.keywords || undefined}
-        faq={displayFaq || undefined}
+        faq={faq || undefined}
         favicon={blog.favicon_url || undefined}
       />
-
 
       <ReadingTracker articleId={article.id} blogId={blog.id} />
 
@@ -348,24 +123,23 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
           blogName={blog.name} 
           blogSlug={blog.slug} 
           logoUrl={blog.logo_url}
-          logoNegativeUrl={blog.logo_negative_url}
+          logoNegativeUrl={null}
           primaryColor={primaryColor}
           customDomain={blog.custom_domain}
-          domainVerified={blog.domain_verified}
-          brandDisplayMode={(blog.brand_display_mode as 'text' | 'image') || 'text'}
+          domainVerified={true}
+          brandDisplayMode="text"
         />
 
         <FloatingShareBar
           url={canonicalUrl}
-          title={displayTitle}
-          description={displayMetaDescription || displayExcerpt || ""}
+          title={article.title}
+          description={article.meta_description || article.excerpt || ""}
           articleId={article.id}
           blogId={blog.id}
           primaryColor={primaryColor}
         />
 
         <main className="flex-1">
-          {/* Hero Section */}
           <article className="max-w-4xl mx-auto px-4 py-8">
             {/* Category & Meta */}
             <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -398,35 +172,22 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
 
             {/* Title */}
             <h1 className="font-heading text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
-              {displayTitle}
+              {article.title}
             </h1>
 
             {/* Excerpt */}
-            {displayExcerpt && (
+            {article.excerpt && (
               <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-                {displayExcerpt}
+                {article.excerpt}
               </p>
             )}
-
-            {/* Language Selector */}
-            {translations.length > 0 && (
-              <div className="mb-8">
-                <ArticleLanguageSelector
-                  currentLanguage={currentLanguage}
-                  availableLanguages={availableLanguages}
-                  onLanguageChange={(lang) => setSelectedLanguage(lang === 'pt-BR' ? null : lang)}
-                  primaryColor={primaryColor}
-                />
-              </div>
-            )}
-
 
             {/* Featured Image */}
             {article.featured_image_url && (
               <div className="mb-10 rounded-xl overflow-hidden shadow-lg">
                 <img
                   src={article.featured_image_url}
-                  alt={article.featured_image_alt || displayTitle}
+                  alt={article.featured_image_alt || article.title}
                   className="w-full h-auto object-cover"
                   loading="eager"
                 />
@@ -434,26 +195,26 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
             )}
 
             {/* Table of Contents */}
-            {displayContent && (
-              <TableOfContents content={displayContent} primaryColor={primaryColor} />
+            {article.content && (
+              <TableOfContents content={article.content} primaryColor={primaryColor} />
             )}
 
             {/* Article Content */}
             <div className="prose prose-lg dark:prose-invert max-w-none">
               <ArticleContent 
-                content={displayContent || ""} 
-                contentImages={article.content_images}
+                content={article.content || ""} 
+                contentImages={null}
               />
             </div>
 
             {/* FAQ Section */}
-            {displayFaq && displayFaq.length > 0 && (
+            {faq && faq.length > 0 && (
               <section className="mt-12 pt-8 border-t border-border/50">
                 <h2 className="font-heading text-2xl font-bold text-foreground mb-6">
                   Perguntas Frequentes
                 </h2>
                 <div className="bg-muted/30 rounded-xl p-6">
-                  {displayFaq.map((item, index) => (
+                  {faq.map((item, index) => (
                     <FAQItem key={index} question={item.question} answer={item.answer} />
                   ))}
                 </div>
@@ -470,27 +231,33 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
               />
             )}
 
-
             {/* CTA Banner */}
-            {blog.cta_text && blog.cta_url && (
+            {blog.header_cta_text && blog.header_cta_url && (
               <CTABanner
                 title={blog.banner_title}
                 description={blog.banner_description}
-                ctaText={blog.cta_text}
-                ctaUrl={blog.cta_url}
-                ctaType={blog.cta_type}
+                ctaText={blog.header_cta_text}
+                ctaUrl={blog.header_cta_url}
+                ctaType={null}
                 primaryColor={primaryColor}
               />
             )}
 
-
             {/* Related Articles */}
             <RelatedArticles 
-              articles={relatedArticles} 
+              articles={related.map(r => ({
+                id: r.id,
+                title: r.title,
+                excerpt: r.excerpt,
+                slug: r.slug,
+                category: r.category,
+                published_at: r.published_at,
+                featured_image_url: r.featured_image_url
+              }))} 
               blogSlug={blog.slug}
               primaryColor={primaryColor}
               customDomain={blog.custom_domain}
-              domainVerified={blog.domain_verified}
+              domainVerified={true}
             />
           </article>
         </main>
@@ -510,7 +277,7 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
         />
 
         {/* Brand Sales Agent Widget */}
-        {blog && article && agentConfig && agentConfig.is_enabled && (
+        {blog && article && agentConfig?.is_enabled && (
           <BrandSalesAgentWidget
             blogId={blog.id}
             articleId={article.id}
@@ -524,4 +291,3 @@ export default function CustomDomainArticle({ blogId, blogSlug: propBlogSlug }: 
     </>
   );
 }
-
