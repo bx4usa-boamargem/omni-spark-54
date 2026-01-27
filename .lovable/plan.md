@@ -1,289 +1,323 @@
 
-# Plano: Correção do Bug de Remoção de Blocos em Super Páginas
+# Plano: Unificar Experiência Visual de "Meus Artigos" com "Super Páginas"
 
-## Problema Identificado
+## Análise Comparativa
 
-Ao tentar remover blocos (FAQ, Contact, Services, etc.), a Super Página **não salva** porque:
+### Estado Atual
 
-1. O sistema atual apenas **oculta** blocos visualmente via `visibility` state
-2. O `visibility` **nunca é persistido** - não faz parte do `page_data`
-3. O TypeScript exige campos obrigatórios como `services`, `testimonials`, `faq`, `contact`
-4. Quando o usuário desmarca um bloco e salva, o `page_data` enviado continua com todos os campos
+| Aspecto | Super Páginas | Meus Artigos |
+|---------|---------------|--------------|
+| Layout | Grid de cards (1-4 colunas) | Lista/tabela com checkboxes |
+| Thumbnail | Imagem hero ou placeholder colorido | Sem thumbnail (apenas alerta "Sem imagem") |
+| Ações | Botões Abrir/Editar + Menu dropdown | Menu dropdown apenas |
+| Filtros | Tabs estilizados (Todas/Pub/Rasc/Arq) + Busca | Tabs com badges de contagem + Busca |
+| Hover | Scale 105% na imagem, shadow-lg | Background muted/30 |
+| Cards | Rounded, border, shadow-sm | Listagem dividida por border |
+| Estado Vazio | Card com CTA para criar | Lista vazia com CTA |
 
-## Solução Proposta
+### Objetivo
 
-Implementar um sistema de **remoção real de blocos**, onde:
-
-1. Blocos desabilitados são **removidos** do JSON antes de salvar
-2. Os tipos TypeScript são **flexibilizados** para aceitar campos opcionais
-3. O `visibility` é **persistido** dentro do `page_data.meta`
-4. O sistema de preview continua funcionando normalmente
+Transformar `ClientArticles.tsx` para usar o mesmo padrão visual de `ClientLandingPages.tsx`:
+- Grid responsivo de cards (1-4 colunas)
+- Card com thumbnail (imagem ou placeholder com inicial)
+- Badge de status colorido
+- Data de criação/publicação
+- Ações rápidas visíveis (Abrir/Editar) + menu dropdown (Duplicar/Arquivar/Excluir)
 
 ---
 
 ## Arquitetura da Solução
 
-### 1. Atualizar Tipos TypeScript
+### 1. Criar Componente ArticleCard
 
-Modificar `landingPageTypes.ts` para tornar todos os blocos opcionais:
-
-| Campo | Antes | Depois |
-|-------|-------|--------|
-| `hero` | `HeroSection` (obrigatório) | `HeroSection?` (opcional) |
-| `services` | `ServiceCard[]` (obrigatório) | `ServiceCard[]?` (opcional) |
-| `service_details` | `ServiceDetail[]` (obrigatório) | `ServiceDetail[]?` (opcional) |
-| `testimonials` | `Testimonial[]` (obrigatório) | `Testimonial[]?` (opcional) |
-| `areas_served` | `AreasServed` (obrigatório) | `AreasServed?` (opcional) |
-| `faq` | `FAQItem[]` (obrigatório) | `FAQItem[]?` (opcional) |
-| `contact` | `ContactInfo` (obrigatório) | `ContactInfo?` (opcional) |
-
-### 2. Adicionar BlockVisibility ao Meta
-
-O `page_data.meta` passará a incluir o estado de visibilidade:
+Novo componente `ArticleCard.tsx` seguindo o mesmo padrão de `LandingPageCard.tsx`:
 
 ```typescript
-interface LandingPageMeta {
-  primary_color?: string;
-  secondary_color?: string;
-  font_family?: string;
-  block_visibility?: BlockVisibility; // NOVO
+interface ArticleCardProps {
+  article: Article;
+  publicBaseUrl: string;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+  onView: () => void;
 }
 ```
 
-### 3. Criar Função de Normalização
+**Estrutura visual do card:**
+```text
+┌─────────────────────────────────────┐
+│  ┌───────────────────────────────┐  │
+│  │   THUMBNAIL / PLACEHOLDER     │  │  ← aspect-video
+│  │   (imagem ou inicial)         │  │
+│  │                    [BADGE     │  │  ← Badge de origem (Radar/Funil/Auto)
+│  │                     ORIGEM]   │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  Título do Artigo (line-clamp-2)    │
+│  Categoria • Origem                 │  ← Metadados secundários
+│                                     │
+│  [Badge Status]     12 Jan 2026     │  ← Status + data
+│  ─────────────────────────────────  │
+│  [Abrir]  [Editar]           [...] │  ← Ações
+└─────────────────────────────────────┘
+```
 
-Nova função `normalizePageDataForSave()` que:
+### 2. Criar Hook useArticleFilters
+
+Similar ao `useLandingPageFilters`, para gerenciar estado dos filtros de forma isolada:
 
 ```typescript
-function normalizePageDataForSave(
-  pageData: LandingPageData, 
-  visibility: BlockVisibility
-): LandingPageData {
-  const normalized: LandingPageData = {
-    ...pageData,
-    meta: {
-      ...pageData.meta,
-      block_visibility: visibility
-    }
+export function useArticleFilters(articles: Article[]) {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredArticles = useMemo(() => {
+    // Lógica de filtragem
+  }, [articles, statusFilter, searchQuery]);
+
+  const statusCounts = useMemo(() => {
+    // Contagem por status
+  }, [articles]);
+
+  return {
+    statusFilter, setStatusFilter,
+    searchQuery, setSearchQuery,
+    filteredArticles,
+    statusCounts
   };
-  
-  // Remover blocos desabilitados
-  if (!visibility.services) delete normalized.services;
-  if (!visibility.service_details) delete normalized.service_details;
-  if (!visibility.emergency_banner) delete normalized.emergency_banner;
-  if (!visibility.materials) delete normalized.materials;
-  if (!visibility.process_steps) delete normalized.process_steps;
-  if (!visibility.why_choose_us) delete normalized.why_choose_us;
-  if (!visibility.testimonials) delete normalized.testimonials;
-  if (!visibility.areas_served) delete normalized.areas_served;
-  if (!visibility.faq) delete normalized.faq;
-  if (!visibility.contact) delete normalized.contact;
-  if (!visibility.cta_banner) delete normalized.cta_banner;
-  
-  // Limpar arrays vazios
-  Object.keys(normalized).forEach(key => {
-    const value = (normalized as any)[key];
-    if (Array.isArray(value) && value.length === 0) {
-      delete (normalized as any)[key];
-    }
-  });
-  
-  return normalized;
 }
 ```
 
-### 4. Modificar LandingPageEditor
+### 3. Criar Componente ArticleFilters
 
-#### 4.1 Carregar Visibility do Page Data
-Quando carregar uma página, restaurar o `visibility` do `page_data.meta.block_visibility`:
+Similar ao `LandingPageFilters.tsx`:
 
 ```typescript
-const loadPage = async () => {
-  // ...fetch page...
-  
-  // Restaurar visibility do meta
-  if (landingPage.page_data?.meta?.block_visibility) {
-    setVisibility(landingPage.page_data.meta.block_visibility);
-  } else {
-    // Inferir visibility baseado em quais campos existem
-    setVisibility(inferVisibilityFromPageData(landingPage.page_data));
-  }
-};
+export function ArticleFilters({
+  statusFilter,
+  onStatusFilterChange,
+  searchQuery,
+  onSearchChange,
+  statusCounts,
+}: ArticleFiltersProps)
 ```
 
-#### 4.2 Normalizar Antes de Salvar
-Modificar `handleSave` para normalizar:
+Diferença: inclui contagem (badges) em cada tab, como já existe na versão atual.
 
-```typescript
-const handleSave = async () => {
-  if (!blog?.id || !pageData) return;
+### 4. Refatorar ClientArticles.tsx
 
-  // Normalizar antes de enviar
-  const normalizedData = normalizePageDataForSave(pageData, visibility);
+Substituir a listagem em tabela por grid de cards:
 
-  const result = await savePage({
-    blog_id: blog.id,
-    title: title || normalizedData.hero?.title || "Nova Super Página",
-    slug: slug || "super-pagina-" + Date.now(),
-    page_data: normalizedData,
-    status: 'draft'
-  });
-  // ...
-};
-```
-
-### 5. Atualizar updatePage no Hook
-
-Modificar a função `updatePage` para aceitar e normalizar o `page_data`:
-
-```typescript
-const updatePage = async (id: string, updates: Partial<LandingPage>): Promise<boolean> => {
-  // ...
-  
-  if (updates.page_data !== undefined) {
-    // Garantir que page_data é um objeto limpo e válido
-    const cleanData = typeof updates.page_data === 'string' 
-      ? JSON.parse(updates.page_data) 
-      : JSON.parse(JSON.stringify(updates.page_data));
-    
-    // Remover campos undefined/null
-    Object.keys(cleanData).forEach(key => {
-      if (cleanData[key] === undefined || cleanData[key] === null) {
-        delete cleanData[key];
-      }
-    });
-    
-    updateData.page_data = cleanData;
-  }
-  
-  // ...
-};
-```
-
-### 6. Atualizar Preview para Lidar com Campos Ausentes
-
-O `LandingPagePreview` já faz verificações como `pageData.services?.length > 0`, mas adicionar fallbacks mais robustos:
-
-```typescript
-// Antes
-if (!pageData || !pageData.hero) {
-  return <div>Carregando...</div>;
-}
-
-// Depois
-if (!pageData) {
-  return <div>Carregando...</div>;
-}
-// Hero pode não existir se foi removido - renderizar fallback ou pular
+```tsx
+{/* Grid de Cards */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+  {filteredArticles.map((article) => (
+    <ArticleCard
+      key={article.id}
+      article={article}
+      publicBaseUrl={publicBaseUrl}
+      onEdit={() => handleEdit(article.id)}
+      onDuplicate={() => handleDuplicate(article.id)}
+      onArchive={() => handleArchive(article.id)}
+      onRestore={() => handleRestore(article.id)}
+      onDelete={() => handleDeleteClick(article.id)}
+      onView={() => handleView(article)}
+    />
+  ))}
+</div>
 ```
 
 ---
 
-## Arquivos a Modificar
+## Detalhes de Implementação
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/client/landingpage/types/landingPageTypes.ts` | Tornar todos os blocos opcionais no `LandingPageData` |
-| `src/components/client/landingpage/LandingPageEditor.tsx` | Adicionar `normalizePageDataForSave`, carregar visibility do meta |
-| `src/components/client/landingpage/hooks/useLandingPages.ts` | Validar e limpar `page_data` antes de salvar |
-| `src/components/client/landingpage/LandingPagePreview.tsx` | Melhorar fallbacks para campos ausentes |
-| `src/components/client/landingpage/layouts/ServiceAuthorityLayout.tsx` | Fallbacks para blocos opcionais |
-| `src/components/client/landingpage/layouts/InstitutionalLayout.tsx` | Fallbacks para blocos opcionais |
-| `src/components/client/landingpage/layouts/SpecialistAuthorityLayout.tsx` | Fallbacks para blocos opcionais |
+### Placeholder de Thumbnail
+
+Para artigos sem imagem, usar placeholder colorido baseado no status de origem:
+
+```typescript
+const originColors: Record<string, { bg: string; text: string }> = {
+  radar: { bg: "bg-purple-500", text: "text-white" },      // Via Radar
+  funnel: { bg: "bg-orange-500", text: "text-white" },     // Via Funil
+  automation: { bg: "bg-blue-500", text: "text-white" },   // Via Automação
+  manual: { bg: "bg-slate-500", text: "text-white" },      // Manual
+};
+```
+
+Se o artigo tem `featured_image_url`, mostrar a imagem.
+Se não, mostrar placeholder com a inicial do título.
+
+### Badge de Origem no Thumbnail
+
+Similar às Super Páginas que mostram "SEO Score", mostrar badge de origem no canto superior direito:
+- Radar (roxo)
+- Funil (laranja)
+- Auto (azul)
+
+### Remoção de Funcionalidades de Lista
+
+| Funcionalidade | Decisão |
+|----------------|---------|
+| Checkboxes para seleção múltipla | Remover (não existe em Super Páginas) |
+| Bulk actions (arquivar/excluir em massa) | Remover |
+| Paginação | Manter se >12 artigos ou usar scroll infinito |
+| Detecção de duplicados | Manter como alerta no topo |
+
+### Manutenção de Funcionalidades
+
+- Manter o modal de resolução de duplicados
+- Manter os diálogos de confirmação de exclusão
+- Manter a funcionalidade de duplicar artigo (nova ação)
 
 ---
 
-## Fluxo de Dados Corrigido
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/client/articles/ArticleCard.tsx` | Criar | Card de artigo seguindo padrão LandingPageCard |
+| `src/components/client/articles/ArticleFilters.tsx` | Criar | Filtros com contagem (similar a LandingPageFilters) |
+| `src/pages/client/ClientArticles.tsx` | Modificar | Refatorar para usar grid de cards |
+
+---
+
+## Estrutura do ArticleCard
+
+```tsx
+export function ArticleCard({
+  article,
+  publicBaseUrl,
+  onEdit,
+  onDuplicate,
+  onArchive,
+  onRestore,
+  onDelete,
+  onView,
+}: ArticleCardProps) {
+  // Determinar thumbnail
+  const heroImage = article.featured_image_url;
+  const originType = getOriginType(article); // radar | funnel | automation | manual
+  const colors = originColors[originType];
+  
+  return (
+    <Card className="group overflow-hidden hover:border-primary/40 hover:shadow-lg transition-all duration-200">
+      {/* Thumbnail */}
+      <div className="relative aspect-video overflow-hidden bg-muted">
+        {heroImage ? (
+          <img src={heroImage} ... />
+        ) : (
+          <div className={cn("w-full h-full flex items-center justify-center", colors.bg)}>
+            <span className="text-6xl font-bold opacity-30">{article.title.charAt(0)}</span>
+          </div>
+        )}
+        
+        {/* Origin Badge */}
+        {originType !== 'manual' && (
+          <div className="absolute top-2 right-2">
+            <Badge>...</Badge>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <CardContent className="p-4 space-y-3">
+        <h3 className="font-semibold text-base line-clamp-2">{article.title}</h3>
+        
+        <div className="flex items-center justify-between">
+          {getStatusBadge(article.status)}
+          <span className="text-xs text-muted-foreground">
+            {format(date, "d MMM yyyy", { locale: ptBR })}
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-2 border-t">
+          {article.status === "published" && (
+            <Button variant="outline" size="sm" onClick={onView}>
+              <Globe /> Abrir
+            </Button>
+          )}
+          <Button variant="..." size="sm" onClick={onEdit}>
+            <Pencil /> Editar
+          </Button>
+          <DropdownMenu>
+            {/* Duplicar, Arquivar/Restaurar, Excluir */}
+          </DropdownMenu>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+## Fluxo Visual Comparativo
 
 ```text
-┌────────────────────────────────────────────────────────────────────┐
-│                     FLUXO ATUAL (QUEBRADO)                        │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  [Toggle "FAQ" para OFF]                                           │
-│         ↓                                                          │
-│  visibility.faq = false (apenas no state React)                    │
-│         ↓                                                          │
-│  [Usuário clica "Salvar"]                                          │
-│         ↓                                                          │
-│  pageData AINDA contém page_data.faq com dados                     │
-│         ↓                                                          │
-│  Supabase recebe JSON completo                                     │
-│         ↓                                                          │
-│  Ao recarregar: FAQ reaparece ❌                                   │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      ANTES (ClientArticles)                        │
+├─────────────────────────────────────────────────────────────────────┤
+│  [x] Título                              Status      Data    [...]  │
+│  ─────────────────────────────────────────────────────────────────  │
+│  [ ] Artigo sobre pragas                 Publicado   12 Jan   [...]  │
+│  [ ] Como dedetizar...                   Rascunho    10 Jan   [...]  │
+│  [ ] Controle de pragas em...            Arquivado   08 Jan   [...]  │
+└─────────────────────────────────────────────────────────────────────┘
 
-┌────────────────────────────────────────────────────────────────────┐
-│                     FLUXO CORRIGIDO                               │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  [Toggle "FAQ" para OFF]                                           │
-│         ↓                                                          │
-│  visibility.faq = false (state React)                              │
-│         ↓                                                          │
-│  [Usuário clica "Salvar"]                                          │
-│         ↓                                                          │
-│  normalizePageDataForSave() é chamado                              │
-│  → Remove page_data.faq                                            │
-│  → Persiste visibility em page_data.meta.block_visibility          │
-│         ↓                                                          │
-│  Supabase recebe JSON SEM faq                                      │
-│         ↓                                                          │
-│  Ao recarregar:                                                    │
-│  → visibility é restaurado do meta                                 │
-│  → FAQ não existe e não aparece ✓                                  │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      DEPOIS (Grid de Cards)                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
+│  │  [Imagem]   │  │  [Inicial]  │  │  [Imagem]   │  │  [Inicial]  │ │
+│  │             │  │     D       │  │             │  │     C       │ │
+│  │ Artigo...   │  │ Dedetiza... │  │ Pragas...   │  │ Controle... │ │
+│  │ Publicado   │  │ Rascunho    │  │ Publicado   │  │ Arquivado   │ │
+│  │[Abrir][Ed.] │  │   [Editar]  │  │[Abrir][Ed.] │  │   [Editar]  │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Funcionalidades da Correção
+## Considerações Adicionais
 
-### O Que Muda
+### Paginação vs Scroll Infinito
 
-| Comportamento | Antes | Depois |
-|---------------|-------|--------|
-| Toggle de bloco | Apenas esconde visualmente | Remove do JSON ao salvar |
-| Visibility state | Perdido ao recarregar | Persistido em `meta.block_visibility` |
-| Campos obrigatórios | TypeScript exige todos | Todos opcionais exceto estrutura base |
-| JSON salvo | Sempre completo | Apenas blocos ativos |
-| Validação | Nenhuma | Normalização antes de salvar |
+Para manter consistência com Super Páginas (que não tem paginação visível), a opção é:
+1. Mostrar todos os artigos se forem poucos (<20)
+2. Implementar lazy loading ou "Carregar mais" se forem muitos
 
-### Página Mínima Válida
+### Funcionalidade de Duplicar Artigo
 
-Uma Super Página válida poderá conter apenas:
-- `hero` (título e subtítulo)
-- `meta` (configurações e visibility)
-
-Todos os outros blocos são opcionais.
-
----
-
-## Detalhes Técnicos
-
-### Nova Função: inferVisibilityFromPageData()
-
-Para páginas existentes sem `meta.block_visibility`, inferir o estado:
+Será necessário implementar a função `handleDuplicate` em `ClientArticles.tsx`:
 
 ```typescript
-function inferVisibilityFromPageData(pageData: LandingPageData): BlockVisibility {
-  return {
-    hero: !!pageData.hero,
-    services: !!pageData.services?.length,
-    service_details: !!pageData.service_details?.length,
-    emergency_banner: !!pageData.emergency_banner,
-    materials: !!pageData.materials,
-    process_steps: !!pageData.process_steps?.length,
-    why_choose_us: !!pageData.why_choose_us?.length,
-    testimonials: !!pageData.testimonials?.length,
-    areas_served: !!pageData.areas_served,
-    faq: !!pageData.faq?.length,
-    contact: !!pageData.contact,
-    cta_banner: !!pageData.cta_banner,
-  };
-}
+const handleDuplicate = async (id: string) => {
+  const article = articles.find(a => a.id === id);
+  if (!article || !blog?.id) return;
+  
+  const { data, error } = await supabase
+    .from('articles')
+    .insert({
+      blog_id: blog.id,
+      title: `${article.title} (cópia)`,
+      slug: `${article.slug}-copia-${Date.now()}`,
+      status: 'draft',
+      // ... copiar outros campos relevantes
+    })
+    .select()
+    .single();
+    
+  if (!error) {
+    toast.success("Artigo duplicado!");
+    fetchArticles();
+  }
+};
 ```
 
 ---
@@ -292,8 +326,10 @@ function inferVisibilityFromPageData(pageData: LandingPageData): BlockVisibility
 
 Após a implementação:
 
-1. Usuário pode **remover qualquer bloco** sem erros de save
-2. A remoção é **persistida** no banco
-3. Ao recarregar, os blocos removidos **não reaparecem**
-4. O sistema aceita páginas **minimalistas** (apenas Hero)
-5. O JSON salvo é **limpo e compacto**
+1. Interface **visualmente unificada** entre Artigos e Super Páginas
+2. **Grid responsivo** de cards (1 coluna mobile → 4 colunas desktop)
+3. **Thumbnails** com imagem ou placeholder colorido
+4. **Badges de origem** visíveis (Radar/Funil/Auto)
+5. **Ações rápidas** acessíveis (Abrir/Editar no card + menu dropdown)
+6. **Filtros** mantidos com contagem por status
+7. **Experiência profissional** consistente em todo o produto
