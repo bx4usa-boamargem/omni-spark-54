@@ -99,16 +99,40 @@ export function SpecialistAuthorityLayout({
               </div>
             </div>
 
-            {/* Right: Photo Placeholder */}
+            {/* Right: Specialist Photo or Smart Placeholder */}
             <div className="hidden lg:flex justify-center">
-              <div 
-                className="w-80 h-96 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-2xl"
-              >
-                <div className="text-center">
-                  <User className="w-24 h-24 mx-auto opacity-40" />
-                  <p className="text-sm opacity-40 mt-4">Foto do Especialista</p>
+              {specialist.photo_url ? (
+                <img 
+                  src={specialist.photo_url}
+                  alt={specialist.name || "Especialista"}
+                  className="w-80 h-96 rounded-2xl object-cover shadow-2xl border-2 border-white/20"
+                />
+              ) : (
+                <div 
+                  className="w-80 h-96 rounded-2xl flex items-center justify-center shadow-2xl"
+                  style={{ 
+                    background: `linear-gradient(135deg, ${primaryColor}20, ${primaryColor}40)`,
+                    border: `2px solid ${primaryColor}30`
+                  }}
+                >
+                  <div className="text-center">
+                    <div 
+                      className="w-24 h-24 mx-auto rounded-full flex items-center justify-center text-4xl font-black shadow-lg"
+                      style={{ backgroundColor: primaryColor, color: 'white' }}
+                    >
+                      {(specialist.name || "E").charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-sm mt-4 font-medium text-white/80">
+                      {specialist.title || "Especialista"}
+                    </p>
+                    {specialist.credentials && (
+                      <p className="text-xs mt-2 text-white/60">
+                        {specialist.credentials}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

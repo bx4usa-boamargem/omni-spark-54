@@ -45,7 +45,7 @@ import { InstitutionalLayout } from "./layouts/InstitutionalLayout";
 import { SpecialistAuthorityLayout } from "./layouts/SpecialistAuthorityLayout";
 import { TemplateSelector, LandingPageTemplate } from "./TemplateSelector";
 import { LandingPageSEOPanel } from "./LandingPageSEOPanel";
-import { LandingPageData, BlockVisibility, DEFAULT_BLOCK_VISIBILITY, LandingPage } from "./types/landingPageTypes";
+import { LandingPageData, BlockVisibility, DEFAULT_BLOCK_VISIBILITY, TEMPLATE_DEFAULT_VISIBILITY, LandingPage, LandingPageTemplateType } from "./types/landingPageTypes";
 import { normalizePageDataForSave, inferVisibilityFromPageData } from "./utils/pageDataNormalizer";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -65,7 +65,7 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
     return () => { isMounted.current = false; };
   }, []);
 
-  const { generatePage, savePage, updatePage, deletePage, publishPage, unpublishPage, generating, saving, analyzeSEO, fixSEO } = useLandingPages();
+  const { generatePage, savePage, updatePage, deletePage, publishPage, unpublishPage, generating, saving, analyzeSEO, fixSEO, regeneratePage } = useLandingPages();
 
   const publicBaseUrl = blog ? getCanonicalBlogUrl(blog) : "";
 
@@ -82,6 +82,7 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<LandingPageTemplate>('service_authority_v1');
   const [isAnalyzingSEO, setIsAnalyzingSEO] = useState(false);
   const [isFixingSEO, setIsFixingSEO] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [seoKeywords, setSeoKeywords] = useState<string[]>([]);
 
   // Fetch business profile for generation context
@@ -131,15 +132,25 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
       setSeoDescription(landingPage.seo_description || "");
       setSeoKeywords(landingPage.seo_keywords || []);
 
-      // Restore visibility from meta or infer from existing data
+      // Restore visibility from meta or apply template defaults
       if (landingPage.page_data?.meta?.block_visibility) {
         setVisibility({
           ...DEFAULT_BLOCK_VISIBILITY,
           ...landingPage.page_data.meta.block_visibility
         });
       } else {
-        // Infer visibility based on which blocks have data
-        setVisibility(inferVisibilityFromPageData(landingPage.page_data));
+        // Apply template-specific default visibility
+        const template = landingPage.page_data?.template || 'service_authority_v1';
+        const templateVisibility = TEMPLATE_DEFAULT_VISIBILITY[template as LandingPageTemplateType];
+        if (templateVisibility) {
+          setVisibility({
+            ...DEFAULT_BLOCK_VISIBILITY,
+            ...templateVisibility
+          });
+        } else {
+          // Infer visibility based on which blocks have data
+          setVisibility(inferVisibilityFromPageData(landingPage.page_data));
+        }
       }
     } catch (error) {
       console.error("Error loading page:", error);
@@ -301,13 +312,27 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
     if (!page?.id) return;
     setIsFixingSEO(true);
     try {
-      const result = await fixSEO(page.id);
+      const result = await fixSEO(page.id, ["title", "meta", "content", "keywords"]);
       if (result?.success) {
         // Reload page to get updated SEO data
         await loadPage();
       }
     } finally {
       setIsFixingSEO(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!page?.id) return;
+    setIsRegenerating(true);
+    try {
+      const result = await regeneratePage(page.id);
+      if (result) {
+        // Reload page to get updated content
+        await loadPage();
+      }
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -574,8 +599,10 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
                     seoAnalyzedAt={page.seo_analyzed_at}
                     onReanalyze={handleReanalyze}
                     onAutoFix={handleAutoFix}
+                    onRegenerate={handleRegenerate}
                     isAnalyzing={isAnalyzingSEO}
                     isFixing={isFixingSEO}
+                    isRegenerating={isRegenerating}
                   />
                 </TabsContent>
               )}
