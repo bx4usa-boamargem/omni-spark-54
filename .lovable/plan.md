@@ -1,258 +1,347 @@
 
-# Plano: Feed Mensal de Oportunidades
+# Plano: Templates de Super Página + Rotação Editorial Automática
 
-## Contexto
+## Visão Geral
 
-O sistema atual de oportunidades de conteúdo (`article_opportunities`) acumula registros históricos indefinidamente, criando backlog morto. O objetivo é transformá-lo em um **feed vivo mensal** onde apenas ideias dos últimos 30 dias são visíveis e relevantes.
+Este plano implementa duas funcionalidades críticas para diversificar o conteúdo entre tenants:
 
----
-
-## Arquitetura Proposta
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│                       ESTRATÉGIA HÍBRIDA                           │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│   1. FILTRAGEM NO FETCH (imediata)                                │
-│      Todas as queries filtram por created_at >= now() - 30 dias   │
-│      Ideias antigas nunca aparecem na UI                          │
-│                                                                    │
-│   2. LIMPEZA AUTOMÁTICA (diária via cron)                         │
-│      Edge Function agendada deleta registros > 30 dias            │
-│      Mantém banco limpo e performático                            │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
+1. **2 Novos Templates de Super Página** com seletor no frontend
+2. **Rotação Automática de Editorial Model** nos artigos gerados via Radar/Funil
 
 ---
 
-## Componentes Afetados
+## PARTE 1: Novos Templates de Super Página
 
-### Queries de Fetch (6 arquivos)
+### Templates a Criar
 
-| Arquivo | Função | Mudança |
-|---------|--------|---------|
-| `src/hooks/useRadarOpportunities.ts` | Hook principal do Radar | Adicionar `.gte('created_at', thirtyDaysAgo)` |
-| `src/components/content/OpportunitiesTab.tsx` | Tab de oportunidades | Filtrar por data |
-| `src/components/client/strategy/ClientOpportunitiesTab.tsx` | Tab cliente | Filtrar por data |
-| `src/components/mobile/MobileRadarFeed.tsx` | Feed mobile | Filtrar por data |
-| `src/pages/client/ClientConsultantMetrics.tsx` | Métricas consultor | Já filtra por período selecionado |
-| `src/components/content/FunnelModal.tsx` | Modal de funil | Filtrar por data |
+| Template | Foco | Público-Alvo |
+|----------|------|--------------|
+| `institutional_v1` | Empresarial/Corporativo | Escritórios, empresas B2B, consultórias |
+| `specialist_authority_v1` | Autoridade Pessoal | Profissionais liberais, coaches, especialistas |
 
-### Métricas (2 arquivos)
+### 1.1 Novos Layouts de Renderização
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/content/OpportunitiesTab.tsx` | Contador e stats filtrando 30 dias |
-| `src/components/consultant/TopOpportunitiesTable.tsx` | Filtrar oportunidades antigas |
+Criar 2 novos componentes de layout:
 
----
+**InstitutionalLayout.tsx** - Estrutura corporativa:
+- Hero com logo grande e tagline
+- Seção "Sobre a Empresa" (história, missão, valores)
+- Grid de "Áreas de Atuação"
+- Seção de Cases/Resultados
+- Equipe/Parceiros (opcional)
+- Seção de Contato institucional
+- Footer completo
 
-## Implementação
+**SpecialistAuthorityLayout.tsx** - Autoridade pessoal:
+- Hero com foto do especialista + headline de autoridade
+- Seção "Quem Sou" (bio, credenciais, formação)
+- Metodologia/Framework proprietário
+- Depoimentos de clientes/alunos
+- Mídia/Palestras/Publicações
+- CTA para consulta/mentoria
+- Footer com redes sociais
 
-### Fase 1: Filtro de Data nas Queries
-
-Todas as queries que buscam `article_opportunities` receberão um filtro adicional:
+### 1.2 Schemas JSON por Template
 
 ```typescript
-const thirtyDaysAgo = new Date();
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+// institutional_v1
+{
+  "template": "institutional_v1",
+  "brand": { company_name, tagline, founded_year, city },
+  "hero": { headline, subheadline, image_prompt },
+  "about": { mission, vision, values: [], history },
+  "services_areas": [{ title, description, icon }],
+  "cases": [{ title, result, client }],
+  "team": [{ name, role, photo_prompt }],
+  "contact": { address, phone, email, map_embed },
+  "authority_content": "..." // SEO block
+}
 
-const { data } = await supabase
-  .from('article_opportunities')
-  .select('*')
-  .eq('blog_id', blogId)
-  .gte('created_at', thirtyDaysAgo.toISOString())  // NOVO
-  .order('relevance_score', { ascending: false });
+// specialist_authority_v1
+{
+  "template": "specialist_authority_v1",
+  "specialist": { name, title, credentials, photo_prompt },
+  "hero": { headline, subheadline, tagline },
+  "about": { bio, experience_years, specializations: [] },
+  "methodology": { name, steps: [], unique_selling_point },
+  "testimonials": [{ quote, name, context }],
+  "media": [{ type, title, source }],
+  "cta": { headline, description, action_text },
+  "authority_content": "..."
+}
 ```
 
-Isso garante que:
-- Ideias antigas nunca aparecem na UI
-- Contadores refletem apenas o mês atual
-- Métricas de conversão consideram apenas período ativo
+### 1.3 Atualização da Edge Function `generate-landing-page`
 
-### Fase 2: Edge Function de Limpeza
+Modificar `supabase/functions/generate-landing-page/index.ts`:
 
-Criar função `cleanup-expired-opportunities`:
+1. Aceitar novo parâmetro: `template_type: 'service_authority_v1' | 'institutional_v1' | 'specialist_authority_v1'`
+2. Criar prompts específicos para cada template
+3. Retornar estrutura JSON correspondente
 
 ```typescript
-// supabase/functions/cleanup-expired-opportunities/index.ts
-
-const thirtyDaysAgo = new Date();
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-// Deletar oportunidades:
-// - Criadas há mais de 30 dias
-// - Não convertidas (status != 'converted')
-const { count, error } = await supabase
-  .from('article_opportunities')
-  .delete()
-  .lt('created_at', thirtyDaysAgo.toISOString())
-  .not('status', 'eq', 'converted');
+// Pseudocódigo da lógica
+const TEMPLATE_PROMPTS = {
+  service_authority_v1: "...", // Prompt atual
+  institutional_v1: `Você é um Especialista em Páginas Institucionais...
+    REGRAS:
+    - Tom formal e corporativo
+    - Destacar história e credibilidade da empresa
+    - Focar em B2B e parcerias
+    SCHEMA: { template: "institutional_v1", ... }`,
+  specialist_authority_v1: `Você é um Especialista em Branding Pessoal...
+    REGRAS:
+    - Foco no especialista como autoridade
+    - Destacar credenciais e resultados
+    - Tom de confiança e expertise
+    SCHEMA: { template: "specialist_authority_v1", ... }`
+};
 ```
 
-**Comportamento**:
-- Preserva oportunidades convertidas (histórico de ROI)
-- Deleta pending, approved e archived com mais de 30 dias
-- Retorna contagem de registros removidos
+### 1.4 Seletor de Template no Frontend
 
-### Fase 3: Job Agendado
+Atualizar `src/components/client/landingpage/LandingPageEditor.tsx`:
 
-Configurar cron no banco para execução diária às 03:00 (horário de baixo tráfego):
-
-```sql
-SELECT cron.schedule(
-  'cleanup-expired-opportunities-daily',
-  '0 3 * * *',  -- Diariamente às 03:00 UTC
-  $$
-  SELECT net.http_post(
-    url:='https://lkyypeqdstftooegqngf.supabase.co/functions/v1/cleanup-expired-opportunities',
-    headers:='{"Authorization": "Bearer ANON_KEY", "Content-Type": "application/json"}'::jsonb,
-    body:='{}'::jsonb
-  ) as request_id;
-  $$
-);
-```
-
----
-
-## Detalhes Técnicos
-
-### Mudança no useRadarOpportunities.ts
-
-```typescript
-const fetchData = useCallback(async () => {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  
-  const { data: opps } = await supabase
-    .from('article_opportunities')
-    .select('id, suggested_title, relevance_score, ...')
-    .eq('blog_id', blogId)
-    .gte('created_at', thirtyDaysAgo.toISOString())  // NOVO
-    .not('status', 'eq', 'converted')
-    .not('status', 'eq', 'archived')
-    .order('relevance_score', { ascending: false })
-    .limit(limit);
-  
-  // Count também com filtro de 30 dias
-  const { count } = await supabase
-    .from('article_opportunities')
-    .select('id', { count: 'exact', head: true })
-    .eq('blog_id', blogId)
-    .gte('created_at', thirtyDaysAgo.toISOString())  // NOVO
-    .not('status', 'eq', 'converted')
-    .not('status', 'eq', 'archived');
-}, [blogId, limit]);
-```
-
-### UI: Indicador Visual
-
-Adicionar badge na interface mostrando o período ativo:
+1. Adicionar estado para template selecionado
+2. Criar componente `TemplateSelector` com 3 opções visuais
+3. Passar `template_type` na chamada de geração
 
 ```tsx
-<Badge variant="outline" className="gap-1 text-xs">
-  <Calendar className="h-3 w-3" />
-  Últimos 30 dias
-</Badge>
+// Novo componente
+<TemplateSelector
+  value={selectedTemplate}
+  onChange={setSelectedTemplate}
+  options={[
+    { id: 'service_authority_v1', name: 'Serviços Locais', icon: Briefcase },
+    { id: 'institutional_v1', name: 'Institucional', icon: Building },
+    { id: 'specialist_authority_v1', name: 'Autoridade', icon: User }
+  ]}
+/>
 ```
 
-### Edge Function: cleanup-expired-opportunities
+### 1.5 Tipos TypeScript
+
+Atualizar `src/components/client/landingpage/types/landingPageTypes.ts`:
 
 ```typescript
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+export type LandingPageTemplate = 
+  | 'service_authority_v1' 
+  | 'institutional_v1' 
+  | 'specialist_authority_v1';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    // Deletar oportunidades expiradas (não convertidas)
-    const { data: deleted, error } = await supabase
-      .from('article_opportunities')
-      .delete()
-      .lt('created_at', thirtyDaysAgo.toISOString())
-      .neq('status', 'converted')
-      .select('id');
-
-    if (error) throw error;
-
-    console.log(`[cleanup] Deleted ${deleted?.length || 0} expired opportunities`);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        deleted_count: deleted?.length || 0,
-        cutoff_date: thirtyDaysAgo.toISOString()
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('[cleanup] Error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-});
+// Adicionar interfaces para novos schemas
+export interface InstitutionalPageData { ... }
+export interface SpecialistPageData { ... }
 ```
 
 ---
 
-## Garantias do Sistema
+## PARTE 2: Rotação Automática de Editorial Model
 
-| Regra | Implementação |
-|-------|---------------|
-| Ideias > 30 dias não aparecem na UI | Filtro em todas as queries |
-| Ideias expiradas não contam em métricas | Filtro na contagem |
-| Limpeza automática do banco | Cron diário às 03:00 |
-| Oportunidades convertidas preservadas | Filtro `status != 'converted'` na deleção |
-| Feed sempre parece "vivo" | Apenas dados recentes visíveis |
+### Objetivo
+
+Garantir que artigos gerados automaticamente (via Radar/Funil/Oportunidades) alternem entre os 3 modelos editoriais para evitar uniformidade:
+
+- `traditional` - Artigo Clássico (SEO & Autoridade)
+- `strategic` - Artigo de Impacto (Conversão & Persuasão)
+- `visual_guided` - Artigo Visual (Mobile-first)
+
+### 2.1 Criar Módulo `editorialRotation.ts`
+
+Novo arquivo: `supabase/functions/_shared/editorialRotation.ts`
+
+```typescript
+export type EditorialModel = 'traditional' | 'strategic' | 'visual_guided';
+
+// Ordem de rotação
+const EDITORIAL_ROTATION: EditorialModel[] = [
+  'traditional',
+  'strategic', 
+  'visual_guided'
+];
+
+// Mapeamento de nicho para modelo preferencial
+const NICHE_PREFERRED_MODEL: Record<string, EditorialModel> = {
+  'advocacia': 'traditional',     // Formal
+  'saude': 'traditional',         // Técnico
+  'tecnologia': 'strategic',      // Conversão
+  'estetica': 'visual_guided',    // Visual
+  'alimentacao': 'visual_guided', // Visual
+  'construcao': 'strategic',      // Prático
+  // ... outros nichos
+};
+
+/**
+ * Busca último editorial_model usado pelo blog
+ */
+export async function getLastEditorialModel(
+  supabase: any, 
+  blogId: string
+): Promise<EditorialModel | null>;
+
+/**
+ * Calcula próximo modelo na rotação
+ */
+export function calculateNextEditorialModel(
+  lastModel: EditorialModel | null,
+  niche?: string
+): EditorialModel;
+
+/**
+ * Obtém próximo modelo considerando:
+ * 1. Histórico do blog (evita repetição)
+ * 2. Preferência do nicho (peso inicial)
+ */
+export async function getNextEditorialModel(
+  supabase: any,
+  blogId: string,
+  niche?: string
+): Promise<EditorialModel>;
+```
+
+### 2.2 Lógica de Rotação Inteligente
+
+A rotação considera:
+
+1. **Histórico do Blog**: Evita repetir o mesmo modelo 3x seguidas
+2. **Preferência de Nicho**: Peso inicial baseado no perfil de negócio
+3. **Balanceamento**: Mantém distribuição equilibrada a longo prazo
+
+```typescript
+// Exemplo de lógica
+async function getNextEditorialModel(supabase, blogId, niche) {
+  // 1. Buscar últimos 3 artigos
+  const recentModels = await getRecentEditorialModels(supabase, blogId, 3);
+  
+  // 2. Se todos iguais, forçar rotação
+  if (allSame(recentModels)) {
+    return rotateToNext(recentModels[0]);
+  }
+  
+  // 3. Verificar distribuição geral
+  const distribution = await getEditorialDistribution(supabase, blogId);
+  
+  // 4. Preferir modelo menos usado
+  const leastUsed = findLeastUsed(distribution);
+  
+  // 5. Considerar preferência do nicho
+  const nichePreferred = NICHE_PREFERRED_MODEL[niche] || 'traditional';
+  
+  // 6. Combinar fatores
+  return weightedSelection(leastUsed, nichePreferred, recentModels);
+}
+```
+
+### 2.3 Integrar no `convert-opportunity-to-article`
+
+Modificar `supabase/functions/convert-opportunity-to-article/index.ts`:
+
+```typescript
+// Antes da chamada a generate-article-structured
+import { getNextEditorialModel } from '../_shared/editorialRotation.ts';
+
+// ...
+
+// 3b. ROTAÇÃO EDITORIAL - Determinar próximo modelo
+const editorialModel = await getNextEditorialModel(
+  supabase,
+  blogId,
+  profile?.niche
+);
+
+console.log(`[CONVERT] Editorial rotation: model=${editorialModel}`);
+
+// Na chamada de geração
+body: JSON.stringify({
+  // ... outros parâmetros
+  editorial_model: editorialModel, // NOVO
+  article_structure_type: structureType,
+  // ...
+})
+```
+
+### 2.4 Integrar no Gerador de Artigos via Radar
+
+Atualizar `src/utils/streamArticle.ts` para permitir override:
+
+```typescript
+// Quando source é 'opportunity' ou 'radar', usar rotação automática
+if (options.source === 'opportunity' || options.source === 'radar') {
+  // Backend já calcula via getNextEditorialModel
+  editorialModel = undefined; // Deixar backend decidir
+}
+```
+
+### 2.5 Persistir no Artigo
+
+Garantir que `editorial_model` seja salvo na tabela `articles` para rastreamento:
+
+```sql
+-- Se a coluna não existir
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS editorial_model TEXT;
+```
 
 ---
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/client/landingpage/layouts/InstitutionalLayout.tsx` | Layout institucional |
+| `src/components/client/landingpage/layouts/SpecialistAuthorityLayout.tsx` | Layout autoridade pessoal |
+| `src/components/client/landingpage/TemplateSelector.tsx` | Seletor visual de template |
+| `supabase/functions/_shared/editorialRotation.ts` | Módulo de rotação editorial |
 
 ## Arquivos a Modificar
 
-1. **Hook principal**: `src/hooks/useRadarOpportunities.ts`
-2. **Tab oportunidades**: `src/components/content/OpportunitiesTab.tsx`
-3. **Tab cliente**: `src/components/client/strategy/ClientOpportunitiesTab.tsx`
-4. **Feed mobile**: `src/components/mobile/MobileRadarFeed.tsx`
-5. **Modal funil**: `src/components/content/FunnelModal.tsx`
-6. **Table top opps**: `src/components/consultant/TopOpportunitiesTable.tsx`
-
-## Novos Arquivos
-
-1. **Edge Function**: `supabase/functions/cleanup-expired-opportunities/index.ts`
-2. **Config.toml**: Adicionar função na configuração
-
-## Configuração de Banco
-
-1. **Habilitar extensões**: `pg_cron` e `pg_net` (se não estiverem ativas)
-2. **Criar job**: Agendar limpeza diária via SQL
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/generate-landing-page/index.ts` | Aceitar `template_type`, prompts por template |
+| `src/components/client/landingpage/LandingPageEditor.tsx` | Integrar seletor de template |
+| `src/components/client/landingpage/types/landingPageTypes.ts` | Novos tipos |
+| `supabase/functions/convert-opportunity-to-article/index.ts` | Usar `getNextEditorialModel` |
+| `src/pages/PublicLandingPage.tsx` | Renderizar novos templates |
 
 ---
 
-## Resultado Final
+## Resultado Esperado
 
-- **Painel sempre atualizado**: Apenas ideias do mês atual
-- **Zero backlog morto**: Registros antigos removidos automaticamente
-- **Métricas precisas**: Contadores refletem período ativo
-- **Performance otimizada**: Banco limpo, queries rápidas
-- **Histórico preservado**: Oportunidades convertidas mantidas para ROI
+### Super Páginas
+- 3 templates visuais distintos selecionáveis no editor
+- Cada template gera conteúdo com estrutura única
+- Empresas diferentes = páginas diferentes
+
+### Artigos
+- Rotação automática entre traditional, strategic e visual_guided
+- Consideração do nicho para preferência inicial
+- Distribuição equilibrada ao longo do tempo
+- Nenhum artigo consecutivo com mesmo estilo editorial
+
+---
+
+## Diagrama de Fluxo - Rotação Editorial
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ROTAÇÃO EDITORIAL AUTOMÁTICA                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Oportunidade/Radar → convert-opportunity-to-article               │
+│          ↓                                                          │
+│   ┌──────────────────────────────────────────────┐                 │
+│   │ getNextEditorialModel(blogId, niche)         │                 │
+│   │   1. Buscar últimos 3 artigos                │                 │
+│   │   2. Verificar se todos iguais → forçar rot. │                 │
+│   │   3. Calcular distribuição geral             │                 │
+│   │   4. Considerar preferência do nicho         │                 │
+│   │   5. Retornar modelo balanceado              │                 │
+│   └──────────────────────────────────────────────┘                 │
+│          ↓                                                          │
+│   editorial_model = 'strategic' (exemplo)                           │
+│          ↓                                                          │
+│   generate-article-structured (com modelo definido)                 │
+│          ↓                                                          │
+│   Artigo gerado com estilo visual distinto                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
