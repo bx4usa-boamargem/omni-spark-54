@@ -1,9 +1,15 @@
 project_id = "lkyypeqdstftooegqngf"
 
+[functions.analyze-landing-page-seo]
+verify_jwt = false
+
 [functions.cleanup-expired-opportunities]
 verify_jwt = false
 
 [functions.content-api]
+verify_jwt = false
+
+[functions.fix-landing-page-seo]
 verify_jwt = false
 
 [functions.generate-article-pdf]

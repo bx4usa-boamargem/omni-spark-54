@@ -11,7 +11,7 @@ import {
   Settings,
   Globe,
   Trash2,
-  Plus
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ import { ServiceAuthorityLayout } from "./layouts/ServiceAuthorityLayout";
 import { InstitutionalLayout } from "./layouts/InstitutionalLayout";
 import { SpecialistAuthorityLayout } from "./layouts/SpecialistAuthorityLayout";
 import { TemplateSelector, LandingPageTemplate } from "./TemplateSelector";
+import { LandingPageSEOPanel } from "./LandingPageSEOPanel";
 import { LandingPageData, BlockVisibility, DEFAULT_BLOCK_VISIBILITY, LandingPage } from "./types/landingPageTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -63,7 +64,7 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
     return () => { isMounted.current = false; };
   }, []);
 
-  const { generatePage, savePage, updatePage, deletePage, publishPage, unpublishPage, generating, saving } = useLandingPages();
+  const { generatePage, savePage, updatePage, deletePage, publishPage, unpublishPage, generating, saving, analyzeSEO, fixSEO } = useLandingPages();
 
   const publicBaseUrl = blog ? getCanonicalBlogUrl(blog) : "";
 
@@ -78,6 +79,9 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
   const [activeTab, setActiveTab] = useState("preview");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<LandingPageTemplate>('service_authority_v1');
+  const [isAnalyzingSEO, setIsAnalyzingSEO] = useState(false);
+  const [isFixingSEO, setIsFixingSEO] = useState(false);
+  const [seoKeywords, setSeoKeywords] = useState<string[]>([]);
 
   // Fetch business profile for generation context
   const [businessProfile, setBusinessProfile] = useState<any>(null);
@@ -123,6 +127,8 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
       setTitle(landingPage.title);
       setSlug(landingPage.slug);
       setSeoTitle(landingPage.seo_title || "");
+      setSeoDescription(landingPage.seo_description || "");
+      setSeoKeywords(landingPage.seo_keywords || []);
       setSeoDescription(landingPage.seo_description || "");
     } catch (error) {
       console.error("Error loading page:", error);
@@ -259,6 +265,35 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
     setVisibility(prev => ({ ...prev, [block]: !prev[block] }));
   };
 
+  const handleReanalyze = async () => {
+    if (!page?.id) return;
+    setIsAnalyzingSEO(true);
+    try {
+      const result = await analyzeSEO(page.id);
+      if (result?.success) {
+        // Reload page to get updated SEO data
+        await loadPage();
+        toast.success("Análise SEO concluída!");
+      }
+    } finally {
+      setIsAnalyzingSEO(false);
+    }
+  };
+
+  const handleAutoFix = async () => {
+    if (!page?.id) return;
+    setIsFixingSEO(true);
+    try {
+      const result = await fixSEO(page.id);
+      if (result?.success) {
+        // Reload page to get updated SEO data
+        await loadPage();
+      }
+    } finally {
+      setIsFixingSEO(false);
+    }
+  };
+
   if (blogLoading || loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -383,6 +418,12 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
                 <Settings className="w-4 h-4 mr-2" />
                 Config
               </TabsTrigger>
+              {page && (
+                <TabsTrigger value="seo" className="flex-1">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  SEO
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <div className="flex-1 overflow-y-auto">
@@ -500,6 +541,27 @@ export function LandingPageEditor({ pageId }: LandingPageEditorProps) {
                   </AccordionItem>
                 </Accordion>
               </TabsContent>
+
+              {/* SEO Tab */}
+              {page && (
+                <TabsContent value="seo" className="m-0 h-full overflow-y-auto">
+                  <LandingPageSEOPanel
+                    pageId={page.id}
+                    pageData={pageData}
+                    seoTitle={seoTitle}
+                    seoDescription={seoDescription}
+                    seoKeywords={seoKeywords}
+                    seoScore={page.seo_score}
+                    seoMetrics={page.seo_metrics}
+                    seoRecommendations={page.seo_recommendations}
+                    seoAnalyzedAt={page.seo_analyzed_at}
+                    onReanalyze={handleReanalyze}
+                    onAutoFix={handleAutoFix}
+                    isAnalyzing={isAnalyzingSEO}
+                    isFixing={isFixingSEO}
+                  />
+                </TabsContent>
+              )}
             </div>
           </Tabs>
         </div>
