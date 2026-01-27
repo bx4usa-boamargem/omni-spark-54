@@ -1,40 +1,12 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { isBlogDomainAccess, getCurrentHostname, getBlogUrl } from "@/utils/blogUrl";
+import { useState, useMemo } from "react";
+import { useBlogHome, useAgentConfig } from "@/hooks/useContentApi";
+import { getBlogUrl } from "@/utils/blogUrl";
 import { SEOHead } from "@/components/public/SEOHead";
 import { BlogHeader } from "@/components/public/BlogHeader";
 import { ArticleCard } from "@/components/public/ArticleCard";
 import { CategoryFilter } from "@/components/public/CategoryFilter";
 import { BrandSalesAgentWidget } from "@/components/public/BrandSalesAgentWidget";
-import { useBrandAgentConfig } from "@/hooks/useBrandAgentConfig";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface Blog {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  logo_url: string | null;
-  logo_negative_url: string | null;
-  favicon_url: string | null;
-  primary_color: string | null;
-  secondary_color: string | null;
-  custom_domain: string | null;
-  domain_verified: boolean | null;
-  platform_subdomain: string | null;
-  brand_display_mode: string | null;
-}
-
-interface Article {
-  id: string;
-  title: string;
-  excerpt: string | null;
-  slug: string;
-  category: string | null;
-  tags: string[] | null;
-  published_at: string | null;
-  featured_image_url: string | null;
-}
 
 interface CustomDomainBlogProps {
   blogId?: string | null;
@@ -42,93 +14,29 @@ interface CustomDomainBlogProps {
 }
 
 export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogProps) {
-  const [blog, setBlog] = useState<Blog | null>(null);
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { blog, articles, loading, error } = useBlogHome(50); // Fetch up to 50 articles
+  const { agentConfig, businessProfile } = useAgentConfig();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
-  // Brand Sales Agent
-  const { agentConfig, businessProfile } = useBrandAgentConfig(blog?.id || null);
 
-  useEffect(() => {
-    const fetchBlog = async () => {
-      console.log('[CustomDomainBlog] Fetching blog...', { blogId, blogSlug });
-      
-      let blogData: Blog | null = null;
-      
-      // If we have blogId from routing, use it directly
-      if (blogId) {
-        const { data, error: fetchError } = await supabase
-          .from("blogs")
-          .select("*")
-          .eq("id", blogId)
-          .maybeSingle();
-        
-        if (fetchError) {
-          console.error('[CustomDomainBlog] Error fetching by ID:', fetchError);
-        } else {
-          blogData = data;
-        }
+  const primaryColor = useMemo(() => blog?.primary_color || "#6366f1", [blog?.primary_color]);
+
+  // Filter articles by category
+  const filteredArticles = useMemo(() => {
+    if (!selectedCategory) return articles;
+    return articles.filter(a => a.category === selectedCategory);
+  }, [articles, selectedCategory]);
+
+  // Get unique categories with counts
+  const { categories, articleCounts } = useMemo(() => {
+    const cats = [...new Set(articles.map(a => a.category).filter(Boolean))] as string[];
+    const counts = articles.reduce((acc, a) => {
+      if (a.category) {
+        acc[a.category] = (acc[a.category] || 0) + 1;
       }
-      
-      // Fallback: try to find by hostname using RPC resolve_domain
-      if (!blogData) {
-        const hostname = getCurrentHostname();
-        console.log('[CustomDomainBlog] Trying hostname lookup via RPC:', hostname);
-        
-        // Use RPC resolve_domain as single source of truth
-        const { data: domainData, error: rpcError } = await supabase.rpc('resolve_domain', {
-          p_hostname: hostname
-        });
-        
-        if (rpcError) {
-          console.error('[CustomDomainBlog] RPC error:', rpcError);
-        } else if (domainData && domainData.length > 0 && domainData[0].blog_id) {
-          // Fetch blog by resolved blog_id
-          const { data, error: fetchError } = await supabase
-            .from("blogs")
-            .select("*")
-            .eq("id", domainData[0].blog_id)
-            .maybeSingle();
-          
-          if (fetchError) {
-            console.error('[CustomDomainBlog] Error fetching by resolved blog_id:', fetchError);
-          } else {
-            blogData = data;
-          }
-        } else {
-          console.log('[CustomDomainBlog] No domain found via RPC for:', hostname);
-        }
-      }
-
-      if (!blogData) {
-        console.log('[CustomDomainBlog] No blog found');
-        setError("Blog não encontrado");
-        setLoading(false);
-        return;
-      }
-
-      console.log('[CustomDomainBlog] Blog found:', blogData.id);
-      setBlog(blogData);
-
-      // Fetch published articles
-      const { data: articlesData } = await supabase
-        .from("articles")
-        .select("id, title, excerpt, slug, category, tags, published_at, featured_image_url")
-        .eq("blog_id", blogData.id)
-        .eq("status", "published")
-        .order("published_at", { ascending: false });
-
-      if (articlesData) {
-        setArticles(articlesData);
-      }
-
-      setLoading(false);
-    };
-
-    fetchBlog();
-  }, [blogId, blogSlug]);
+      return acc;
+    }, {} as Record<string, number>);
+    return { categories: cats, articleCounts: counts };
+  }, [articles]);
 
   if (loading) {
     return (
@@ -166,8 +74,12 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
     );
   }
 
-  const primaryColor = blog.primary_color || "#6366f1";
-  const canonicalUrl = getBlogUrl(blog);
+  const canonicalUrl = getBlogUrl({
+    custom_domain: blog.custom_domain,
+    domain_verified: true,
+    platform_subdomain: blog.platform_subdomain,
+    slug: blog.slug
+  });
 
   return (
     <>
@@ -179,17 +91,16 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
         favicon={blog.favicon_url || undefined}
       />
 
-
       <div className="min-h-screen bg-background flex flex-col">
         <BlogHeader 
           blogName={blog.name} 
           blogSlug={blog.slug} 
           logoUrl={blog.logo_url}
-          logoNegativeUrl={blog.logo_negative_url}
+          logoNegativeUrl={null}
           primaryColor={primaryColor}
           customDomain={blog.custom_domain}
-          domainVerified={blog.domain_verified}
-          brandDisplayMode={(blog.brand_display_mode as 'text' | 'image') || 'text'}
+          domainVerified={true}
+          brandDisplayMode="text"
         />
 
         <main className="flex-1">
@@ -223,55 +134,32 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
                 </div>
               ) : (
                 <>
-                  {/* Category Filter */}
-                  {(() => {
-                    const uniqueCategories = [...new Set(articles
-                      .map(a => a.category)
-                      .filter(Boolean)
-                    )] as string[];
-                    
-                    const articleCounts = articles.reduce((acc, a) => {
-                      if (a.category) {
-                        acc[a.category] = (acc[a.category] || 0) + 1;
-                      }
-                      return acc;
-                    }, {} as Record<string, number>);
-                    
-                    const filteredArticles = selectedCategory
-                      ? articles.filter(a => a.category === selectedCategory)
-                      : articles;
-                    
-                    return (
-                      <>
-                        <CategoryFilter
-                          categories={uniqueCategories}
-                          activeCategory={selectedCategory}
-                          onCategoryChange={setSelectedCategory}
-                          primaryColor={primaryColor}
-                          articleCounts={articleCounts}
-                        />
-                        
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {filteredArticles.map((article) => (
-                            <ArticleCard
-                              key={article.id}
-                              title={article.title}
-                              excerpt={article.excerpt}
-                              slug={article.slug}
-                              blogSlug={blog.slug}
-                              category={article.category}
-                              tags={article.tags}
-                              publishedAt={article.published_at}
-                              featuredImageUrl={article.featured_image_url}
-                              primaryColor={primaryColor}
-                              customDomain={blog.custom_domain}
-                              domainVerified={blog.domain_verified}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    );
-                  })()}
+                  <CategoryFilter
+                    categories={categories}
+                    activeCategory={selectedCategory}
+                    onCategoryChange={setSelectedCategory}
+                    primaryColor={primaryColor}
+                    articleCounts={articleCounts}
+                  />
+                  
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredArticles.map((article) => (
+                      <ArticleCard
+                        key={article.id}
+                        title={article.title}
+                        excerpt={article.excerpt}
+                        slug={article.slug}
+                        blogSlug={blog.slug}
+                        category={article.category}
+                        tags={article.tags}
+                        publishedAt={article.published_at}
+                        featuredImageUrl={article.featured_image_url}
+                        primaryColor={primaryColor}
+                        customDomain={blog.custom_domain}
+                        domainVerified={true}
+                      />
+                    ))}
+                  </div>
                 </>
               )}
             </div>
@@ -286,7 +174,7 @@ export default function CustomDomainBlog({ blogId, blogSlug }: CustomDomainBlogP
         </footer>
 
         {/* Brand Sales Agent Widget */}
-        {blog && agentConfig && agentConfig.is_enabled && (
+        {blog && agentConfig?.is_enabled && (
           <BrandSalesAgentWidget
             blogId={blog.id}
             agentConfig={agentConfig}
