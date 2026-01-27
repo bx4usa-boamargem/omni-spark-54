@@ -37,60 +37,74 @@ export function ServiceAuthorityLayout({
         Service Authority Template v1.0
       </div>
 
-      {/* 1. Authority Hero */}
-      <AuthorityHero 
-        data={{...hero, phone: brand.phone}} 
-        primaryColor={primaryColor} 
-        isEditing={isEditing}
-        onEdit={(field, value) => onEditBlock?.('hero', { field, value })}
-      />
+      {/* 1. Authority Hero - only render if hero data exists */}
+      {hero && Object.keys(hero).length > 0 && (
+        <AuthorityHero 
+          data={{...hero, phone: brand.phone}} 
+          primaryColor={primaryColor} 
+          isEditing={isEditing}
+          onEdit={(field, value) => onEditBlock?.('hero', { field, value })}
+        />
+      )}
 
-      {/* 2. Call Now Strip (Floating-style or fixed) */}
-      <CallNowStrip 
-        phone={brand.phone} 
-        primaryColor={primaryColor} 
-      />
+      {/* 2. Call Now Strip (Floating-style or fixed) - only if phone exists */}
+      {brand.phone && (
+        <CallNowStrip 
+          phone={brand.phone} 
+          primaryColor={primaryColor} 
+        />
+      )}
 
-      {/* 3. Service Card Grid */}
-      <ServiceCardGrid 
-        services={services} 
-        primaryColor={primaryColor}
-        isEditing={isEditing}
-        onEdit={(index, field, value) => onEditBlock?.('services', { index, field, value })}
-      />
+      {/* 3. Service Card Grid - only if services exist */}
+      {services.length > 0 && (
+        <ServiceCardGrid 
+          services={services} 
+          primaryColor={primaryColor}
+          isEditing={isEditing}
+          onEdit={(index, field, value) => onEditBlock?.('services', { index, field, value })}
+        />
+      )}
 
-      {/* 4. Emergency CTA */}
-      <EmergencyCTA 
-        data={emergency} 
-        phone={brand.phone}
-        isEditing={isEditing}
-        onEdit={(field, value) => onEditBlock?.('emergency', { field, value })}
-      />
+      {/* 4. Emergency CTA - only if emergency data exists */}
+      {emergency && Object.keys(emergency).length > 0 && (
+        <EmergencyCTA 
+          data={emergency} 
+          phone={brand.phone}
+          isEditing={isEditing}
+          onEdit={(field, value) => onEditBlock?.('emergency', { field, value })}
+        />
+      )}
 
-      {/* 5. Authority Content Block */}
-      <section className="py-24 px-6 bg-slate-50 border-y border-slate-200">
-        <div className="container max-w-4xl mx-auto">
-          <div className="prose prose-slate prose-lg max-w-none 
-            prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-950
-            prose-h2:text-4xl prose-h2:border-b-4 prose-h2:pb-4 prose-h2:mb-8
-            prose-p:text-slate-700 prose-p:leading-relaxed">
-            <ArticleContent content={typeof authorityContent === 'string' ? authorityContent : (authorityContent.html || "")} />
+      {/* 5. Authority Content Block - only if content exists */}
+      {authorityContent && (
+        <section className="py-24 px-6 bg-slate-50 border-y border-slate-200">
+          <div className="container max-w-4xl mx-auto">
+            <div className="prose prose-slate prose-lg max-w-none 
+              prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-950
+              prose-h2:text-4xl prose-h2:border-b-4 prose-h2:pb-4 prose-h2:mb-8
+              prose-p:text-slate-700 prose-p:leading-relaxed">
+              <ArticleContent content={typeof authorityContent === 'string' ? authorityContent : (authorityContent.html || "")} />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* 6. FAQ Section */}
-      <FAQSection 
-        faqs={pageData.faq || []} 
-        primaryColor={primaryColor}
-      />
+      {/* 6. FAQ Section - only if FAQs exist */}
+      {pageData.faq && pageData.faq.length > 0 && (
+        <FAQSection 
+          faqs={pageData.faq} 
+          primaryColor={primaryColor}
+        />
+      )}
 
-      {/* 7. Footer CTA */}
-      <FooterCTA 
-        brandName={brand.company_name} 
-        phone={brand.phone}
-        primaryColor={primaryColor}
-      />
+      {/* 7. Footer CTA - only if brand name or phone exists */}
+      {(brand.company_name || brand.phone) && (
+        <FooterCTA 
+          brandName={brand.company_name} 
+          phone={brand.phone}
+          primaryColor={primaryColor}
+        />
+      )}
     </div>
   );
 }

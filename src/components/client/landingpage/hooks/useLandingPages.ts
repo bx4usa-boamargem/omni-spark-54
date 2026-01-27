@@ -320,11 +320,27 @@ export function useLandingPages(): UseLandingPagesReturn {
 
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.slug !== undefined) updateData.slug = updates.slug;
-      if (updates.page_data !== undefined) updateData.page_data = updates.page_data as unknown;
       if (updates.seo_title !== undefined) updateData.seo_title = updates.seo_title;
       if (updates.seo_description !== undefined) updateData.seo_description = updates.seo_description;
       if (updates.status !== undefined) updateData.status = updates.status;
       if (updates.featured_image_url !== undefined) updateData.featured_image_url = updates.featured_image_url;
+
+      // Clean and normalize page_data before saving
+      if (updates.page_data !== undefined) {
+        // Deep clone to create clean JSON without undefined values
+        const cleanData = typeof updates.page_data === 'string' 
+          ? JSON.parse(updates.page_data) 
+          : JSON.parse(JSON.stringify(updates.page_data));
+        
+        // Remove any undefined/null top-level keys
+        Object.keys(cleanData).forEach(key => {
+          if (cleanData[key] === undefined || cleanData[key] === null) {
+            delete cleanData[key];
+          }
+        });
+        
+        updateData.page_data = cleanData;
+      }
 
       const { error } = await supabase.from("landing_pages").update(updateData).eq("id", id);
 
