@@ -64,12 +64,18 @@ export function FunnelModal({ open, onOpenChange, blogId, onContinue, isClientCo
 
   async function fetchOpportunities() {
     setLoading(true);
+
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
     
-    // Buscar oportunidades abertas agrupadas por estágio
+    // Buscar oportunidades abertas agrupadas por estágio (last 30 days)
     const { data, error } = await supabase
       .from("article_opportunities")
       .select("id, suggested_title, relevance_score, suggested_keywords, goal, funnel_stage, why_now")
       .eq("blog_id", blogId)
+      .gte("created_at", cutoffDate)
       .in("status", ["pending", "approved"])
       .order("relevance_score", { ascending: false });
 
