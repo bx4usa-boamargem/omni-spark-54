@@ -1,84 +1,256 @@
 
-# Plano: Correção do Bug Visual nos Filtros de Status
+# Plano: Correção Crítica - Mini-Site Público Exigindo Login
 
-## Problema Identificado
+## Diagnóstico Confirmado
 
-Os botões de filtro usam `variant="ghost"` do shadcn Button, que aplica:
-```css
-hover:bg-accent hover:text-accent-foreground
+### Evidências Coletadas
+
+1. **Edge Function Funcionando**: A `content-api` resolve corretamente `anabione.app.omniseen.app` e retorna dados do blog (testado via curl)
+
+2. **Problema de RLS na Tabela `blogs`**: 
+   - Políticas atuais: `SELECT` apenas para `auth.uid() = user_id`
+   - **Não existe política pública de leitura**
+   - Usuários anônimos não conseguem ler a tabela `blogs`
+
+3. **Tabela `tenant_domains` Incompleta**:
+   - Blog `anabione` não tem registro em `tenant_domains`
+   - O RPC `resolve_domain` depende dessa tabela
+   - Fallback no frontend faz query direta à tabela `blogs` (falha por RLS)
+
+4. **Fluxo Atual com Falha**:
+```text
+Visitante acessa anabione.app.omniseen.app
+        ↓
+isSubaccountHost() → true (OK)
+        ↓
+SubaccountRouteDecider → BlogRoutes (OK)
+        ↓
+useDomainResolution → RPC resolve_domain → VAZIO (tenant_domains não tem registro)
+        ↓
+Fallback: query blogs.platform_subdomain → BLOQUEADO POR RLS
+        ↓
+blogId = null, error = "Domain not found"
+        ↓
+BlogRoutes mostra "Blog não encontrado" ou erro dispara redirect
 ```
 
-Os estilos customizados tentam sobrescrever apenas o background:
-```tsx
-statusFilter === tab.value
-  ? "bg-background shadow-sm font-medium"
-  : "hover:bg-background/50"  // ← Falta hover:text-...
+---
+
+## Solução: Eliminar Dependência de Queries Diretas
+
+### Estratégia
+
+O portal público (`BlogRoutes`) deve usar **exclusivamente** a edge function `content-api`, que utiliza `service_role` e bypassa RLS. Isso é consistente com a arquitetura já planejada (memória: `content-api-gateway-v1-0-pt`).
+
+### Mudanças Necessárias
+
+#### 1. Criar Hook `usePublicDomainResolution`
+
+Novo hook que resolve domínio via `content-api` ao invés de queries diretas:
+
+**Arquivo**: `src/hooks/usePublicDomainResolution.ts` (NOVO)
+
+```typescript
+// Hook para resolução de domínio via content-api (para portal público)
+// Não depende de RLS ou queries diretas ao Supabase
+
+export function usePublicDomainResolution() {
+  const [blogId, setBlogId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const resolve = async () => {
+      const hostname = getCurrentHostname();
+      
+      // Chamar content-api com route mínimo para obter blog_id
+      const result = await fetchContentApi<{ total: number }>("blog.home", { limit: 1 });
+      
+      if (result?.tenant?.blog_id) {
+        setBlogId(result.tenant.blog_id);
+        setError(null);
+      } else {
+        setError("Domain not found");
+      }
+      setIsLoading(false);
+    };
+    
+    resolve();
+  }, []);
+
+  return { blogId, isLoading, error };
+}
 ```
 
-**Resultado**: No hover, o texto pode perder contraste dependendo do tema, pois o `text-accent-foreground` do variant ghost conflita com o background customizado.
+#### 2. Atualizar `BlogRoutes` para Usar Novo Hook
 
-## Solução
+**Arquivo**: `src/routes/BlogRoutes.tsx`
 
-Adicionar estilos completos para todos os estados (normal, hover, active) garantindo contraste consistente.
+```diff
+- import { useDomainResolution } from '@/hooks/useDomainResolution';
++ import { usePublicDomainResolution } from '@/hooks/usePublicDomainResolution';
 
-### Alterações em Ambos os Componentes
-
-**ArticleFilters.tsx** (linhas 59-64):
-```tsx
-// ANTES
-className={cn(
-  "rounded-md px-2 sm:px-3 py-1.5 h-auto text-xs sm:text-sm transition-colors gap-1 whitespace-nowrap",
-  statusFilter === tab.value
-    ? "bg-background shadow-sm font-medium"
-    : "hover:bg-background/50"
-)}
-
-// DEPOIS
-className={cn(
-  "rounded-md px-2 sm:px-3 py-1.5 h-auto text-xs sm:text-sm transition-colors gap-1 whitespace-nowrap",
-  "text-muted-foreground hover:text-foreground hover:bg-muted/80",
-  statusFilter === tab.value && "bg-background text-foreground shadow-sm font-medium hover:bg-background"
-)}
+export function BlogRoutes() {
+-  const { blogId, isLoading, error } = useDomainResolution();
++  const { blogId, isLoading, error } = usePublicDomainResolution();
 ```
 
-**LandingPageFilters.tsx** (linhas 39-44):
-```tsx
-// ANTES
-className={cn(
-  "rounded-md px-3 py-1.5 h-auto text-sm transition-colors",
-  statusFilter === tab.value
-    ? "bg-background shadow-sm font-medium"
-    : "hover:bg-background/50"
-)}
+#### 3. Garantir que `content-api` Aceite Fallback por `platform_subdomain`
 
-// DEPOIS
-className={cn(
-  "rounded-md px-3 py-1.5 h-auto text-sm transition-colors",
-  "text-muted-foreground hover:text-foreground hover:bg-muted/80",
-  statusFilter === tab.value && "bg-background text-foreground shadow-sm font-medium hover:bg-background"
-)}
-```
+**Arquivo**: `supabase/functions/content-api/index.ts`
 
-## Lógica dos Estilos
+A função `resolveTenant` já tem fallback por `platform_subdomain`, então não precisa de mudanças.
 
-| Estado | Background | Texto |
-|--------|------------|-------|
-| Normal (não selecionado) | transparente | `text-muted-foreground` |
-| Hover (não selecionado) | `bg-muted/80` | `text-foreground` |
-| Ativo (selecionado) | `bg-background` | `text-foreground` |
-| Hover + Ativo | `bg-background` (mantém) | `text-foreground` |
+---
 
 ## Arquivos a Modificar
 
-| Arquivo | Linha | Mudança |
-|---------|-------|---------|
-| `src/components/client/articles/ArticleFilters.tsx` | 59-64 | Atualizar classes do Button |
-| `src/components/client/landingpage/LandingPageFilters.tsx` | 39-44 | Atualizar classes do Button |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/hooks/usePublicDomainResolution.ts` | **CRIAR** | Hook de resolução via content-api |
+| `src/routes/BlogRoutes.tsx` | Modificar | Usar novo hook |
+| `src/hooks/useContentApi.ts` | Modificar | Exportar `fetchContentApi` se não estiver |
+
+---
+
+## Fluxo Corrigido
+
+```text
+┌────────────────────────────────────────────────────────────────────┐
+│                     FLUXO CORRIGIDO                               │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Visitante acessa anabione.app.omniseen.app                        │
+│         ↓                                                          │
+│  isSubaccountHost() → true                                         │
+│         ↓                                                          │
+│  SubaccountRouteDecider → BlogRoutes                               │
+│         ↓                                                          │
+│  usePublicDomainResolution()                                       │
+│         ↓                                                          │
+│  Chama content-api edge function                                   │
+│  (usa service_role, bypassa RLS)                                   │
+│         ↓                                                          │
+│  content-api resolve via platform_subdomain                        │
+│         ↓                                                          │
+│  blogId = "90bd692a-..." ✓                                         │
+│         ↓                                                          │
+│  Renderiza CustomDomainBlog com blogId                             │
+│         ↓                                                          │
+│  Blog público exibido sem login ✓                                  │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Detalhes Técnicos
+
+### Hook `usePublicDomainResolution`
+
+```typescript
+import { useState, useEffect } from 'react';
+import { fetchContentApi } from '@/hooks/useContentApi';
+import { getCurrentHostname } from '@/utils/blogUrl';
+
+interface PublicDomainResolution {
+  blogId: string | null;
+  isLoading: boolean;
+  error: string | null;
+}
+
+/**
+ * Hook para resolução de domínio público via content-api
+ * 
+ * IMPORTANTE: Este hook usa a edge function content-api que:
+ * - Utiliza service_role (bypassa RLS)
+ * - Resolve via tenant_domains OU blogs.platform_subdomain
+ * - NÃO depende de autenticação do usuário
+ * 
+ * Usar este hook para o portal PÚBLICO (BlogRoutes)
+ * O hook useDomainResolution antigo pode continuar para uso interno/admin
+ */
+export function usePublicDomainResolution(): PublicDomainResolution {
+  const [blogId, setBlogId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const resolve = async () => {
+      const hostname = getCurrentHostname();
+      
+      if (!hostname) {
+        if (mounted) {
+          setError('No hostname');
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      console.log('[usePublicDomainResolution] Resolving via content-api:', hostname);
+
+      try {
+        // Faz uma chamada mínima à content-api para obter tenant info
+        const result = await fetchContentApi<{ total: number }>("blog.home", { limit: 1 }, hostname);
+        
+        if (!mounted) return;
+
+        if (result?.tenant?.blog_id) {
+          console.log('[usePublicDomainResolution] Resolved:', result.tenant.blog_id);
+          setBlogId(result.tenant.blog_id);
+          setError(null);
+        } else {
+          console.log('[usePublicDomainResolution] No blog found for hostname:', hostname);
+          setError('Domain not found');
+        }
+      } catch (err) {
+        console.error('[usePublicDomainResolution] Error:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Resolution failed');
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    resolve();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return { blogId, isLoading, error };
+}
+```
+
+---
 
 ## Resultado Esperado
 
-1. Todos os tabs têm texto visível no estado normal (`text-muted-foreground`)
-2. Hover aplica background sutil (`bg-muted/80`) e texto destacado (`text-foreground`)
-3. Tab ativo tem fundo sólido (`bg-background`) com sombra e texto destacado
-4. Contraste mantido em todos os estados (normal, hover, active)
-5. Comportamento consistente em ambas as telas (Artigos e Super Páginas)
+Após a implementação:
+
+1. **Mini-site 100% público**: Qualquer visitante pode acessar `https://anabione.app.omniseen.app` sem login
+2. **Artigos públicos**: `/artigo-slug` funciona sem autenticação
+3. **Super Páginas públicas**: `/p/pagina-slug` funciona sem autenticação
+4. **Sem dependência de RLS**: Portal público usa apenas `content-api` (service_role)
+5. **Isolamento mantido**: Área admin (`/login`, `/client/*`) continua exigindo autenticação
+6. **Botão "Abrir Site" funciona**: Abre o site público sem redirecionamento
+
+---
+
+## Validação
+
+Após implementação, verificar:
+
+| URL | Esperado |
+|-----|----------|
+| `https://anabione.app.omniseen.app` | Blog público visível |
+| `https://anabione.app.omniseen.app/artigo-x` | Artigo público visível |
+| `https://anabione.app.omniseen.app/p/pagina-y` | Super Página pública visível |
+| `https://anabione.app.omniseen.app/login` | Tela de login (plataforma) |
+| `https://anabione.app.omniseen.app/client/dashboard` | Redirect para login se não autenticado |
