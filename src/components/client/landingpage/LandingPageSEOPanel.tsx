@@ -65,8 +65,10 @@ interface LandingPageSEOPanelProps {
   seoAnalyzedAt?: string | null;
   onReanalyze: () => Promise<void>;
   onAutoFix: () => Promise<void>;
+  onRegenerate?: () => Promise<void>;
   isAnalyzing?: boolean;
   isFixing?: boolean;
+  isRegenerating?: boolean;
 }
 
 function getScoreLabel(score: number): { label: string; color: string } {
@@ -123,8 +125,10 @@ export function LandingPageSEOPanel({
   seoAnalyzedAt,
   onReanalyze,
   onAutoFix,
+  onRegenerate,
   isAnalyzing = false,
   isFixing = false,
+  isRegenerating = false,
 }: LandingPageSEOPanelProps) {
   const hasScore = seoScore !== null && seoScore !== undefined;
   const scoreInfo = hasScore ? getScoreLabel(seoScore) : null;
@@ -328,32 +332,89 @@ export function LandingPageSEOPanel({
               </div>
             ))}
             
-            {recommendations.some(r => r.auto_fixable) && (
+            <div className="flex flex-col gap-2 mt-3">
+              {recommendations.some(r => r.auto_fixable) && (
+                <Button 
+                  className="w-full"
+                  onClick={onAutoFix}
+                  disabled={isFixing || !pageId}
+                >
+                  {isFixing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  Corrigir automaticamente
+                </Button>
+              )}
+              
+              {onRegenerate && (
+                <Button 
+                  variant="outline"
+                  className="w-full"
+                  onClick={onRegenerate}
+                  disabled={isRegenerating || !pageId}
+                >
+                  {isRegenerating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Regenerar Página
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Actions when no recommendations */}
+      {hasScore && recommendations.length === 0 && (
+        <Card className="border-green-200 bg-green-50/50 dark:bg-green-900/10">
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <Check className="h-5 w-5 text-green-600" />
+              <p className="text-sm text-green-700 dark:text-green-400">
+                Excelente! Não há recomendações de melhoria.
+              </p>
+            </div>
+            
+            {onRegenerate && (
               <Button 
-                className="w-full mt-3"
-                onClick={onAutoFix}
-                disabled={isFixing || !pageId}
+                variant="outline"
+                className="w-full"
+                onClick={onRegenerate}
+                disabled={isRegenerating || !pageId}
               >
-                {isFixing ? (
+                {isRegenerating ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Corrigir automaticamente
+                Regenerar Página
               </Button>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Empty state when no recommendations */}
-      {hasScore && recommendations.length === 0 && (
-        <Card className="border-green-200 bg-green-50/50 dark:bg-green-900/10">
-          <CardContent className="flex items-center gap-3 py-4">
-            <Check className="h-5 w-5 text-green-600" />
-            <p className="text-sm text-green-700 dark:text-green-400">
-              Excelente! Não há recomendações de melhoria.
-            </p>
+      {/* Regenerate button when no score yet */}
+      {!hasScore && onRegenerate && (
+        <Card>
+          <CardContent className="py-4">
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={onRegenerate}
+              disabled={isRegenerating || !pageId}
+            >
+              {isRegenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Regenerar Página
+            </Button>
           </CardContent>
         </Card>
       )}

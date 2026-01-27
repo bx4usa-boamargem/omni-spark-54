@@ -8,7 +8,92 @@ const corsHeaders = {
 
 type LandingPageTemplate = 'service_authority_v1' | 'institutional_v1' | 'specialist_authority_v1';
 
-// Template-specific prompts
+// Helper functions for SEO field generation
+function buildSeoTitle(pageData: any, companyName: string, niche: string, city: string): string {
+  // Priority: use hero headline if it's good length
+  const heroHeadline = pageData.hero?.headline || pageData.hero?.title || '';
+  if (heroHeadline.length >= 30 && heroHeadline.length <= 60) {
+    return heroHeadline;
+  }
+  
+  // Build a proper SEO title
+  const parts = [companyName, niche, city].filter(Boolean);
+  let title = parts.join(' - ');
+  
+  // Ensure it's not too long
+  if (title.length > 60) {
+    title = `${companyName} - ${niche}`.slice(0, 60);
+  }
+  
+  // Ensure it's not too short
+  if (title.length < 30 && city) {
+    title = `${companyName}: ${niche} em ${city}`.slice(0, 60);
+  }
+  
+  return title || `${companyName} - Serviços Profissionais`;
+}
+
+function buildSeoDescription(pageData: any, niche: string, city: string, companyName: string): string {
+  // Priority: use hero subheadline if it's good length
+  const heroSubheadline = pageData.hero?.subheadline || pageData.hero?.subtitle || '';
+  if (heroSubheadline.length >= 120 && heroSubheadline.length <= 160) {
+    return heroSubheadline;
+  }
+  
+  // Build a proper meta description with CTA
+  const cityPart = city ? ` em ${city}` : '';
+  const description = `${companyName} oferece serviços de ${niche}${cityPart}. Atendimento profissional e qualidade garantida. Solicite seu orçamento grátis!`;
+  
+  // Ensure proper length
+  return description.slice(0, 160);
+}
+
+function extractKeywords(pageData: any, niche: string, services: string[], city: string, companyName: string): string[] {
+  const keywords = new Set<string>();
+  
+  // Add primary keywords
+  if (niche) keywords.add(niche.toLowerCase());
+  if (city) keywords.add(`${niche} ${city}`.toLowerCase());
+  if (companyName) keywords.add(companyName.toLowerCase());
+  
+  // Add service-based keywords
+  services.slice(0, 3).forEach(service => {
+    if (service) {
+      keywords.add(service.toLowerCase().trim());
+      if (city) {
+        keywords.add(`${service} ${city}`.toLowerCase().trim());
+      }
+    }
+  });
+  
+  // Extract from hero if available
+  const heroTitle = pageData.hero?.headline || pageData.hero?.title || '';
+  if (heroTitle) {
+    // Extract significant words (3+ chars)
+    const words = heroTitle.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+    words.slice(0, 2).forEach((w: string) => keywords.add(w));
+  }
+  
+  return Array.from(keywords).slice(0, 7);
+}
+
+function buildSlug(headline: string, niche: string, city: string): string {
+  // Try to build from headline first
+  let base = headline || `${niche} ${city}` || 'landing-page';
+  
+  // Normalize and slugify
+  const slug = base
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with hyphens
+    .replace(/(^-|-$)/g, "") // Remove leading/trailing hyphens
+    .slice(0, 50); // Limit length
+  
+  return slug || 'super-pagina';
+}
+
+// Template-specific prompts with photo_prompt for specialist
 const TEMPLATE_PROMPTS: Record<LandingPageTemplate, (company: string, niche: string, city: string, services: string[]) => string> = {
   service_authority_v1: (company, niche, city, services) => `Você é um Especialista em Landing Pages de Alta Conversão para Serviços Locais.
 Gere um JSON para o template "service_authority_v1".
@@ -99,6 +184,7 @@ REGRAS:
 - Tom de CONFIANÇA e EXPERTISE.
 - Linguagem em primeira pessoa quando apropriado.
 - Crie conteúdo de autoridade (1200+ palavras) em HTML.
+- IMPORTANTE: Gere um photo_prompt profissional para o especialista.
 
 SCHEMA OBRIGATÓRIO:
 {
@@ -107,7 +193,8 @@ SCHEMA OBRIGATÓRIO:
     "name": "${company}",
     "title": "Especialista em ${niche}",
     "credentials": "MBA, 15+ anos de experiência",
-    "photo_prompt": "Professional portrait photography of expert consultant, confident pose, studio lighting, 8k"
+    "photo_prompt": "Professional portrait photography of ${niche} consultant, business attire, confident smile, studio lighting, neutral background, 8k quality, photorealistic",
+    "photo_url": null
   },
   "hero": { 
     "headline": "Transforme Resultados com Expertise Comprovada", 
@@ -177,12 +264,17 @@ serve(async (req) => {
 
     console.log(`[generate-landing-page] Generating ${selectedTemplate} for ${company_name} in ${city}`);
 
+    const companyName = company_name || 'Empresa';
+    const nicheValue = niche || 'Serviços';
+    const cityValue = city || 'São Paulo';
+    const servicesArray = services.length > 0 ? services : ['Serviço 1', 'Serviço 2', 'Serviço 3'];
+
     // Get template-specific prompt
     const systemPrompt = TEMPLATE_PROMPTS[selectedTemplate](
-      company_name || 'Empresa',
-      niche || 'Serviços',
-      city || 'São Paulo',
-      services.length > 0 ? services : ['Serviço 1', 'Serviço 2', 'Serviço 3']
+      companyName,
+      nicheValue,
+      cityValue,
+      servicesArray
     );
 
     const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -195,7 +287,7 @@ serve(async (req) => {
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt }, 
-          { role: 'user', content: `Gerar Super Página ${selectedTemplate} para ${company_name} em ${city}. Serviços: ${services.join(', ')}` }
+          { role: 'user', content: `Gerar Super Página ${selectedTemplate} para ${companyName} em ${cityValue}. Serviços: ${servicesArray.join(', ')}` }
         ],
         response_format: { type: 'json_object' }
       })
@@ -230,9 +322,25 @@ serve(async (req) => {
     // Ensure template field is set correctly
     pageData.template = selectedTemplate;
 
-    console.log(`[generate-landing-page] Successfully generated ${selectedTemplate} page`);
+    // Generate SEO fields automatically
+    const seoTitle = buildSeoTitle(pageData, companyName, nicheValue, cityValue);
+    const seoDescription = buildSeoDescription(pageData, nicheValue, cityValue, companyName);
+    const seoKeywords = extractKeywords(pageData, nicheValue, servicesArray, cityValue, companyName);
+    const slug = buildSlug(pageData.hero?.headline || pageData.hero?.title, nicheValue, cityValue);
 
-    return new Response(JSON.stringify({ success: true, page_data: pageData }), {
+    console.log(`[generate-landing-page] Successfully generated ${selectedTemplate} page with SEO fields`);
+    console.log(`[generate-landing-page] SEO Title: ${seoTitle} (${seoTitle.length} chars)`);
+    console.log(`[generate-landing-page] SEO Description: ${seoDescription.length} chars`);
+    console.log(`[generate-landing-page] Keywords: ${seoKeywords.join(', ')}`);
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      page_data: pageData,
+      seo_title: seoTitle,
+      seo_description: seoDescription,
+      seo_keywords: seoKeywords,
+      slug: slug
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 

@@ -20,7 +20,8 @@ interface UseLandingPagesReturn {
   archivePage: (id: string) => Promise<boolean>;
   unarchivePage: (id: string) => Promise<boolean>;
   analyzeSEO: (id: string) => Promise<any>;
-  fixSEO: (id: string) => Promise<any>;
+  fixSEO: (id: string, fixTypes?: string[]) => Promise<any>;
+  regeneratePage: (id: string) => Promise<LandingPageData | null>;
 }
 
 async function generateLandingPageImage(params: {
@@ -191,11 +192,14 @@ export function useLandingPages(): UseLandingPagesReturn {
 
       const insertPayload: any = {
         blog_id: request.blog_id,
-        title: pageData.hero?.headline || "Nova Super Página",
-        slug: finalSlug,
+        title: data.seo_title || pageData.hero?.headline || "Nova Super Página",
+        slug: data.slug || finalSlug,
         page_data: pageData,
         status: 'published',
-        published_at: new Date().toISOString()
+        published_at: new Date().toISOString(),
+        seo_title: data.seo_title || pageData.hero?.headline || "Nova Super Página",
+        seo_description: data.seo_description || pageData.hero?.subheadline || "",
+        seo_keywords: data.seo_keywords || [],
       };
 
       // Só adiciona user_id se o usuário estiver autenticado, 
@@ -601,18 +605,107 @@ export function useLandingPages(): UseLandingPagesReturn {
     }
   }, []);
 
-  const fixSEO = useCallback(async (id: string): Promise<any> => {
+  const fixSEO = useCallback(async (id: string, fixTypes?: string[]): Promise<any> => {
     try {
       const { data, error } = await supabase.functions.invoke("fix-landing-page-seo", {
-        body: { landing_page_id: id },
+        body: { 
+          landing_page_id: id,
+          fix_types: fixTypes || ["title", "meta", "content", "keywords"]
+        },
       });
 
       if (error) throw error;
-      toast.success("SEO otimizado com sucesso!");
+      
+      const fixesApplied = data?.fixes_applied || [];
+      if (fixesApplied.length > 0) {
+        toast.success(`SEO otimizado: ${fixesApplied.join(', ')}`);
+      } else {
+        toast.info("Nenhuma otimização necessária");
+      }
       return data;
     } catch (error) {
       console.error("[useLandingPages] Fix SEO error:", error);
       toast.error("Erro ao corrigir SEO");
+      return null;
+    }
+  }, []);
+
+  const regeneratePage = useCallback(async (id: string): Promise<LandingPageData | null> => {
+    try {
+      // 1. Fetch existing page for context
+      const { data: existingPage, error: fetchError } = await supabase
+        .from("landing_pages")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (fetchError || !existingPage) {
+        throw new Error("Landing page not found");
+      }
+
+      // 2. Fetch business profile for generation context
+      const { data: profile } = await supabase
+        .from("business_profile")
+        .select("*")
+        .eq("blog_id", existingPage.blog_id)
+        .single();
+
+      // Safely access page_data.template
+      const pageDataObj = existingPage.page_data as Record<string, unknown> | null;
+      const currentTemplate = (pageDataObj?.template as string) || "service_authority_v1";
+      
+      console.log(`[regeneratePage] Regenerating page ${id} with template ${currentTemplate}`);
+
+      // 3. Call generate-landing-page with current template
+      const { data, error } = await supabase.functions.invoke("generate-landing-page", {
+        body: {
+          blog_id: existingPage.blog_id,
+          company_name: profile?.company_name,
+          niche: profile?.niche,
+          city: profile?.city,
+          services: profile?.services?.split(',').map((s: string) => s.trim()),
+          phone: profile?.whatsapp || "",
+          template_type: currentTemplate
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || "Regeneration failed");
+      }
+
+      const newPageData = data.page_data;
+
+      // 4. Update existing page with new content (keep ID and slug)
+      const { error: updateError } = await supabase
+        .from("landing_pages")
+        .update({
+          page_data: newPageData,
+          title: data.seo_title || newPageData.hero?.headline || existingPage.title,
+          seo_title: data.seo_title || newPageData.hero?.headline,
+          seo_description: data.seo_description || "",
+          seo_keywords: data.seo_keywords || [],
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // 5. Re-analyze SEO
+      try {
+        await supabase.functions.invoke("analyze-landing-page-seo", {
+          body: { landing_page_id: id }
+        });
+      } catch (e) {
+        console.warn("[regeneratePage] SEO re-analysis failed:", e);
+      }
+
+      toast.success("Página regenerada com sucesso!");
+      return newPageData;
+    } catch (error) {
+      console.error("[useLandingPages] Regenerate error:", error);
+      toast.error("Erro ao regenerar página");
       return null;
     }
   }, []);
@@ -634,5 +727,6 @@ export function useLandingPages(): UseLandingPagesReturn {
     unarchivePage,
     analyzeSEO,
     fixSEO,
+    regeneratePage,
   };
 }

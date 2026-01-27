@@ -227,6 +227,52 @@ export type LandingPageTemplateType =
   | 'institutional_v1' 
   | 'specialist_authority_v1';
 
+// Template-specific default visibility configurations
+export const TEMPLATE_DEFAULT_VISIBILITY: Record<LandingPageTemplateType, BlockVisibility> = {
+  service_authority_v1: {
+    hero: true,
+    services: true,
+    service_details: true,
+    emergency_banner: true,
+    materials: false,
+    process_steps: true,
+    why_choose_us: true,
+    testimonials: true,
+    areas_served: true,
+    faq: true,
+    contact: true,
+    cta_banner: true,
+  },
+  institutional_v1: {
+    hero: true,
+    services: true,  // services_areas
+    service_details: false,
+    emergency_banner: false,
+    materials: false,
+    process_steps: false,
+    why_choose_us: false,
+    testimonials: true,  // cases
+    areas_served: false,
+    faq: false,
+    contact: true,
+    cta_banner: true,
+  },
+  specialist_authority_v1: {
+    hero: true,
+    services: false,
+    service_details: false,
+    emergency_banner: false,
+    materials: false,
+    process_steps: true,  // methodology
+    why_choose_us: false,
+    testimonials: true,
+    areas_served: false,
+    faq: false,
+    contact: true,
+    cta_banner: true,
+  }
+};
+
 // Generation request types
 export interface GenerateLandingPageRequest {
   blog_id: string;
