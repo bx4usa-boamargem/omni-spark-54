@@ -33,12 +33,18 @@ export function useRadarOpportunities(blogId: string | undefined, limit = 5): Us
 
     setLoading(true);
 
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
+
     try {
-      // Fetch top opportunities by relevance score (not converted/archived)
+      // Fetch top opportunities by relevance score (not converted/archived, last 30 days)
       const { data: opps, error: oppsError } = await supabase
         .from('article_opportunities')
         .select('id, suggested_title, relevance_score, suggested_keywords, status, why_now, created_at')
         .eq('blog_id', blogId)
+        .gte('created_at', cutoffDate)
         .not('status', 'eq', 'converted')
         .not('status', 'eq', 'archived')
         .order('relevance_score', { ascending: false, nullsFirst: false })
@@ -50,11 +56,12 @@ export function useRadarOpportunities(blogId: string | undefined, limit = 5): Us
         setOpportunities(opps || []);
       }
 
-      // Count total pending opportunities
+      // Count total pending opportunities (last 30 days only)
       const { count, error: countError } = await supabase
         .from('article_opportunities')
         .select('id', { count: 'exact', head: true })
         .eq('blog_id', blogId)
+        .gte('created_at', cutoffDate)
         .not('status', 'eq', 'converted')
         .not('status', 'eq', 'archived');
 

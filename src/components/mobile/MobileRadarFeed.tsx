@@ -44,6 +44,11 @@ export function MobileRadarFeed({ blogId }: MobileRadarFeedProps) {
   const fetchOpportunities = useCallback(async () => {
     if (!blogId) return;
 
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
+
     try {
       const { data, error } = await supabase
         .from('article_opportunities')
@@ -62,6 +67,7 @@ export function MobileRadarFeed({ blogId }: MobileRadarFeedProps) {
         `)
         .eq('blog_id', blogId)
         .eq('status', 'pending')
+        .gte('created_at', cutoffDate)
         .order('relevance_score', { ascending: false, nullsFirst: false })
         .limit(20);
 

@@ -108,10 +108,16 @@ export function OpportunitiesTab({ blogId, isClientContext = false }: Opportunit
   async function fetchOpportunities() {
     if (!blogId) return;
 
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
+
     const { data, error } = await supabase
       .from("article_opportunities")
       .select("*")
       .eq("blog_id", blogId)
+      .gte("created_at", cutoffDate)
       .order("relevance_score", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -146,10 +152,16 @@ export function OpportunitiesTab({ blogId, isClientContext = false }: Opportunit
   async function fetchConversionMetrics() {
     if (!blogId) return;
 
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
+
     const { data: allOpps } = await supabase
       .from("article_opportunities")
       .select("id, converted_article_id")
-      .eq("blog_id", blogId);
+      .eq("blog_id", blogId)
+      .gte("created_at", cutoffDate);
 
     const total = allOpps?.length || 0;
     const convertedIds = allOpps?.filter(o => o.converted_article_id).map(o => o.converted_article_id) || [];

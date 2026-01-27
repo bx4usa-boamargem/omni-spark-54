@@ -1,5 +1,8 @@
 project_id = "lkyypeqdstftooegqngf"
 
+[functions.cleanup-expired-opportunities]
+verify_jwt = false
+
 [functions.content-api]
 verify_jwt = false
 

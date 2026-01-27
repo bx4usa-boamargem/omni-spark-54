@@ -63,11 +63,18 @@ export function ClientOpportunitiesTab({ blogId }: ClientOpportunitiesTabProps) 
 
   const fetchOpportunities = async () => {
     setLoading(true);
+
+    // Filter for last 30 days only
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffDate = thirtyDaysAgo.toISOString();
+
     try {
       const { data, error } = await supabase
         .from('article_opportunities')
         .select('*')
         .eq('blog_id', blogId)
+        .gte('created_at', cutoffDate)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
