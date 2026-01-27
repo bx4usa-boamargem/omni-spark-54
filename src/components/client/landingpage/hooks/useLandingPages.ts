@@ -16,6 +16,11 @@ interface UseLandingPagesReturn {
   deletePage: (id: string) => Promise<boolean>;
   publishPage: (id: string) => Promise<boolean>;
   unpublishPage: (id: string) => Promise<boolean>;
+  duplicatePage: (id: string) => Promise<LandingPage | null>;
+  archivePage: (id: string) => Promise<boolean>;
+  unarchivePage: (id: string) => Promise<boolean>;
+  analyzeSEO: (id: string) => Promise<any>;
+  fixSEO: (id: string) => Promise<any>;
 }
 
 async function generateLandingPageImage(params: {
@@ -483,6 +488,119 @@ export function useLandingPages(): UseLandingPagesReturn {
     }
   }, []);
 
+  const duplicatePage = useCallback(async (id: string): Promise<LandingPage | null> => {
+    try {
+      const { data: original, error: fetchError } = await supabase
+        .from("landing_pages")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (fetchError || !original) throw fetchError || new Error("Page not found");
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const newSlug = `${original.slug}-copy-${Date.now()}`;
+      const newPage = {
+        blog_id: original.blog_id,
+        user_id: user.id,
+        title: `${original.title} (cópia)`,
+        slug: newSlug,
+        page_data: original.page_data,
+        status: "draft",
+        seo_title: original.seo_title,
+        seo_description: original.seo_description,
+        seo_keywords: original.seo_keywords,
+        template_type: original.template_type,
+        generation_source: "duplicate",
+      };
+
+      const { data, error } = await supabase
+        .from("landing_pages")
+        .insert([newPage])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return data as unknown as LandingPage;
+    } catch (error) {
+      console.error("[useLandingPages] Duplicate error:", error);
+      toast.error("Erro ao duplicar página");
+      return null;
+    }
+  }, []);
+
+  const archivePage = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from("landing_pages")
+        .update({ status: "archived", updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setPages((prev) => prev.map((p) => (p.id === id ? { ...p, status: "archived" as const } : p)));
+      toast.success("Página arquivada");
+      return true;
+    } catch (error) {
+      console.error("[useLandingPages] Archive error:", error);
+      toast.error("Erro ao arquivar página");
+      return false;
+    }
+  }, []);
+
+  const unarchivePage = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from("landing_pages")
+        .update({ status: "draft", updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setPages((prev) => prev.map((p) => (p.id === id ? { ...p, status: "draft" as const } : p)));
+      toast.success("Página restaurada");
+      return true;
+    } catch (error) {
+      console.error("[useLandingPages] Unarchive error:", error);
+      toast.error("Erro ao restaurar página");
+      return false;
+    }
+  }, []);
+
+  const analyzeSEO = useCallback(async (id: string): Promise<any> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-landing-page-seo", {
+        body: { landing_page_id: id },
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("[useLandingPages] Analyze SEO error:", error);
+      toast.error("Erro ao analisar SEO");
+      return null;
+    }
+  }, []);
+
+  const fixSEO = useCallback(async (id: string): Promise<any> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("fix-landing-page-seo", {
+        body: { landing_page_id: id },
+      });
+
+      if (error) throw error;
+      toast.success("SEO otimizado com sucesso!");
+      return data;
+    } catch (error) {
+      console.error("[useLandingPages] Fix SEO error:", error);
+      toast.error("Erro ao corrigir SEO");
+      return null;
+    }
+  }, []);
+
   return {
     pages,
     loading,
@@ -495,5 +613,10 @@ export function useLandingPages(): UseLandingPagesReturn {
     deletePage,
     publishPage,
     unpublishPage,
+    duplicatePage,
+    archivePage,
+    unarchivePage,
+    analyzeSEO,
+    fixSEO,
   };
 }

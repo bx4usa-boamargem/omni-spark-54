@@ -3911,8 +3911,12 @@ export type Database = {
           id: string
           page_data: Json
           published_at: string | null
+          seo_analyzed_at: string | null
           seo_description: string | null
           seo_keywords: string[] | null
+          seo_metrics: Json | null
+          seo_recommendations: Json | null
+          seo_score: number | null
           seo_title: string | null
           slug: string
           status: string
@@ -3928,8 +3932,12 @@ export type Database = {
           id?: string
           page_data?: Json
           published_at?: string | null
+          seo_analyzed_at?: string | null
           seo_description?: string | null
           seo_keywords?: string[] | null
+          seo_metrics?: Json | null
+          seo_recommendations?: Json | null
+          seo_score?: number | null
           seo_title?: string | null
           slug: string
           status?: string
@@ -3945,8 +3953,12 @@ export type Database = {
           id?: string
           page_data?: Json
           published_at?: string | null
+          seo_analyzed_at?: string | null
           seo_description?: string | null
           seo_keywords?: string[] | null
+          seo_metrics?: Json | null
+          seo_recommendations?: Json | null
+          seo_score?: number | null
           seo_title?: string | null
           slug?: string
           status?: string

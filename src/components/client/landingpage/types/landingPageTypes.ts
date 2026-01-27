@@ -145,6 +145,44 @@ export interface LandingPage {
   created_at: string;
   updated_at: string;
   published_at?: string;
+  // SEO snapshot fields
+  seo_score?: number | null;
+  seo_metrics?: SEOMetrics | null;
+  seo_recommendations?: SEORecommendation[] | null;
+  seo_analyzed_at?: string | null;
+}
+
+// SEO Types
+export interface SEOMetrics {
+  breakdown?: {
+    title_points: number;
+    meta_points: number;
+    keywords_points: number;
+    content_points: number;
+    density_points: number;
+    image_points: number;
+  };
+  diagnostics?: {
+    title_length: number;
+    meta_length: number;
+    word_count: number;
+    density: Record<string, number>;
+    missing: string[];
+    h2_count?: number;
+    image_count?: number;
+  };
+  serp_benchmark?: {
+    avg_words_niche: number;
+    competitors_analyzed: number;
+    semantic_coverage: number;
+  } | null;
+}
+
+export interface SEORecommendation {
+  type: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+  auto_fixable: boolean;
 }
 
 // Block visibility configuration

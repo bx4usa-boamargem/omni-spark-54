@@ -1,27 +1,84 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, FileText, Loader2, Globe, Pencil } from "lucide-react";
+import { Plus, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useBlog } from "@/hooks/useBlog";
 import { useLandingPages } from "@/components/client/landingpage/hooks/useLandingPages";
+import { LandingPageCard } from "@/components/client/landingpage/LandingPageCard";
+import { LandingPageFilters, useLandingPageFilters } from "@/components/client/landingpage/LandingPageFilters";
 import { getCanonicalBlogUrl } from "@/utils/blogUrl";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export default function ClientLandingPages() {
   const navigate = useNavigate();
   const { blog } = useBlog();
-  const { pages, loading, fetchPages } = useLandingPages();
+  const { pages, loading, fetchPages, deletePage, duplicatePage, archivePage, unarchivePage } = useLandingPages();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pageToDelete, setPageToDelete] = useState<string | null>(null);
 
   const publicBaseUrl = useMemo(() => (blog ? getCanonicalBlogUrl(blog) : ""), [blog]);
+
+  // Use filter hook
+  const {
+    statusFilter,
+    setStatusFilter,
+    searchQuery,
+    setSearchQuery,
+    filteredPages,
+  } = useLandingPageFilters(pages);
 
   useEffect(() => {
     if (!blog?.id) return;
     fetchPages(blog.id);
   }, [blog?.id, fetchPages]);
 
+  const handleDuplicate = async (id: string) => {
+    const result = await duplicatePage(id);
+    if (result) {
+      toast.success("Página duplicada com sucesso!");
+      if (blog?.id) fetchPages(blog.id);
+    }
+  };
+
+  const handleArchive = async (id: string) => {
+    const page = pages.find(p => p.id === id);
+    if (!page) return;
+    
+    if (page.status === "archived") {
+      await unarchivePage(id);
+    } else {
+      await archivePage(id);
+    }
+    if (blog?.id) fetchPages(blog.id);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setPageToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (pageToDelete) {
+      await deletePage(pageToDelete);
+      setDeleteDialogOpen(false);
+      setPageToDelete(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-800 dark:text-white">
@@ -39,6 +96,17 @@ export default function ClientLandingPages() {
         </Button>
       </div>
 
+      {/* Filters */}
+      {pages.length > 0 && (
+        <LandingPageFilters
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
+      )}
+
+      {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center min-h-[240px]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -58,43 +126,50 @@ export default function ClientLandingPages() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredPages.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">
+              Nenhuma página encontrada com os filtros atuais.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-4">
-          {pages.map((p) => (
-            <Card key={p.id} className="hover:border-primary/40 transition-colors">
-              <CardContent className="pt-6 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold truncate">{p.title}</p>
-                    <Badge variant={p.status === "published" ? "default" : "secondary"}>
-                      {p.status === "published" ? "Publicada" : "Rascunho"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                    <span className="font-mono truncate">/p/{p.slug}</span>
-                    {p.status === "published" && publicBaseUrl && (
-                      <a
-                        href={`${publicBaseUrl}/p/${p.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        <Globe className="h-4 w-4" />
-                        abrir
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <Button variant="outline" onClick={() => navigate(`/client/landing-pages/${p.id}`)} className="gap-2">
-                  <Pencil className="h-4 w-4" />
-                  Editar
-                </Button>
-              </CardContent>
-            </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredPages.map((p) => (
+            <LandingPageCard
+              key={p.id}
+              page={p}
+              publicBaseUrl={publicBaseUrl}
+              onEdit={() => navigate(`/client/landing-pages/${p.id}`)}
+              onDuplicate={() => handleDuplicate(p.id)}
+              onArchive={() => handleArchive(p.id)}
+              onDelete={() => handleDeleteClick(p.id)}
+            />
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Super Página?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A página será permanentemente removida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
