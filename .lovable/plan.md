@@ -1,381 +1,405 @@
 
 
-# Plano: Consertar Super Páginas + Adicionar Editor Inline Premium
+# Plano: Corrigir Editor de Super Páginas - Erro insertBefore + Layout SEO
 
 ## Diagnóstico do Problema
 
-### Problema Identificado
+### Problema 1: Erro "insertBefore" ao clicar nos botões SEO
 
-A rota pública `/p/:pageSlug` no domínio `app.omniseen.app` **falha ao carregar** porque:
+**Causa Raiz Identificada:**
+Após análise do código, o erro `insertBefore` **NÃO está vindo dos botões SEO diretamente**. O componente `LandingPageSEOPanel.tsx` usa componentes React puros e **não manipula DOM diretamente**.
 
-1. O `useLandingPage` hook chama a Edge Function `content-api` com `host=app.omniseen.app`
-2. A resolução de tenant falha porque `app.omniseen.app` não está na tabela `tenant_domains`
-3. O resultado é `"Tenant not found"` → `"Falha ao carregar página"`
+A causa mais provável é o componente `InlineEditableText.tsx` que usa `contentEditable`:
 
-### Solução
+```tsx
+// InlineEditableText.tsx - linha 92
+return createElement(
+  Component,
+  { ...props, contentEditable: true },
+  localValue || (isEditing ? '' : placeholder) // ← PROBLEMA: children mudam durante contentEditable
+);
+```
 
-Para a rota `/p/:pageSlug` (sem `blogSlug`), precisamos buscar o `blog_id` diretamente da tabela `landing_pages` pelo `slug` da página, e então passar esse `blog_id` para o `content-api`.
+Quando o React tenta reconciliar o DOM com `contentEditable`, há conflito entre o texto editado pelo usuário e o `children` do React, causando o erro `insertBefore`.
+
+**Por que acontece ao clicar em SEO?**
+Quando clicamos em "Reanalisar" ou "Corrigir automaticamente", o `loadPage()` é chamado após sucesso:
+
+```tsx
+// LandingPageEditor.tsx - linhas 377-386
+const handleReanalyze = async () => {
+  const result = await analyzeSEO(page.id);
+  if (result?.success) {
+    await loadPage(); // ← Isso força re-render de TODOS os blocos
+    toast.success("Análise SEO concluída!");
+  }
+};
+```
+
+O `loadPage()` atualiza `pageData`, que faz re-render dos blocos editáveis (`AuthorityHero`, etc). Se algum bloco está com foco em `contentEditable`, o React tenta inserir/remover nodes e falha.
 
 ---
 
-## Fase 1: Fazer Funcionar (Prioridade Máxima)
+### Problema 2 & 3: Layout do SEO Panel escondido atrás do Preview
 
-### 1.1 Modificar `useLandingPage` Hook
-
-**Arquivo:** `src/hooks/useContentApi.ts`
-
-**Mudança:** Adicionar uma nova função que busca a landing page pelo slug diretamente, quando não há `blogId` nem `blogSlug`.
+**Causa Raiz Identificada:**
+O layout atual do editor (linhas 554-794 do `LandingPageEditor.tsx`):
 
 ```tsx
-// Nova função para buscar landing page sem contexto de blog
-export async function fetchLandingPageBySlug(
-  pageSlug: string
-): Promise<{ blog: BlogMeta | null; page: LandingPage | null; error?: string }> {
-  try {
-    // 1. Buscar landing_page pelo slug para descobrir o blog_id
-    const { data: pageData, error: pageError } = await supabase
-      .from("landing_pages")
-      .select("id, blog_id, slug, title, page_data, seo_title, seo_description, featured_image_url, published_at, updated_at")
-      .eq("slug", pageSlug)
-      .eq("status", "published")
-      .maybeSingle();
-    
-    if (pageError || !pageData) {
-      return { blog: null, page: null, error: "Página não encontrada" };
-    }
-    
-    // 2. Buscar blog metadata pelo blog_id
-    const { data: blogData } = await supabase
-      .from("blogs")
-      .select("id, name, slug, primary_color, secondary_color, ...")
-      .eq("id", pageData.blog_id)
-      .single();
-    
-    return {
-      blog: blogData,
-      page: pageData,
-    };
-  } catch (err) {
-    return { blog: null, page: null, error: "Erro ao buscar página" };
-  }
-}
+<div className="flex-1 flex overflow-hidden">
+  {/* Left Panel - Settings (incluindo SEO) */}
+  <div className="w-80 border-r bg-card overflow-hidden flex flex-col">
+    <TabsContent value="seo" className="m-0 h-full overflow-y-auto">
+      <LandingPageSEOPanel ... /> {/* ← Painel SEO fica DENTRO da área de 320px */}
+    </TabsContent>
+  </div>
+
+  {/* Right Panel - Preview */}
+  <div className="flex-1 bg-muted/30 overflow-hidden relative">
+    <div className="absolute inset-0 overflow-y-auto"> {/* ← ABSOLUTE cobre tudo */}
+      ... preview ...
+    </div>
+  </div>
+</div>
 ```
 
-### 1.2 Modificar `PublicLandingPage.tsx`
-
-**Arquivo:** `src/pages/PublicLandingPage.tsx`
-
-**Mudança:** Usar a nova função quando não há `blogSlug`.
-
-```tsx
-export default function PublicLandingPage() {
-  const { blogSlug, pageSlug } = useParams();
-  
-  // Se não há blogSlug, usar busca direta
-  const directFetch = !blogSlug;
-  
-  // Hook existente para casos com blogSlug
-  const hookResult = useLandingPage(pageSlug, { 
-    blogSlug,
-    skip: directFetch  // Pular se não há blogSlug
-  });
-  
-  // Estado para busca direta
-  const [directResult, setDirectResult] = useState(null);
-  
-  useEffect(() => {
-    if (directFetch && pageSlug) {
-      fetchLandingPageBySlug(pageSlug).then(setDirectResult);
-    }
-  }, [directFetch, pageSlug]);
-  
-  const { blog, page, loading, error } = directFetch 
-    ? { ...directResult, loading: !directResult } 
-    : hookResult;
-  
-  // ... resto do componente
-}
-```
-
-### 1.3 Alternativa Mais Simples (Recomendada)
-
-Modificar a Edge Function `content-api` para aceitar um modo de busca direta por `page_slug`:
-
-**Arquivo:** `supabase/functions/content-api/index.ts`
-
-```typescript
-// Adicionar nova rota: page.landing.direct
-// Que busca pela tabela landing_pages diretamente sem resolver tenant
-
-case "page.landing.direct":
-  data = await handleLandingPageDirect(supabase, params);
-  break;
-
-async function handleLandingPageDirect(
-  supabase: SupabaseClientAny,
-  params: Record<string, unknown>
-) {
-  const slug = String(params.slug || "");
-  
-  // Buscar página pelo slug globalmente
-  const { data: pageData, error } = await supabase
-    .from("landing_pages")
-    .select(`
-      ${LANDING_PAGE_PUBLIC_FIELDS.join(", ")},
-      blog:blogs!inner(${BLOG_PUBLIC_FIELDS.join(", ")})
-    `)
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle();
-    
-  if (error || !pageData) {
-    return { page: null, error: "Page not found" };
-  }
-  
-  return { 
-    page: pageData,
-    blog: pageData.blog 
-  };
-}
-```
+**Problemas:**
+1. O painel esquerdo tem `w-80` (320px) mas o `LandingPageSEOPanel` precisa de mais espaço
+2. O preview usa `absolute inset-0` que pode sobrepor elementos em certos tamanhos de tela
+3. Não há separação clara de z-index entre painel SEO e preview
 
 ---
 
-## Fase 2: Editor Inline Premium (Estilo SEOWriting.ai)
+## Correções Propostas
 
-### 2.1 Criar Componente `InlineEditableText`
+### Correção 1: Resolver o Erro "insertBefore" no InlineEditableText
 
 **Arquivo:** `src/components/client/landingpage/editor/InlineEditableText.tsx`
 
-```tsx
-interface InlineEditableTextProps {
-  value: string;
-  onChange: (value: string) => void;
-  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span';
-  className?: string;
-  placeholder?: string;
-  canEdit: boolean;
-}
+**Mudança:** Usar `dangerouslySetInnerHTML` ao invés de `children` para evitar conflito de reconciliação:
 
+```tsx
 export function InlineEditableText({
   value,
   onChange,
   as: Component = 'p',
   className,
   placeholder = 'Clique para editar...',
-  canEdit
+  canEdit,
+  multiline = false
 }: InlineEditableTextProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [localValue, setLocalValue] = useState(value);
+  const elementRef = useRef<HTMLElement>(null);
+
+  // Não usar localValue - React não deve controlar o conteúdo de contentEditable
   
+  const handleBlur = () => {
+    setIsEditing(false);
+    const newValue = elementRef.current?.textContent || '';
+    if (newValue !== value) {
+      onChange(newValue);
+    }
+  };
+
   if (!canEdit) {
-    return <Component className={className}>{value || placeholder}</Component>;
+    return createElement(Component, { className }, value || placeholder);
   }
-  
-  return (
-    <Component
-      className={cn(
-        className,
-        "outline-none cursor-text transition-all",
-        isEditing && "ring-2 ring-primary/50 rounded px-1",
-        !value && "text-muted-foreground italic"
-      )}
-      contentEditable
-      suppressContentEditableWarning
-      onFocus={() => setIsEditing(true)}
-      onBlur={(e) => {
-        setIsEditing(false);
-        onChange(e.currentTarget.textContent || '');
-      }}
-      dangerouslySetInnerHTML={{ __html: value || placeholder }}
-    />
+
+  // SOLUÇÃO: Usar dangerouslySetInnerHTML para evitar conflito com contentEditable
+  return createElement(
+    Component,
+    {
+      ref: elementRef,
+      className: cn(className, "outline-none cursor-text transition-all ..."),
+      contentEditable: true,
+      suppressContentEditableWarning: true,
+      onFocus: handleFocus,
+      onBlur: handleBlur,
+      onKeyDown: handleKeyDown,
+      dangerouslySetInnerHTML: { __html: value || placeholder }, // ← MUDANÇA CRÍTICA
+    }
   );
 }
 ```
 
-### 2.2 Criar Toolbar Flutuante de Edição
-
-**Arquivo:** `src/components/client/landingpage/editor/BlockEditToolbar.tsx`
-
-```tsx
-interface BlockEditToolbarProps {
-  visible: boolean;
-  position: { top: number; left: number };
-  onAskAI: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}
-
-export function BlockEditToolbar({
-  visible,
-  position,
-  onAskAI,
-  onDuplicate,
-  onDelete,
-  onMoveUp,
-  onMoveDown
-}: BlockEditToolbarProps) {
-  if (!visible) return null;
-  
-  return (
-    <div
-      className="fixed z-50 bg-white rounded-lg shadow-xl border p-2 flex items-center gap-1"
-      style={{ top: position.top, left: position.left }}
-    >
-      <Button variant="ghost" size="sm" onClick={onAskAI}>
-        <Sparkles className="h-4 w-4 mr-1" />
-        Ask AI
-      </Button>
-      <Separator orientation="vertical" className="h-6" />
-      <Button variant="ghost" size="icon" onClick={onMoveUp}>
-        <ArrowUp className="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="icon" onClick={onMoveDown}>
-        <ArrowDown className="h-4 w-4" />
-      </Button>
-      <Separator orientation="vertical" className="h-6" />
-      <Button variant="ghost" size="icon" onClick={onDuplicate}>
-        <Copy className="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="icon" onClick={onDelete} className="text-destructive">
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-}
-```
-
-### 2.3 Atualizar Blocos para Suporte Inline
-
-**Exemplo: Atualizar `AuthorityHero.tsx`**
-
-```tsx
-export function AuthorityHero({ 
-  data, 
-  primaryColor, 
-  isEditing, 
-  onEdit 
-}: AuthorityHeroProps) {
-  return (
-    <section className="relative min-h-[600px] ...">
-      {/* ... background ... */}
-      
-      <div className="container relative z-10 ...">
-        <div className="max-w-3xl">
-          {/* Headline - Editável inline */}
-          {isEditing ? (
-            <InlineEditableText
-              value={data.headline}
-              onChange={(val) => onEdit?.('headline', val)}
-              as="h1"
-              className="text-5xl md:text-7xl font-black text-white leading-tight mb-6"
-              placeholder="Título Principal"
-              canEdit={isEditing}
-            />
-          ) : (
-            <h1 className="text-5xl md:text-7xl font-black text-white leading-tight mb-6">
-              {data.headline}
-            </h1>
-          )}
-          
-          {/* Subheadline - Editável inline */}
-          {isEditing ? (
-            <InlineEditableText
-              value={data.subheadline}
-              onChange={(val) => onEdit?.('subheadline', val)}
-              as="p"
-              className="text-xl md:text-2xl text-slate-300 mb-10"
-              placeholder="Subtítulo descritivo"
-              canEdit={isEditing}
-            />
-          ) : (
-            <p className="text-xl md:text-2xl text-slate-300 mb-10">
-              {data.subheadline}
-            </p>
-          )}
-          
-          {/* ... resto ... */}
-        </div>
-      </div>
-    </section>
-  );
-}
-```
-
-### 2.4 Adicionar Modo de Edição no Editor
+### Correção 2: Prevenir Re-render Agressivo Durante Edição
 
 **Arquivo:** `src/components/client/landingpage/LandingPageEditor.tsx`
 
-Modificar para passar `isEditing={true}` quando o usuário está no editor:
+**Mudança:** Adicionar flag para evitar reload enquanto edição está em progresso:
 
 ```tsx
-// No render do layout
-{pageData?.template === 'service_authority_v1' && (
-  <ServiceAuthorityLayout 
-    pageData={pageData} 
-    primaryColor={primaryColor}
-    visibility={visibility}
-    isEditing={true}  // SEMPRE true no editor
-    onEditBlock={handleEditBlock}
-  />
-)}
+// Novo estado
+const [isEditingContent, setIsEditingContent] = useState(false);
+
+// Modificar handleReanalyze
+const handleReanalyze = async () => {
+  if (!page?.id) return;
+  
+  setIsAnalyzingSEO(true);
+  try {
+    const result = await analyzeSEO(page.id);
+    if (result?.success) {
+      // NÃO recarregar a página inteira - apenas atualizar os campos de SEO
+      setPage(prev => prev ? {
+        ...prev,
+        seo_score: result.score_total,
+        seo_metrics: { breakdown: result.breakdown, diagnostics: result.diagnostics },
+        seo_recommendations: result.recommendations,
+        seo_analyzed_at: new Date().toISOString()
+      } : null);
+      
+      toast.success("Análise SEO concluída!");
+    }
+  } catch (error) {
+    toast.error("Erro ao analisar SEO");
+  } finally {
+    setIsAnalyzingSEO(false);
+  }
+};
+
+// Similar para handleAutoFix - só recarregar se necessário
+const handleAutoFix = async () => {
+  if (!page?.id) return;
+  setIsFixingSEO(true);
+  try {
+    const result = await fixSEO(page.id, ["title", "meta", "content", "keywords"]);
+    if (result?.success) {
+      // Reload necessário apenas se content foi alterado
+      if (result.updates?.content_expanded) {
+        await loadPage();
+      } else {
+        // Atualizar apenas campos SEO
+        setPage(prev => prev ? {
+          ...prev,
+          seo_title: result.updates?.seo_title || prev.seo_title,
+          seo_description: result.updates?.seo_description || prev.seo_description,
+          seo_keywords: result.updates?.seo_keywords || prev.seo_keywords,
+        } : null);
+        
+        // Re-trigger analysis
+        await handleReanalyze();
+      }
+    }
+  } finally {
+    setIsFixingSEO(false);
+  }
+};
+```
+
+### Correção 3: Ajustar Layout para SEO Panel Visível
+
+**Arquivo:** `src/components/client/landingpage/LandingPageEditor.tsx`
+
+**Mudança 1:** Aumentar largura do painel esquerdo quando tab SEO está ativo:
+
+```tsx
+{/* Left Panel - Settings */}
+<div className={cn(
+  "border-r bg-card overflow-hidden flex flex-col transition-all duration-300",
+  activeTab === 'seo' ? "w-[380px]" : "w-80"  // ← Aumentar para 380px no SEO
+)}>
+```
+
+**Mudança 2:** Garantir z-index apropriado:
+
+```tsx
+{/* Left Panel - Settings */}
+<div className={cn(
+  "border-r bg-card overflow-hidden flex flex-col transition-all duration-300 z-20",
+  activeTab === 'seo' ? "w-[380px]" : "w-80"
+)}>
+
+{/* Right Panel - Preview */}
+<div className="flex-1 bg-muted/30 overflow-hidden relative z-10">
+```
+
+**Mudança 3:** Remover `absolute` do container do preview e usar layout flex apropriado:
+
+```tsx
+{/* Right Panel - Preview */}
+<div className="flex-1 bg-muted/30 overflow-hidden flex flex-col">
+  {pageData ? (
+    <div className="flex-1 overflow-y-auto"> {/* ← Usar flex ao invés de absolute */}
+      <div className="max-w-[1200px] mx-auto shadow-2xl shadow-black/10 min-h-full">
+        {/* layouts */}
+      </div>
+    </div>
+  ) : (
+    {/* empty state */}
+  )}
+</div>
+```
+
+### Correção 4: Adicionar ErrorBoundary para Captura Elegante
+
+**Novo arquivo:** `src/components/client/landingpage/EditorErrorBoundary.tsx`
+
+```tsx
+import React from 'react';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+
+interface Props {
+  children: React.ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class EditorErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[EditorErrorBoundary]', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card className="m-4 p-6 border-2 border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-4">
+            <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-bold text-amber-800 mb-2">
+                Erro de Renderização
+              </h3>
+              <p className="text-amber-700 text-sm mb-4">
+                {this.state.error?.message || 'Ocorreu um erro ao renderizar o conteúdo.'}
+              </p>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  onClick={() => this.setState({ hasError: false })}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Tentar Novamente
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                >
+                  Recarregar Página
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+**Uso no Editor:**
+
+```tsx
+// LandingPageEditor.tsx - Envolver preview com ErrorBoundary
+import { EditorErrorBoundary } from "./EditorErrorBoundary";
+
+// No return, envolver o preview:
+<div className="flex-1 bg-muted/30 overflow-hidden flex flex-col">
+  <EditorErrorBoundary>
+    {pageData ? (
+      <div className="flex-1 overflow-y-auto">
+        {/* layouts */}
+      </div>
+    ) : (
+      {/* empty state */}
+    )}
+  </EditorErrorBoundary>
+</div>
 ```
 
 ---
 
-## Arquivos a Modificar/Criar
+## Arquivos a Modificar
 
-| Arquivo | Ação | Prioridade |
-|---------|------|------------|
-| `src/hooks/useContentApi.ts` | **MODIFICAR** | 🔴 FASE 1 |
-| `src/pages/PublicLandingPage.tsx` | **MODIFICAR** | 🔴 FASE 1 |
-| `supabase/functions/content-api/index.ts` | **MODIFICAR** | 🔴 FASE 1 |
-| `src/components/client/landingpage/editor/InlineEditableText.tsx` | **CRIAR** | 🟡 FASE 2 |
-| `src/components/client/landingpage/editor/BlockEditToolbar.tsx` | **CRIAR** | 🟡 FASE 2 |
-| `src/components/client/landingpage/layouts/AuthorityHero.tsx` | **MODIFICAR** | 🟡 FASE 2 |
-| Todos os blocos em `/blocks/` | **MODIFICAR** | 🟡 FASE 2 |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/client/landingpage/editor/InlineEditableText.tsx` | **MODIFICAR** | Usar dangerouslySetInnerHTML |
+| `src/components/client/landingpage/LandingPageEditor.tsx` | **MODIFICAR** | Layout z-index + handlers SEO |
+| `src/components/client/landingpage/EditorErrorBoundary.tsx` | **CRIAR** | Captura de erros elegante |
 
 ---
 
-## Ordem de Implementação
+## Resumo das Mudanças
 
-### FASE 1 (Fazer Funcionar) - ~30 min
-1. Modificar `content-api` para aceitar rota `page.landing.direct`
-2. Criar `useLandingPageDirect` hook
-3. Atualizar `PublicLandingPage.tsx` para usar busca direta quando sem `blogSlug`
-4. Testar rota `/p/:slug` no domínio principal
+### 1. InlineEditableText.tsx (~20 linhas alteradas)
+- Remover uso de `children` com `contentEditable`
+- Usar `dangerouslySetInnerHTML` para evitar conflito React-DOM
+- Manter `suppressContentEditableWarning`
 
-### FASE 2 (Editor Inline) - ~1h
-1. Criar componente `InlineEditableText`
-2. Criar componente `BlockEditToolbar`
-3. Atualizar `AuthorityHero` com suporte inline
-4. Atualizar demais blocos progressivamente
-5. Testar edição no editor
+### 2. LandingPageEditor.tsx (~50 linhas alteradas)
+- Aumentar largura do painel quando tab SEO ativo (`w-80` → `w-[380px]`)
+- Adicionar z-index explícito (`z-20` painel, `z-10` preview)
+- Modificar `handleReanalyze` para não recarregar página inteira
+- Modificar `handleAutoFix` para atualização parcial
+- Remover `absolute inset-0` do preview container
+- Envolver preview com `EditorErrorBoundary`
+
+### 3. EditorErrorBoundary.tsx (~60 linhas novas)
+- Novo componente para captura de erros de renderização
+- UI amigável com opções de retry
 
 ---
 
 ## Critérios de Aceite
 
-### FASE 1 (Funcionar)
-- [ ] Rota `/p/:slug` carrega sem erro no `app.omniseen.app`
-- [ ] Super página publicada exibe corretamente todos os blocos
-- [ ] Hero com imagem + título + CTA funciona
-- [ ] Services com cards renderizam
-- [ ] F5 na página pública não quebra
+### Layout e Z-index
+- [ ] Sidebar SEO visível com 380px de largura
+- [ ] Preview não sobrepõe sidebar
+- [ ] Card "Pontuação de SEO" totalmente visível
+- [ ] Botão "Reanalisar" clicável
+- [ ] Seção "Estrutura" totalmente visível
+- [ ] Seção "Densidade de palavras-chave" totalmente visível
+- [ ] Seção "Recomendações" totalmente visível
+- [ ] Botão "Corrigir automaticamente" clicável
+- [ ] Botão "Regenerar Página" clicável
 
-### FASE 2 (Editor Inline)
-- [ ] Clicar em texto no editor ativa modo edição inline
-- [ ] Texto digitado é salvo ao clicar fora
-- [ ] Toolbar "Ask AI" aparece ao hover no bloco
-- [ ] Usuário não autenticado NÃO vê controles de edição
-- [ ] Mudanças são persistidas ao clicar "Salvar"
+### Funcionalidade dos Botões
+- [ ] Clicar "Reanalisar" não dá erro insertBefore
+- [ ] Score SEO atualiza após reanalisar
+- [ ] Clicar "Corrigir automaticamente" não dá erro
+- [ ] Correções são aplicadas e página atualiza
+- [ ] Clicar "Regenerar Página" não dá erro
+- [ ] Página regenera e preview atualiza
+
+### Error Handling
+- [ ] ErrorBoundary captura erros sem travar
+- [ ] Toast/notificação mostra erros ao usuário
+- [ ] Botão "Tentar Novamente" funciona
+
+---
+
+## Ordem de Implementação
+
+1. **PASSO 1:** Criar `EditorErrorBoundary.tsx`
+2. **PASSO 2:** Corrigir `InlineEditableText.tsx` (dangerouslySetInnerHTML)
+3. **PASSO 3:** Atualizar layout do `LandingPageEditor.tsx` (largura + z-index)
+4. **PASSO 4:** Refatorar `handleReanalyze` e `handleAutoFix`
+5. **PASSO 5:** Envolver preview com ErrorBoundary
+6. **PASSO 6:** Testar cada botão SEO
 
 ---
 
 ## Impacto
 
-- **FASE 1**: Corrige bug crítico que impede visualização pública das Super Páginas
-- **FASE 2**: Equipara funcionalidade ao concorrente SEOWriting.ai com edição inline premium
+- **Crítico:** Corrige editor que está inutilizável
+- **UX:** SEO panel sempre visível e funcional
+- **Estabilidade:** ErrorBoundary evita travamentos completos
+- **Performance:** Atualizações parciais evitam re-render desnecessário
 
