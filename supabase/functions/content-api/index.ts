@@ -13,6 +13,7 @@ type ContentRoute =
   | "blog.tag"
   | "blog.search"
   | "page.landing"
+  | "page.landing.direct"
   | "sitemap.urls"
   | "agent.config";
 
@@ -66,7 +67,84 @@ Deno.serve(async (req) => {
   try {
     const { host, blog_id, blog_slug, route, params = {} } = await req.json() as ContentRequest;
 
-    // Must have either host, blog_id, or blog_slug
+    // Create Supabase client with service role (bypasses RLS)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase: SupabaseClientAny = createClient(supabaseUrl, serviceRoleKey);
+
+    // ============================================================
+    // SPECIAL ROUTE: page.landing.direct - bypasses tenant resolution entirely
+    // Fetches landing page by slug directly, resolving blog from the page
+    // ============================================================
+    if (route === "page.landing.direct") {
+      const slug = String(params.slug || "");
+      
+      if (!slug) {
+        return new Response(
+          JSON.stringify({ error: "Missing slug parameter" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`[content-api] page.landing.direct: slug=${slug}`);
+
+      // Fetch landing page with blog join
+      const { data: pageData, error: pageError } = await supabase
+        .from("landing_pages")
+        .select(`
+          ${LANDING_PAGE_PUBLIC_FIELDS.join(", ")},
+          blog:blogs!inner(${BLOG_PUBLIC_FIELDS.join(", ")})
+        `)
+        .eq("slug", slug)
+        .eq("status", "published")
+        .maybeSingle();
+
+      if (pageError) {
+        console.error("[content-api] Error fetching landing page direct:", pageError);
+        return new Response(
+          JSON.stringify({ error: "Database error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!pageData) {
+        return new Response(
+          JSON.stringify({ error: "Page not found", slug }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Parse page_data if needed
+      // deno-lint-ignore no-explicit-any
+      const page = pageData as any;
+      if (page.page_data && typeof page.page_data === "string") {
+        try {
+          page.page_data = JSON.parse(page.page_data);
+        } catch {
+          console.error("[content-api] Failed to parse page_data JSON");
+        }
+      }
+
+      // Extract blog from join
+      const blogData = page.blog;
+      delete page.blog; // Remove from page object
+
+      return new Response(
+        JSON.stringify({
+          tenant: {
+            blog_id: blogData?.id || null,
+            tenant_id: null,
+            domain: "direct",
+            domain_type: "subdomain",
+          },
+          blog: blogData,
+          data: { page },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Standard routes require host, blog_id, or blog_slug
     if (!route || (!host && !blog_id && !blog_slug)) {
       return new Response(
         JSON.stringify({ error: "Missing required fields: route and (host or blog_id or blog_slug)" }),
@@ -75,11 +153,6 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[content-api] Request: host=${host}, blog_id=${blog_id}, blog_slug=${blog_slug}, route=${route}, params=${JSON.stringify(params)}`);
-
-    // Create Supabase client with service role (bypasses RLS)
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase: SupabaseClientAny = createClient(supabaseUrl, serviceRoleKey);
 
     // Step 1: Resolve tenant - priority: blog_id > blog_slug > host
     let tenant: TenantResolution | null = null;
@@ -163,6 +236,9 @@ Deno.serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
+    
+    // Special case: page.landing.direct is handled before tenant resolution
+    // But we should NEVER reach here for page.landing.direct - see special handling above
 
     return new Response(
       JSON.stringify({

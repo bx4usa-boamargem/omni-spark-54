@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { useLandingPage, useAgentConfig } from "@/hooks/useContentApi";
+import { useLandingPage, useAgentConfig, fetchLandingPageDirect, BlogMeta, LandingPage } from "@/hooks/useContentApi";
 import { LandingPagePreview } from "@/components/client/landingpage/LandingPagePreview";
 import { SEOHead } from "@/components/public/SEOHead";
 import { BrandSalesAgentWidget } from "@/components/public/BrandSalesAgentWidget";
@@ -14,8 +14,47 @@ import { inferVisibilityFromPageData } from "@/components/client/landingpage/uti
 export default function PublicLandingPage() {
   const { blogSlug, pageSlug } = useParams<{ blogSlug?: string; pageSlug: string }>();
 
-  // Use content-api hooks with blogSlug for preview environment support
-  const { blog, page, loading, error } = useLandingPage(pageSlug, { blogSlug });
+  // Determine if we need direct fetch (no blogSlug means /p/:pageSlug route)
+  const useDirectFetch = !blogSlug;
+
+  // Standard hook for when we have blogSlug
+  const hookResult = useLandingPage(pageSlug, { blogSlug });
+
+  // State for direct fetch results
+  const [directResult, setDirectResult] = useState<{
+    blog: BlogMeta | null;
+    page: LandingPage | null;
+    loading: boolean;
+    error: string | null;
+  }>({ blog: null, page: null, loading: true, error: null });
+
+  // Direct fetch effect
+  useEffect(() => {
+    if (!useDirectFetch || !pageSlug) return;
+
+    let mounted = true;
+    
+    const fetchDirect = async () => {
+      const result = await fetchLandingPageDirect(pageSlug);
+      if (!mounted) return;
+      
+      setDirectResult({
+        blog: result.blog,
+        page: result.page,
+        loading: false,
+        error: result.error || null,
+      });
+    };
+
+    fetchDirect();
+    return () => { mounted = false; };
+  }, [useDirectFetch, pageSlug]);
+
+  // Merge results based on fetch mode
+  const { blog, page, loading, error } = useDirectFetch
+    ? directResult
+    : hookResult;
+
   const { agentConfig, businessProfile } = useAgentConfig();
 
   const primaryColor = useMemo(() => blog?.primary_color || "#6366f1", [blog?.primary_color]);

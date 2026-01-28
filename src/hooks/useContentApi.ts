@@ -103,8 +103,40 @@ type ContentRoute =
   | "blog.tag"
   | "blog.search"
   | "page.landing"
+  | "page.landing.direct"
   | "sitemap.urls"
   | "agent.config";
+
+/**
+ * Fetch landing page directly by slug (bypasses tenant resolution)
+ * Used when no blogSlug is available (e.g., /p/:pageSlug route)
+ */
+export async function fetchLandingPageDirect(
+  pageSlug: string
+): Promise<{ blog: BlogMeta | null; page: LandingPage | null; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("content-api", {
+      body: { route: "page.landing.direct", params: { slug: pageSlug } },
+    });
+
+    if (error) {
+      console.error("[useContentApi] Edge function error (direct):", error);
+      return { blog: null, page: null, error: "Falha ao carregar página" };
+    }
+
+    if (data?.error) {
+      return { blog: null, page: null, error: data.error };
+    }
+
+    return {
+      blog: data?.blog || null,
+      page: data?.data?.page || null,
+    };
+  } catch (err) {
+    console.error("[useContentApi] Fetch error (direct):", err);
+    return { blog: null, page: null, error: "Erro ao buscar página" };
+  }
+}
 
 /**
  * Core function to call the content-api Edge Function

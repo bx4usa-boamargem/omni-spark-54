@@ -55,7 +55,8 @@ export function ServiceAuthorityLayout({
       {brand.phone && (
         <CallNowStrip 
           phone={brand.phone} 
-          primaryColor={primaryColor} 
+          primaryColor={primaryColor}
+          isEditing={isEditing}
         />
       )}
 
@@ -98,6 +99,8 @@ export function ServiceAuthorityLayout({
         <FAQSection 
           faqs={pageData.faq} 
           primaryColor={primaryColor}
+          isEditing={isEditing}
+          onEdit={(index, field, value) => onEditBlock?.('faq', { index, field, value })}
         />
       )}
 
@@ -107,6 +110,8 @@ export function ServiceAuthorityLayout({
           brandName={brand.company_name} 
           phone={brand.phone}
           primaryColor={primaryColor}
+          isEditing={isEditing}
+          onEdit={(field, value) => onEditBlock?.('footer_cta', { field, value })}
         />
       )}
     </div>
