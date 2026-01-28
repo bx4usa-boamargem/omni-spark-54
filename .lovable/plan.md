@@ -1,171 +1,150 @@
 
-# Plano: Corrigir Páginas Públicas para Usar Hooks `useContentApi`
+# Plano: Corrigir Acesso ao Blog Público em Ambiente Dev/Preview
 
-## Problema Identificado
-As páginas `PublicArticle.tsx` e `PublicLandingPage.tsx` fazem consultas diretas ao Supabase usando `supabase.from()`. Isso falha para usuários anônimos porque as políticas RLS bloqueiam o acesso. O sistema já possui hooks (`useBlogArticle`, `useLandingPage`) que usam a Edge Function `content-api` com `verify_jwt=false`, contornando essas restrições.
+## Problema Diagnosticado
 
-## Evidências
+As páginas `PublicArticle.tsx` e `PublicLandingPage.tsx` foram refatoradas para usar hooks `useBlogArticle` e `useLandingPage`. Esses hooks dependem de `getCurrentHostname()` para resolver o blog via edge function `content-api`.
 
-### PublicArticle.tsx (linhas 178-265)
-```typescript
-// ❌ QUERY DIRETA - FALHA COM RLS
-const { data: blogData } = await supabase
-  .from("blogs")
-  .select("*")
-  .eq("slug", blogSlug)
-  .single();
+**No ambiente Lovable preview** (`d1ade89c-....lovableproject.com`):
+- O hostname não está registrado em `tenant_domains`
+- A edge function não encontra o blog
+- Retorna "Tenant not found" → "Falha ao carregar artigo/página"
 
-const { data: articleData } = await supabase
-  .from("articles")
-  .select("*")
-  .eq("blog_id", blogData.id)
-  .eq("slug", articleSlug)
-  .eq("status", "published")
-  .single();
-```
-
-### PublicLandingPage.tsx (linhas 47-118)
-```typescript
-// ❌ QUERY DIRETA - FALHA COM RLS
-const { data: blogRow } = await supabase
-  .from("blogs")
-  .select("...")
-  .eq("slug", blogSlug)
-  .maybeSingle();
-
-const { data: pageRow } = await supabase
-  .from("landing_pages")
-  .select("*")
-  .eq("blog_id", blogRow.id)
-  .eq("slug", pageSlug)
-  .maybeSingle();
-```
-
-### Solução Existente (Referência)
-- `CustomDomainArticle.tsx` já usa `useBlogArticle` corretamente
-- `CustomDomainLandingPage.tsx` já usa `useLandingPage` corretamente
+**O que está disponível mas não utilizado:**
+- As rotas `/blog/:blogSlug/:articleSlug` e `/blog/:blogSlug/p/:pageSlug` fornecem o `blogSlug` via `useParams()`
+- A edge function já suporta `blog_id` direto, mas não `blog_slug`
 
 ---
 
-## Modificações Necessárias
+## Solução Proposta
 
-### Arquivo 1: `src/pages/PublicArticle.tsx`
+### Fase 1: Estender Edge Function `content-api`
 
-**O que mudar:**
-1. Remover `import { supabase }` 
-2. Importar `useBlogArticle, useAgentConfig` de `useContentApi`
-3. Substituir todo o `useEffect` de fetch (linhas 172-276) pelo hook
-4. Manter lógica de tradução e FAQ parsing existente
-5. Adaptar propriedades do blog/artigo para o formato do hook
+Adicionar suporte para resolver tenant via `blog_slug` (além de `host` e `blog_id`):
 
-**Antes (simplificado):**
+**Arquivo:** `supabase/functions/content-api/index.ts`
+
 ```typescript
-import { supabase } from "@/integrations/supabase/client";
-// ...
-const [blog, setBlog] = useState<Blog | null>(null);
-const [article, setArticle] = useState<Article | null>(null);
-const [loading, setLoading] = useState(true);
-
-useEffect(() => {
-  const fetchData = async () => {
-    const { data: blogData } = await supabase.from("blogs")...
-    const { data: articleData } = await supabase.from("articles")...
-    // ...
-  };
-  fetchData();
-}, [blogSlug, articleSlug, t]);
+interface ContentRequest {
+  host?: string;           // Hostname for resolution
+  blog_id?: string;        // Direct blog_id (bypasses hostname resolution)
+  blog_slug?: string;      // NEW: Blog slug for resolution
+  route: ContentRoute;
+  params?: Record<string, unknown>;
+}
 ```
 
-**Depois:**
-```typescript
-import { useBlogArticle, useAgentConfig } from "@/hooks/useContentApi";
-// ...
-const { blog, article, related, loading, error } = useBlogArticle(articleSlug);
-const { agentConfig, businessProfile } = useAgentConfig();
+**Nova lógica de resolução:**
+```text
+1. Se blog_id fornecido → usar diretamente
+2. Se blog_slug fornecido → buscar blog por slug
+3. Se host fornecido → resolver via tenant_domains
 ```
-
-**Campos que precisam de mapeamento:**
-| Formato Antigo (Blog) | Formato useContentApi |
-|-----------------------|----------------------|
-| `blog.logo_negative_url` | Não existe (usar `null`) |
-| `blog.brand_display_mode` | Não existe (usar `'text'`) |
-| `blog.domain_verified` | Usar `true` |
-| `blog.cta_text` | `blog.header_cta_text` |
-| `blog.cta_url` | `blog.header_cta_url` |
 
 ---
 
-### Arquivo 2: `src/pages/PublicLandingPage.tsx`
+### Fase 2: Estender Hooks `useContentApi`
 
-**O que mudar:**
-1. Remover `import { supabase }`
-2. Importar `useLandingPage, useAgentConfig` de `useContentApi`
-3. Eliminar todo o `useEffect` de fetch (linhas 27-140)
-4. Usar o hook `useLandingPage(pageSlug)` diretamente
-5. Remover estados manuais (`blog`, `page`, `agentConfig`, `businessProfile`)
+**2.1 - Adicionar `fetchContentApiByBlogSlug`:**
 
-**Antes:**
 ```typescript
-import { supabase } from "@/integrations/supabase/client";
-// ...
-const [loading, setLoading] = useState(true);
-const [blog, setBlog] = useState<any>(null);
-const [page, setPage] = useState<any>(null);
-const [agentConfig, setAgentConfig] = useState<any>(null);
-
-useEffect(() => {
-  const run = async () => {
-    const { data: blogRow } = await supabase.from("blogs")...
-    const { data: pageRow } = await supabase.from("landing_pages")...
-    // ...
-  };
-  run();
-}, [blogSlug, pageSlug]);
+export async function fetchContentApiByBlogSlug<T>(
+  route: ContentRoute,
+  blogSlug: string,
+  params: Record<string, unknown> = {}
+): Promise<ContentApiResponse<T> | null> {
+  const { data, error } = await supabase.functions.invoke("content-api", {
+    body: { blog_slug: blogSlug, route, params },
+  });
+  // ...
+}
 ```
 
-**Depois:**
+**2.2 - Estender `useBlogArticle`:**
+
 ```typescript
-import { useLandingPage, useAgentConfig } from "@/hooks/useContentApi";
-// ...
-const { blog, page, loading, error } = useLandingPage(pageSlug);
-const { agentConfig, businessProfile } = useAgentConfig();
+interface UseBlogArticleOptions {
+  blogId?: string;    // Bypass com ID
+  blogSlug?: string;  // NEW: Bypass com slug
+}
 ```
+
+**2.3 - Estender `useLandingPage`:**
+
+```typescript
+interface UseLandingPageOptions {
+  blogId?: string;
+  blogSlug?: string;
+}
+
+export function useLandingPage(
+  slug: string | undefined, 
+  options?: UseLandingPageOptions
+): UseLandingPageResult
+```
+
+---
+
+### Fase 3: Atualizar Páginas Públicas
+
+**3.1 - `PublicArticle.tsx`:**
+
+```typescript
+const { blogSlug, articleSlug } = useParams<{ blogSlug: string; articleSlug: string }>();
+
+// Usar blogSlug para bypass de hostname
+const { blog, article, related, loading, error } = useBlogArticle(articleSlug, { 
+  blogSlug: blogSlug 
+});
+```
+
+**3.2 - `PublicLandingPage.tsx`:**
+
+```typescript
+const { blogSlug, pageSlug } = useParams<{ blogSlug?: string; pageSlug: string }>();
+
+// Usar blogSlug quando disponível
+const { blog, page, loading, error } = useLandingPage(pageSlug, {
+  blogSlug: blogSlug
+});
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `supabase/functions/content-api/index.ts` | Adicionar suporte a `blog_slug` |
+| `src/hooks/useContentApi.ts` | Adicionar `fetchContentApiByBlogSlug` e estender hooks |
+| `src/pages/PublicArticle.tsx` | Passar `blogSlug` para o hook |
+| `src/pages/PublicLandingPage.tsx` | Passar `blogSlug` para o hook |
 
 ---
 
 ## Detalhes Técnicos
 
-### Edge Function `content-api`
-- Configurada com `verify_jwt = false` em `supabase/config.toml`
-- Usa `service_role` internamente para bypass de RLS
-- Rotas: `blog.article`, `page.landing`, `agent.config`
+### Fluxo de Resolução Atualizado
 
-### Mapeamento de Tipos
-
-O hook `useBlogArticle` retorna `ArticleFull`:
-```typescript
-interface ArticleFull extends ArticleSummary {
-  content: string | null;
-  meta_description: string | null;
-  keywords: string[] | null;
-  view_count: number | null;
-  faq: { question: string; answer: string }[] | null;
-  // ...
-}
+```text
+┌──────────────────────────────────────────────────────┐
+│                   content-api                        │
+├──────────────────────────────────────────────────────┤
+│  Request: { blog_slug, route, params }               │
+│                                                      │
+│  1. blog_id fornecido? → usar diretamente            │
+│  2. blog_slug fornecido? → SELECT FROM blogs         │
+│     WHERE slug = blog_slug                           │
+│  3. host fornecido? → resolveTenant(host)            │
+│  4. Nenhum? → erro 400                               │
+└──────────────────────────────────────────────────────┘
 ```
 
-O hook `useLandingPage` retorna:
-```typescript
-interface LandingPage {
-  id: string;
-  title: string;
-  slug: string;
-  page_data: unknown;
-  seo_title: string | null;
-  seo_description: string | null;
-  featured_image_url: string | null;
-}
-```
+### Prioridade de Resolução
+
+1. `blog_id` (mais rápido, sem query adicional)
+2. `blog_slug` (query simples por slug)
+3. `host` (resolve via `tenant_domains` + fallbacks)
 
 ---
 
@@ -173,26 +152,17 @@ interface LandingPage {
 
 | Critério | Validação |
 |----------|-----------|
-| `/blog/:slug/:article` funciona em aba anônima | Testar sem login |
-| `/p/:pageSlug` funciona em aba anônima | Testar sem login |
-| Network mostra `content-api` (não queries diretas) | DevTools > Network |
-| Console não mostra erros de RLS | DevTools > Console |
-| Traduções de artigo continuam funcionando | Selecionar idioma diferente |
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/PublicArticle.tsx` | Substituir queries por `useBlogArticle` |
-| `src/pages/PublicLandingPage.tsx` | Substituir queries por `useLandingPage` |
+| `/blog/bioneteste/artigo-x` funciona no preview | Testar no Lovable |
+| `/blog/bioneteste/p/pagina-y` funciona no preview | Testar no Lovable |
+| Produção (subdomínios) continua funcionando | Testar em `*.app.omniseen.app` |
+| Console não mostra "Tenant not found" | DevTools |
+| Network mostra `content-api` com `blog_slug` | DevTools |
 
 ---
 
 ## Impacto
 
-- **Zero impacto** em páginas de domínio customizado (já usam hooks)
-- **Resolve** erro "Página não encontrada" para visitantes anônimos
-- **Mantém** todas as funcionalidades existentes (traduções, FAQ, agent widget)
-- **Elimina** dependência de políticas RLS públicas nas tabelas
+- **Zero breaking changes** - hostname resolution continua funcionando
+- **Resolve** erro "Falha ao carregar" em ambiente dev/preview
+- **Mantém** todas as funcionalidades existentes
+- **Compatível** com rotas legacy `/blog/:blogSlug/*`
