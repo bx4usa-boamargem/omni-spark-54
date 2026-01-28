@@ -3926,6 +3926,7 @@ export type Database = {
           template_type: string | null
           title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           blog_id: string
@@ -3947,6 +3948,7 @@ export type Database = {
           template_type?: string | null
           title: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           blog_id?: string
@@ -3968,6 +3970,7 @@ export type Database = {
           template_type?: string | null
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
