@@ -1632,28 +1632,25 @@ serve(async (req) => {
     console.log(`[QA] External links found: ${externalUrls.length}, supported: ${supportedLinks.length}`);
     console.log(`[QA] Allowed domains: ${Array.from(allowedDomains).slice(0, 5).join(', ')}`);
 
-    // FAST MODE: Relaxed QA - no minimum external links required (400-1000 word articles)
-    // DEEP MODE: Strict QA - minimum 2 external links required (1500-3000 word articles)
+    // ========================================================================
+    // UNBLOCKED GENERATION: Quality Gate é apenas LOG, nunca bloqueia
+    // Nada pode impedir a geração de um artigo ou super página
+    // ========================================================================
     const isFastMode = requestedGenerationMode === 'fast' || source === 'chat' || source === 'instagram';
-    const minExternalLinks = isFastMode ? 0 : 2;
     
-    console.log(`[QA] Mode: ${isFastMode ? 'FAST (relaxed)' : 'DEEP (strict)'}, min links required: ${minExternalLinks}`);
+    console.log(`[QA] Mode: ${isFastMode ? 'FAST' : 'DEEP'}, external links: ${externalUrls.length}, supported: ${supportedLinks.length}`);
+    console.log(`[QA] UNBLOCKED: Quality checks são apenas informativos, geração NUNCA é bloqueada`);
 
-    if (supportedLinks.length < minExternalLinks) {
-      await logStage(supabase, blog_id, 'qa', 'internal', 'qa-deterministic', false, 0, { 
+    // Log quality metrics but NEVER block
+    if (supportedLinks.length < 2) {
+      console.warn(`[QA] WARNING: Poucos links externos (${supportedLinks.length}/2), mas geração continua`);
+      await logStage(supabase, blog_id, 'qa', 'internal', 'qa-deterministic-warning', true, 0, { 
         supported_links: supportedLinks.length,
         external_links: externalUrls.length,
         allowed_domains: Array.from(allowedDomains).slice(0, 10),
-        generation_mode: isFastMode ? 'fast' : 'deep'
+        generation_mode: isFastMode ? 'fast' : 'deep',
+        unblocked: true
       });
-      return new Response(
-        JSON.stringify({
-          error: 'QUALITY_GATE_FAILED',
-          message: 'QA bloqueou: o artigo não contém links suficientes para fontes reais do pacote de pesquisa (mínimo 2).',
-          debug: { found: externalUrls.length, supported: supportedLinks.length }
-        }),
-        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     const qaSystem = `Você é um Agente de Qualidade editorial e factual.\n\nTarefa:\n- Verificar clareza, autoridade e legibilidade\n- Verificar se afirmações factuais derivam do pacote de pesquisa\n- Reprovar se houver afirmações sem suporte\n\nRetorne JSON estrito:\n{\n  "approved": true|false,\n  "score": 0-100,\n  "issues": [{"code":"...","message":"..."}]\n}`;
@@ -1670,18 +1667,12 @@ serve(async (req) => {
     });
 
     const qaDuration = nowMs() - qaStart;
-    await logStage(supabase, blog_id, 'qa', 'lovable', 'qa', qa.approved, qaDuration, { score: qa.score }, 0, qa.usage?.total_tokens, qa.approved ? undefined : 'QA rejected');
+    await logStage(supabase, blog_id, 'qa', 'lovable', 'qa', qa.approved, qaDuration, { score: qa.score, unblocked: true }, 0, qa.usage?.total_tokens, qa.approved ? undefined : 'QA rejected (logged only)');
 
+    // UNBLOCKED: Log rejection but NEVER return 422
     if (!qa.approved) {
-      return new Response(
-        JSON.stringify({
-          error: 'QUALITY_GATE_FAILED',
-          message: 'QA bloqueou: artigo reprovado por qualidade/consistência factual.',
-          issues: qa.issues,
-          score: qa.score,
-        }),
-        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn(`[QA] WARNING: QA reprovou com score ${qa.score}, mas geração continua (UNBLOCKED)`);
+      console.warn(`[QA] Issues: ${JSON.stringify(qa.issues)}`);
     }
 
     // ============================================================================
