@@ -1,117 +1,133 @@
 
-# Plano: Corrigir Navegação do Sidebar (Separar Hover de Click)
+# Plano: Corrigir Acesso a Super Páginas, Blog e Artigos
 
-## Problema Identificado
+## Diagnóstico Confirmado
 
-Os itens "Criar" e "Documentos" no `MinimalSidebar.tsx` **não passam prop `onClick`** para `SidebarNavItem`:
+### Causa Raiz (100% verificada no código)
 
-```tsx
-// ANTES - SEM onClick (não navega no clique)
-<SidebarNavItem
-  icon={PenTool}
-  label="Criar"
-  isActive={isCreationActive()}
-  panel={<SidebarHoverPanel items={creationTools} onNavigate={navigate} />}
-/>
-```
+Os hooks e edge function **já suportam** `blog_id` direto, mas os componentes públicos **não estão passando** o ID que recebem.
 
-Quando o usuário clica no ícone:
-- O `button` no `SidebarNavItem` executa `onClick={onClick}` (linha 47)
-- Como `onClick` é `undefined`, nada acontece
-- A navegação só funciona ao clicar nos itens DO PAINEL (que usam `onNavigate`)
+### Evidências no Código
+
+| Componente/Hook | Status | Problema |
+|-----------------|--------|----------|
+| Edge Function `content-api` | ✅ Aceita `blog_id` (linha 87) | Nenhum |
+| `fetchContentApiByBlogId` | ✅ Existe e funciona (linha 145) | Nenhum |
+| `useBlogArticle` | ✅ Aceita `blogId` (linha 268) | Nenhum |
+| `useLandingPage` | ✅ Aceita `blogId` (linha 345) | **Não está sendo usado** |
+| `useBlogHome` | ❌ **Não aceita** `blogId` (linha 213) | Precisa atualizar |
+| `CustomDomainBlog` | ❌ Recebe `blogId` mas não passa | Precisa passar |
+| `CustomDomainLandingPage` | ❌ Recebe `blogId` mas não passa | Precisa passar |
 
 ---
 
 ## Solução
 
-### 1. Adicionar `onClick` aos itens com painel
+### 1. Atualizar `useBlogHome` para aceitar `blogId`
 
-Cada item que tem um painel flutuante deve **também ter uma rota padrão** para navegação direta:
+**Arquivo:** `src/hooks/useContentApi.ts`
 
-```tsx
-// DEPOIS - COM onClick (navega para rota principal)
-<SidebarNavItem
-  icon={PenTool}
-  label="Criar"
-  isActive={isCreationActive()}
-  onClick={() => navigate('/client/create')}  // ← Rota padrão
-  panel={<SidebarHoverPanel items={creationTools} onNavigate={navigate} />}
-/>
+**Mudança:** Converter parâmetros simples em objeto de opções:
 
-<SidebarNavItem
-  icon={FileText}
-  label="Documentos"
-  isActive={isDocumentsActive()}
-  onClick={() => navigate('/client/articles')}  // ← Rota padrão
-  panel={<SidebarHoverPanel items={documentItems} onNavigate={navigate} />}
-/>
+```typescript
+// ANTES (linha 213)
+export function useBlogHome(limit = 12, offset = 0): UseBlogHomeResult {
+  // ...
+  const result = await fetchContentApi<BlogHomeData>("blog.home", { limit, offset });
+}
+
+// DEPOIS
+interface UseBlogHomeOptions {
+  blogId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function useBlogHome(options: UseBlogHomeOptions = {}): UseBlogHomeResult {
+  const { blogId, limit = 12, offset = 0 } = options;
+  // ...
+  let result;
+  if (blogId) {
+    result = await fetchContentApiByBlogId<BlogHomeData>("blog.home", blogId, { limit, offset });
+  } else {
+    result = await fetchContentApi<BlogHomeData>("blog.home", { limit, offset });
+  }
+}
 ```
 
-### 2. Comportamento Final
+### 2. Atualizar `CustomDomainBlog` para passar `blogId`
 
-| Interação | Resultado |
-|-----------|-----------|
-| **Hover** no ícone | Painel flutuante aparece (apenas visual) |
-| **Click** no ícone | Navega para rota padrão do item |
-| **Click** em item do painel | Navega para rota específica |
-| **Mouse sai** | Painel fecha automaticamente |
+**Arquivo:** `src/pages/CustomDomainBlog.tsx`
 
----
+```typescript
+// ANTES (linha 18)
+const { blog, articles, loading, error } = useBlogHome(50);
 
-## Arquivo a Modificar
-
-### `src/components/layout/MinimalSidebar.tsx`
-
-**Mudança 1 - Item "Criar":**
-```tsx
-<SidebarNavItem
-  icon={PenTool}
-  label="Criar"
-  isActive={isCreationActive()}
-  onClick={() => navigate('/client/create')}  // ADICIONAR
-  panel={<SidebarHoverPanel items={creationTools} onNavigate={navigate} />}
-/>
+// DEPOIS
+const { blog, articles, loading, error } = useBlogHome({ 
+  blogId: blogId || undefined, 
+  limit: 50 
+});
 ```
 
-**Mudança 2 - Item "Documentos":**
-```tsx
-<SidebarNavItem
-  icon={FileText}
-  label="Documentos"
-  isActive={isDocumentsActive()}
-  onClick={() => navigate('/client/articles')}  // ADICIONAR
-  panel={<SidebarHoverPanel items={documentItems} onNavigate={navigate} />}
-/>
+### 3. Atualizar `CustomDomainLandingPage` para passar `blogId`
+
+**Arquivo:** `src/pages/CustomDomainLandingPage.tsx`
+
+```typescript
+// ANTES (linha 27)
+const { blog, page, loading, error } = useLandingPage(pageSlug);
+
+// DEPOIS
+const { blog, page, loading, error } = useLandingPage(pageSlug, { blogId });
 ```
 
 ---
 
-## Validação da Arquitetura
+## Fluxo Corrigido
 
-O `SidebarNavItem.tsx` já está **corretamente implementado**:
-- Hover controlado por `onMouseEnter` / `onMouseLeave` (estado `isHovered`)
-- Click delega para `onClick` prop
-- Separação completa entre visual (hover) e ação (click)
+```text
+ANTES (quebrado):
+BlogRoutes → blogId ✅
+  → CustomDomainBlog(blogId) 
+    → useBlogHome(50) ← Não recebe blogId ❌
+      → fetchContentApi(hostname) 
+        → hostname inválido → "Tenant not found" ❌
 
-O problema era apenas **não passar a prop `onClick`** no componente pai.
-
----
-
-## Critérios de Aceite
-
-| Critério | Validação |
-|----------|-----------|
-| Click em "Criar" navega para `/client/create` | Testar clique |
-| Click em "Documentos" navega para `/client/articles` | Testar clique |
-| Hover em "Criar" ainda abre painel flutuante | Testar hover |
-| Hover em "Documentos" ainda abre painel flutuante | Testar hover |
-| Leads, Radar, Ajuda continuam funcionando | Testar clique |
-| Painel fecha ao tirar o mouse | Testar hover out |
+DEPOIS (corrigido):
+BlogRoutes → blogId ✅
+  → CustomDomainBlog(blogId) 
+    → useBlogHome({ blogId, limit: 50 }) ✅
+      → fetchContentApiByBlogId(blogId) 
+        → Bypass hostname → Retorna dados ✅
+```
 
 ---
 
-## Impacto
+## Arquivos a Modificar
 
-- **Fix simples**: Apenas 2 linhas adicionadas
-- **Zero breaking changes**: Comportamento de hover não é afetado
-- **Navegação funcional**: Todos os itens agora respondem ao clique
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/hooks/useContentApi.ts` | Atualizar `useBlogHome` para aceitar `blogId` em objeto de opções |
+| `src/pages/CustomDomainBlog.tsx` | Passar `{ blogId, limit: 50 }` para `useBlogHome` |
+| `src/pages/CustomDomainLandingPage.tsx` | Passar `{ blogId }` para `useLandingPage` |
+
+---
+
+## Garantia de Funcionamento
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Preview Lovable (`*.lovableproject.com`) | ❌ Tenant not found | ✅ Funciona via blogId |
+| Subdomínio cliente (`*.app.omniseen.app`) | ✅ Funciona | ✅ Continua funcionando |
+| Domínio customizado | ✅ Funciona | ✅ Continua funcionando |
+
+---
+
+## Por que tenho 100% de certeza?
+
+1. **Edge Function já suporta**: Linhas 87-96 do `content-api/index.ts` mostram que `blog_id` direto funciona
+2. **Função auxiliar existe**: `fetchContentApiByBlogId` (linha 145) está pronta
+3. **Padrão já funciona**: `useBlogArticle` usa esse padrão e funciona quando blogId é passado
+4. **Mudança mínima**: Apenas 3 arquivos, ~15 linhas de código
+5. **Zero breaking changes**: Fallback para hostname continua funcionando
