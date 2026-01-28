@@ -1,296 +1,799 @@
 
-# Plano: Refatoração Premium da Navegação OmniSeen
+# Plano: Premium Sidebar SaaS - Expansível com Hover e PIN
 
-## Resumo Executivo
+## Visão Geral
 
-Refatorar completamente a navegação da OmniSeen seguindo padrão SaaS premium (Notion/Linear/Slack), com:
-- Sidebar de 64px com acento laranja (#FF8A00)
-- Separação absoluta entre hover (UI) e click (navegação)
-- Restauração de TODAS as funcionalidades desconectadas
-- Zero menus travados ou rotas mortas
+Criar uma sidebar moderna e profissional seguindo padrão SaaS premium (estilo Notion/Linear) com:
 
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/layout/MinimalSidebar.tsx` | Refatorar estrutura completa |
-| `src/components/layout/SidebarNavItem.tsx` | Atualizar estilos para acento laranja |
-| `src/components/layout/AccountBlock.tsx` | Atualizar menu hover com rotas corretas |
-| `src/components/layout/SubAccountLayout.tsx` | Ajustar largura do sidebar para 64px |
+- **Colapsada (padrão)**: 72px - apenas ícones com tooltips
+- **Expandida (hover/PIN)**: 280px - labels, badges e informações completas
+- **Duas seções visuais distintas**: Superior (PRINCIPAL) e Inferior (CONFIGURAÇÕES)
+- **Menu flutuante do usuário** com perfil, empresa, estratégia e logout
+- **Responsividade mobile** com drawer lateral
 
 ---
 
-## 1. MinimalSidebar.tsx - Nova Estrutura
-
-### Estrutura Visual Obrigatória
+## Arquitetura de Componentes
 
 ```text
-┌────────────────────────────────────┐
-│           🟠 OMNISEEN              │  ← Logo (clique → dashboard)
-├────────────────────────────────────┤
-│                                    │
-│  OPORTUNIDADES                     │  ← Label de seção
-│  🎯 Radar                          │  → /client/radar
-│                                    │
-│  CRIAR                             │
-│  ✏️ Artigos                        │  → /client/articles
-│  📄 Páginas SEO                    │  → /client/landing-pages
-│                                    │
-│  PÚBLICO                           │
-│  🌐 Portal                         │  → /client/portal
-│                                    │
-│  CONVERSÕES                        │
-│  👥 Leads                          │  → /client/leads
-│                                    │
-│  CONTA                             │
-│  ⚙️ Conta (hover → painel)         │
-│                                    │
-├────────────────────────────────────┤
-│  🌙 Tema                           │  ← Toggle tema
-│  👤 AccountBlock                   │  ← Bloco do usuário
-└────────────────────────────────────┘
+src/components/layout/PremiumSidebar/
+├── PremiumSidebar.tsx        (~200 linhas) - Container principal com lógica de hover/pin
+├── SidebarHeader.tsx         (~80 linhas)  - Logo animada + botão PIN
+├── NavSection.tsx            (~60 linhas)  - Seção com label + grupo de itens
+├── NavItem.tsx               (~150 linhas) - Item individual com tooltip/badge
+├── SidebarFooter.tsx         (~100 linhas) - Área do usuário
+├── UserMenu.tsx              (~180 linhas) - Menu flutuante completo
+├── MobileDrawer.tsx          (~100 linhas) - Drawer para mobile
+└── index.ts                  (~10 linhas)  - Barrel export
 ```
 
-### Código Principal
+---
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/layout/PremiumSidebar/PremiumSidebar.tsx` | **CRIAR** | Container principal |
+| `src/components/layout/PremiumSidebar/SidebarHeader.tsx` | **CRIAR** | Logo + PIN |
+| `src/components/layout/PremiumSidebar/NavSection.tsx` | **CRIAR** | Seção com label |
+| `src/components/layout/PremiumSidebar/NavItem.tsx` | **CRIAR** | Item com tooltip/badge |
+| `src/components/layout/PremiumSidebar/SidebarFooter.tsx` | **CRIAR** | Avatar + info usuário |
+| `src/components/layout/PremiumSidebar/UserMenu.tsx` | **CRIAR** | Menu flutuante |
+| `src/components/layout/PremiumSidebar/MobileDrawer.tsx` | **CRIAR** | Drawer mobile |
+| `src/components/layout/PremiumSidebar/index.ts` | **CRIAR** | Export barrel |
+| `src/components/layout/SubAccountLayout.tsx` | **MODIFICAR** | Integrar nova sidebar |
+| `src/index.css` | **MODIFICAR** | Adicionar animações e scrollbar custom |
+
+---
+
+## 1. PremiumSidebar.tsx - Container Principal
+
+### Estados React
 
 ```tsx
-// Imports atualizados
-import { 
-  Radar, 
-  FileText, 
-  LayoutTemplate, 
-  Globe, 
-  Users, 
-  Settings,
-  HelpCircle 
-} from 'lucide-react';
+const [expanded, setExpanded] = useState(false);      // Estado hover
+const [pinned, setPinned] = useState(false);          // Fixar sidebar aberta
+const [menuOpen, setMenuOpen] = useState(false);      // Menu do usuário
+const [activeItem, setActiveItem] = useState('dashboard');
+const [mobileOpen, setMobileOpen] = useState(false);  // Drawer mobile
+```
 
-// Itens de navegação - TODOS com onClick direto
-const navSections = [
+### Comportamento Hover
+
+```tsx
+// Hover expande apenas se NÃO estiver "pinada"
+const handleMouseEnter = () => {
+  if (!pinned) setExpanded(true);
+};
+
+const handleMouseLeave = () => {
+  if (!pinned) setExpanded(false);
+};
+```
+
+### Estrutura Visual
+
+```tsx
+<aside
+  className={cn(
+    "fixed left-0 top-0 h-screen z-50",
+    "flex flex-col bg-white dark:bg-gray-900",
+    "border-r border-[#E5E7EB] dark:border-gray-700",
+    "transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+    isExpanded ? "w-[280px]" : "w-[72px]"
+  )}
+  onMouseEnter={handleMouseEnter}
+  onMouseLeave={handleMouseLeave}
+>
+  {/* Header com Logo + PIN */}
+  <SidebarHeader 
+    expanded={isExpanded} 
+    pinned={pinned} 
+    onTogglePin={() => setPinned(!pinned)} 
+  />
+  
+  {/* SEÇÃO SUPERIOR - Scroll se necessário */}
+  <div className="flex-1 overflow-y-auto scrollbar-custom">
+    <NavSection 
+      title="PRINCIPAL" 
+      items={mainItems} 
+      expanded={isExpanded}
+      activeItem={activeItem}
+      onItemClick={handleNavigation}
+    />
+  </div>
+  
+  {/* Divisor Visual com efeito fade gradient */}
+  {isExpanded && (
+    <div className="px-8 py-5">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#D1D5DB] to-transparent opacity-60" />
+    </div>
+  )}
+  
+  {/* SEÇÃO INFERIOR - Fundo diferente */}
+  <div className={cn(
+    "transition-colors duration-300",
+    isExpanded ? "bg-[#FAFAFA] dark:bg-gray-800/50" : ""
+  )}>
+    <NavSection 
+      title="CONFIGURAÇÕES" 
+      items={settingsItems}
+      expanded={isExpanded}
+      isSecondary
+    />
+  </div>
+  
+  {/* Footer - Área do Usuário */}
+  <SidebarFooter 
+    expanded={isExpanded}
+    onMenuToggle={() => setMenuOpen(!menuOpen)}
+  />
+</aside>
+
+{/* Menu Flutuante do Usuário */}
+{menuOpen && (
+  <UserMenu 
+    onClose={() => setMenuOpen(false)}
+    sidebarExpanded={isExpanded}
+  />
+)}
+
+{/* Mobile Drawer */}
+<MobileDrawer 
+  open={mobileOpen} 
+  onClose={() => setMobileOpen(false)} 
+/>
+```
+
+---
+
+## 2. SidebarHeader.tsx - Logo + PIN
+
+### Estado Colapsado (72px)
+
+```tsx
+<div className="h-16 flex items-center justify-center px-4 border-b border-[#E5E7EB]">
+  <button
+    onClick={() => navigate('/client/dashboard')}
+    className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#3B82F6] flex items-center justify-center transition-all duration-300"
+  >
+    <span className="text-white font-bold text-lg">O</span>
+  </button>
+</div>
+```
+
+### Estado Expandido (280px)
+
+```tsx
+<div className="h-16 flex items-center px-4 gap-3 border-b border-[#E5E7EB]">
+  {/* Logo cresce para 48px */}
+  <button
+    onClick={() => navigate('/client/dashboard')}
+    className="w-12 h-12 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#3B82F6] flex items-center justify-center transition-all duration-300 hover:scale-105"
+  >
+    <span className="text-white font-bold text-xl">O</span>
+  </button>
+  
+  {/* Nome "OmnisEen" */}
+  <span className="text-lg font-semibold text-[#111827] dark:text-white flex-1">
+    OmnisEen
+  </span>
+  
+  {/* Botão PIN */}
+  <button
+    onClick={onTogglePin}
+    className={cn(
+      "p-1.5 rounded-md transition-colors",
+      pinned 
+        ? "text-[#7C3AED] bg-[#EDE9FE]" 
+        : "text-[#9CA3AF] hover:text-[#7C3AED] hover:bg-[#F3F4F6]"
+    )}
+    aria-label={pinned ? "Desafixar sidebar" : "Fixar sidebar"}
+  >
+    <Pin className="h-4 w-4" />
+  </button>
+</div>
+```
+
+---
+
+## 3. NavSection.tsx - Seção de Navegação
+
+### Diferenciação Visual
+
+```tsx
+interface NavSectionProps {
+  title: string;           // "PRINCIPAL" ou "CONFIGURAÇÕES"
+  items: NavItemConfig[];
+  expanded: boolean;
+  activeItem?: string;
+  onItemClick?: (id: string, path: string) => void;
+  isSecondary?: boolean;   // Diferencia seção inferior
+}
+
+// Renderização
+<div className={cn(
+  "py-2",
+  isSecondary && expanded && "bg-[#FAFAFA] dark:bg-gray-800/50"
+)}>
+  {/* Label da seção - apenas quando expandido */}
+  {expanded && (
+    <div className="px-5 py-2 mt-2">
+      <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-[0.05em]">
+        {title}
+      </span>
+    </div>
+  )}
+  
+  {/* Itens com stagger animation */}
+  <div className="space-y-0.5 px-2">
+    {items.map((item, index) => (
+      <div 
+        key={item.id}
+        style={{ animationDelay: `${index * 50}ms` }}
+        className={expanded ? "animate-slide-in" : ""}
+      >
+        <NavItem 
+          {...item}
+          expanded={expanded}
+          isActive={activeItem === item.id}
+          isSecondary={isSecondary}
+          onClick={() => onItemClick?.(item.id, item.path)}
+        />
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+---
+
+## 4. NavItem.tsx - Item Individual
+
+### Estado Colapsado - Tooltip
+
+```tsx
+{!expanded && (
+  <div className="group relative">
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-12 h-12 flex items-center justify-center rounded-[10px] mx-1",
+        "transition-all duration-200",
+        isActive && !isSecondary && "bg-[#EDE9FE] text-[#7C3AED]",
+        !isActive && "text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6]"
+      )}
+    >
+      <Icon className="h-[22px] w-[22px]" />
+    </button>
+    
+    {/* Tooltip */}
+    <div className={cn(
+      "absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[100]",
+      "px-3 py-2 bg-[#111827] text-white text-[13px] font-medium rounded-lg",
+      "whitespace-nowrap shadow-lg",
+      "opacity-0 invisible translate-x-1",
+      "group-hover:opacity-100 group-hover:visible group-hover:translate-x-0",
+      "transition-all duration-150 delay-300",
+      "pointer-events-none"
+    )}>
+      {tooltip || label}
+      {/* Seta apontando para esquerda */}
+      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#111827]" />
+    </div>
+  </div>
+)}
+```
+
+### Estado Expandido - Labels + Badges
+
+```tsx
+{expanded && (
+  <button
+    onClick={onClick}
+    className={cn(
+      "w-full flex items-center gap-3 px-4 py-3 rounded-[10px] mx-2",
+      "transition-all duration-200",
+      
+      // Item ativo (seção principal)
+      isActive && !isSecondary && [
+        "bg-[#EDE9FE] text-[#7C3AED] font-semibold",
+        "border-l-[3px] border-[#7C3AED] -ml-0.5"
+      ],
+      
+      // Item CTA especial (Gerar Artigo)
+      highlight && [
+        "bg-gradient-to-r from-[#EDE9FE] to-[#DBEAFE]",
+        "border border-[#C4B5FD]"
+      ],
+      
+      // Normal
+      !isActive && !highlight && [
+        "text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6]",
+        !isSecondary && "hover:scale-[1.02] hover:shadow-sm"
+      ]
+    )}
+  >
+    <Icon className={cn(
+      "h-[22px] w-[22px] shrink-0",
+      highlight && "text-[#7C3AED]",
+      isSecondary && "h-5 w-5"  // Menor na seção inferior
+    )} />
+    
+    <span className="flex-1 text-left text-sm font-medium">{label}</span>
+    
+    {/* Badge numérico ou texto */}
+    {badge && <Badge type={badgeType}>{badge}</Badge>}
+    
+    {/* Badge "Novo" para CTA */}
+    {highlight && (
+      <span className="px-2 py-0.5 bg-[#7C3AED] text-white text-xs font-semibold rounded-full">
+        Novo
+      </span>
+    )}
+  </button>
+)}
+```
+
+---
+
+## 5. Itens de Menu - Mapeamento Completo
+
+### Seção PRINCIPAL (mainItems)
+
+```tsx
+const mainItems = [
   {
-    label: 'OPORTUNIDADES',
-    items: [
-      { icon: Radar, label: 'Radar', path: '/client/radar' },
-    ]
+    id: 'dashboard',
+    icon: Home,
+    label: 'Dashboard',
+    path: '/client/dashboard',
+    tooltip: 'Visão geral e métricas',
   },
   {
-    label: 'CRIAR',
-    items: [
-      { icon: FileText, label: 'Artigos', path: '/client/articles' },
-      { icon: LayoutTemplate, label: 'Páginas SEO', path: '/client/landing-pages' },
-    ]
+    id: 'generate',
+    icon: Sparkles,
+    label: 'Gerar Artigo',
+    path: '/client/articles/new',
+    tooltip: 'Criar novo conteúdo',
+    highlight: true,  // CTA com destaque visual
+    badge: 'Novo',
   },
   {
-    label: 'PÚBLICO',
-    items: [
-      { icon: Globe, label: 'Portal', path: '/client/portal' },
-    ]
+    id: 'articles',
+    icon: FileText,
+    label: 'Meus Artigos',
+    path: '/client/articles',
+    tooltip: 'Gerenciar conteúdo',
+    badge: 15,         // Contador numérico dinâmico
+    badgeType: 'default',
   },
   {
-    label: 'CONVERSÕES',
-    items: [
-      { icon: Users, label: 'Leads', path: '/client/leads' },
-    ]
+    id: 'analytics',
+    icon: BarChart3,
+    label: 'Analytics',
+    path: '/client/analytics',
+    tooltip: 'Métricas e desempenho',
   },
   {
-    label: 'CONTA',
-    items: [
-      { 
-        icon: Settings, 
-        label: 'Conta', 
-        path: '/client/account',
-        panel: accountPanelItems  // Painel hover com subitens
-      },
-    ]
+    id: 'publish',
+    icon: Globe,
+    label: 'Publicar',
+    path: '/client/portal',
+    tooltip: 'Sites e integrações',
+    badge: 3,          // Sites conectados
+    badgeType: 'success',
+    pulseDot: true,    // Dot pulsante verde
+  },
+  {
+    id: 'leads',
+    icon: MessageSquare,
+    label: 'Conversões',
+    path: '/client/leads',
+    tooltip: 'Leads e chatbot',
   },
 ];
 ```
 
-### Painel Hover de Conta
+### Seção CONFIGURAÇÕES (settingsItems)
 
 ```tsx
-const accountPanelItems: PanelItem[] = [
+const settingsItems = [
   {
-    id: 'my-account',
+    id: 'billing',
+    icon: CreditCard,
+    label: 'Plano & Cobrança',
+    path: '/client/settings?tab=billing',
+    tooltip: 'Assinatura e pagamentos',
+    badge: 'Growth',
+    badgeType: 'purple',
+    badgeIcon: Star,   // Ícone estrela antes do texto
+  },
+  {
+    id: 'integrations',
+    icon: Link2,
+    label: 'Integrações',
+    path: '/client/integrations',
+    tooltip: 'WordPress, APIs, webhooks',
+    badge: 3,
+  },
+  {
+    id: 'settings',
+    icon: Settings,
+    label: 'Configurações',
+    path: '/client/settings',
+    tooltip: 'Preferências do sistema',
+  },
+  {
+    id: 'help',
+    icon: HelpCircle,
+    label: 'Ajuda & Suporte',
+    path: '/help',
+    tooltip: 'Documentação e tickets',
+  },
+  {
+    id: 'theme',
+    icon: Sun,  // ou Moon se dark mode ativo
+    label: 'Tema',
+    tooltip: 'Alternar claro/escuro',
+    isThemeToggle: true,  // Comportamento especial: toggle switch
+  },
+];
+```
+
+---
+
+## 6. SidebarFooter.tsx - Área do Usuário
+
+### Estado Colapsado
+
+```tsx
+<div className="border-t-2 border-[#E5E7EB] p-4">
+  <button
+    onClick={onMenuToggle}
+    className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center hover:ring-2 hover:ring-[#7C3AED]/20 transition-all cursor-pointer"
+  >
+    <span className="text-white font-semibold text-sm">{initials}</span>
+  </button>
+</div>
+```
+
+### Estado Expandido
+
+```tsx
+<div className="border-t-2 border-[#E5E7EB] p-4">
+  <button
+    onClick={onMenuToggle}
+    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-[#F9FAFB] hover:shadow-sm transition-all cursor-pointer"
+  >
+    {/* Avatar */}
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center">
+      <span className="text-white font-semibold text-sm">{initials}</span>
+    </div>
+    
+    {/* Info */}
+    <div className="flex-1 text-left min-w-0">
+      <p className="text-sm font-semibold text-[#111827] dark:text-white truncate">
+        {blogName}
+      </p>
+      <div className="flex items-center gap-1.5">
+        {/* Dot verde pulsante (status online) */}
+        <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+        <span className="text-xs text-[#6B7280]">Plano Growth</span>
+      </div>
+    </div>
+    
+    {/* Chevron */}
+    <ChevronDown className="h-4 w-4 text-[#9CA3AF]" />
+  </button>
+</div>
+```
+
+---
+
+## 7. UserMenu.tsx - Menu Flutuante
+
+### Posicionamento Dinâmico
+
+```tsx
+// Posição se ajusta conforme sidebar está expandida ou não
+const menuPosition = sidebarExpanded 
+  ? "left-[296px]"   // 280px + 16px gap
+  : "left-[88px]";   // 72px + 16px gap
+```
+
+### Estrutura Completa
+
+```tsx
+<>
+  {/* Overlay */}
+  <div 
+    className="fixed inset-0 bg-black/25 z-50 animate-in fade-in duration-150 cursor-pointer"
+    onClick={onClose}
+  />
+  
+  {/* Menu Flutuante */}
+  <div 
+    className={cn(
+      "fixed bottom-[88px] z-[51] w-[280px] bg-white dark:bg-gray-900 rounded-xl",
+      "shadow-[0_10px_40px_rgba(0,0,0,0.15),0_0_1px_rgba(0,0,0,0.1)]",
+      "border border-[#E5E7EB] dark:border-gray-700",
+      "animate-in zoom-in-95 fade-in duration-200",
+      "transition-[left] duration-300",
+      menuPosition
+    )}
+  >
+    {/* Header */}
+    <div className="flex items-center justify-between px-4 py-4 border-b border-[#F3F4F6]">
+      <span className="font-semibold text-[15px] text-[#111827]">Minha Conta</span>
+      <button onClick={onClose} className="p-1 rounded hover:bg-[#F3F4F6]">
+        <X className="h-[18px] w-[18px] text-[#9CA3AF] hover:text-[#111827]" />
+      </button>
+    </div>
+    
+    {/* Menu Items */}
+    <div className="p-2 space-y-1">
+      {accountMenuItems.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => { navigate(item.path); onClose(); }}
+          className="w-full flex items-start gap-3 px-3 py-3 rounded-lg hover:bg-[#F9FAFB] hover:scale-[1.02] transition-all cursor-pointer"
+        >
+          {/* Ícone circular colorido */}
+          <div className={cn("w-9 h-9 rounded-full flex items-center justify-center", item.iconBg)}>
+            <item.icon className="h-4 w-4" />
+          </div>
+          
+          {/* Texto */}
+          <div className="flex-1 text-left">
+            <p className="text-sm font-semibold text-[#111827]">{item.title}</p>
+            <p className="text-xs text-[#6B7280] mt-0.5">{item.subtitle}</p>
+          </div>
+          
+          {/* Toggle opcional (Notificações) */}
+          {item.toggle && <ToggleSwitch />}
+        </button>
+      ))}
+    </div>
+    
+    {/* Footer - Sair */}
+    <div className="border-t border-[#F3F4F6] p-2">
+      <button
+        onClick={handleSignOut}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-[#EF4444] hover:bg-[#FEE2E2] rounded-lg transition-colors"
+      >
+        <LogOut className="h-4 w-4" />
+        <span className="text-sm font-medium">Sair</span>
+      </button>
+    </div>
+  </div>
+</>
+```
+
+### Itens do Menu do Usuário
+
+```tsx
+const accountMenuItems = [
+  {
+    id: 'profile',
     icon: User,
-    iconColor: 'bg-blue-100 dark:bg-blue-900/30',
-    iconTextColor: 'text-blue-600 dark:text-blue-400',
-    title: 'Minha Conta',
-    subtitle: 'Gerencie seu perfil e preferências.',
+    iconBg: 'bg-blue-100 text-blue-600',
+    title: 'Perfil',
+    subtitle: 'Dados pessoais e preferências',
     path: '/client/account',
   },
   {
-    id: 'my-company',
+    id: 'company',
     icon: Building2,
-    iconColor: 'bg-emerald-100 dark:bg-emerald-900/30',
-    iconTextColor: 'text-emerald-600 dark:text-emerald-400',
-    title: 'Minha Empresa',
-    subtitle: 'Configure informações do negócio.',
+    iconBg: 'bg-emerald-100 text-emerald-600',
+    title: 'Empresa',
+    subtitle: 'Informações do negócio',
     path: '/client/company',
   },
   {
     id: 'strategy',
-    icon: Compass,
-    iconColor: 'bg-purple-100 dark:bg-purple-900/30',
-    iconTextColor: 'text-purple-600 dark:text-purple-400',
-    title: 'Estratégia',
-    subtitle: 'Defina sua estratégia de conteúdo.',
-    path: '/client/radar',  // Usa /client/radar (já existe redirect de /client/strategy)
+    icon: Target,
+    iconBg: 'bg-purple-100 text-purple-600',
+    title: 'Estratégia SEO',
+    subtitle: 'Palavras-chave e configurações',
+    path: '/client/radar',
   },
   {
-    id: 'billing',
-    icon: CreditCard,
-    iconColor: 'bg-amber-100 dark:bg-amber-900/30',
-    iconTextColor: 'text-amber-600 dark:text-amber-400',
-    title: 'Plano & Cobrança',
-    subtitle: 'Gerencie sua assinatura e faturas.',
-    path: '/client/settings?tab=billing',
+    id: 'notifications',
+    icon: Bell,
+    iconBg: 'bg-amber-100 text-amber-600',
+    title: 'Notificações',
+    subtitle: 'E-mails e alertas',
+    path: '/client/settings?tab=notifications',
+    toggle: true,  // Mostra switch on/off
   },
 ];
 ```
 
 ---
 
-## 2. SidebarNavItem.tsx - Estilos Premium
+## 8. MobileDrawer.tsx - Responsividade
 
-### Cores de Acento Laranja
-
-```tsx
-// ANTES (roxo/primary)
-isActive && 'text-primary bg-primary/15 shadow-[0_0_12px_hsla(277,76%,50%,0.2)]'
-
-// DEPOIS (laranja #FF8A00)
-isActive && [
-  'text-orange-500',
-  'bg-orange-500/15',
-  'before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2',
-  'before:w-[3px] before:h-6 before:bg-orange-500 before:rounded-r-full'
-]
-```
-
-### Hover Laranja
+### Estrutura
 
 ```tsx
-// ANTES
-'text-muted-foreground hover:text-primary hover:bg-primary/10'
-
-// DEPOIS
-'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10'
-```
-
----
-
-## 3. AccountBlock.tsx - Menu Atualizado
-
-### Novos Itens de Menu
-
-```tsx
-const menuItems: AccountMenuItem[] = [
-  {
-    icon: User,
-    label: 'Minha Conta',
-    action: () => navigateTo('/client/account'),
-  },
-  {
-    icon: Building2,
-    label: 'Minha Empresa',
-    action: () => navigateTo('/client/company'),
-  },
-  {
-    icon: Compass,
-    label: 'Estratégia',
-    action: () => navigateTo('/client/radar'),
-  },
-  {
-    icon: CreditCard,
-    label: 'Plano & Cobrança',
-    action: () => navigateTo('/client/settings?tab=billing'),
-  },
-];
-```
-
-### Imports Necessários
-
-```tsx
-import { 
-  User, 
-  Building2,   // NOVO
-  Compass,     // NOVO
-  CreditCard, 
-  LogOut,
-  Sparkles
-} from 'lucide-react';
-```
-
----
-
-## 4. SubAccountLayout.tsx - Largura 64px
-
-```tsx
-// ANTES
-<aside className="hidden md:flex w-20 client-sidebar flex-col ...">
-
-// DEPOIS
-<aside className="hidden md:flex w-16 client-sidebar flex-col ...">
-
-// ANTES
-<main className="flex-1 md:ml-20">
-
-// DEPOIS
-<main className="flex-1 md:ml-16">
-```
-
----
-
-## Regras de Interação (Implementação Obrigatória)
-
-### Padrão React Correto
-
-```tsx
-// ✅ CORRETO - Separação absoluta
-<div
-  onMouseEnter={() => setHover(true)}   // Apenas UI
-  onMouseLeave={() => setHover(false)}  // Apenas UI
-  onClick={() => navigate('/client/articles')}  // Apenas navegação
+{/* Botão Hamburguer - Apenas Mobile */}
+<button 
+  onClick={() => setMobileOpen(true)}
+  className="fixed top-4 right-4 z-50 md:hidden p-2 rounded-lg bg-white shadow-md"
 >
+  <Menu className="h-6 w-6" />
+</button>
 
-// ❌ PROIBIDO
-onClick={(e) => {
-  e.preventDefault();      // NUNCA
-  e.stopPropagation();     // NUNCA
-  setMenuOpen(!menuOpen);  // NUNCA travar menu
-}}
+{/* Drawer + Overlay */}
+{mobileOpen && (
+  <>
+    {/* Overlay mais escuro */}
+    <div 
+      className="fixed inset-0 bg-black/50 z-[59] md:hidden animate-in fade-in cursor-pointer"
+      onClick={() => setMobileOpen(false)}
+    />
+    
+    {/* Drawer Content - sempre expandido */}
+    <aside className="fixed left-0 top-0 h-screen w-[320px] bg-white z-[60] md:hidden animate-in slide-in-from-left duration-300">
+      {/* Botão fechar */}
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="absolute top-4 right-4 p-1.5 rounded-md hover:bg-[#F3F4F6]"
+      >
+        <X className="h-6 w-6 text-[#6B7280]" />
+      </button>
+      
+      {/* Conteúdo sempre no estado expandido */}
+      <SidebarHeader expanded pinned={false} />
+      <NavSection title="PRINCIPAL" items={mainItems} expanded />
+      <div className="px-8 py-5">
+        <div className="h-px bg-gradient-to-r from-transparent via-[#D1D5DB] to-transparent" />
+      </div>
+      <NavSection title="CONFIGURAÇÕES" items={settingsItems} expanded isSecondary />
+      <SidebarFooter expanded />
+    </aside>
+  </>
+)}
 ```
-
-### Comportamento Garantido
-
-| Ação | Resultado |
-|------|-----------|
-| Mouse entra no ícone | Painel/tooltip aparece |
-| Mouse sai do ícone | Painel/tooltip desaparece |
-| Clique no ícone | Navega para rota principal |
-| Clique em item do painel | Navega para rota específica |
-| F5 em qualquer rota | Página carrega corretamente |
 
 ---
 
-## Mapeamento de Rotas (Validação)
+## 9. Estilos CSS - index.css
 
-Todas as rotas já existem em `App.tsx`:
+### Adicionar ao final do arquivo
 
-| Funcionalidade | Rota | Componente | Status |
-|----------------|------|------------|--------|
-| Radar | `/client/radar` | `ClientStrategy` | ✅ Existe |
-| Artigos | `/client/articles` | `ClientArticles` | ✅ Existe |
-| Páginas SEO | `/client/landing-pages` | `ClientLandingPages` | ✅ Existe |
-| Portal | `/client/portal` | `ClientSite` | ✅ Existe |
-| Leads | `/client/leads` | `ClientLeads` | ✅ Existe |
-| Minha Conta | `/client/account` | `ClientAccount` | ✅ Existe |
-| Minha Empresa | `/client/company` | `ClientCompany` | ✅ Existe |
-| Estratégia | `/client/radar` | Redirect existe | ✅ Existe |
-| Plano & Cobrança | `/client/settings?tab=billing` | `ClientSettings` | ✅ Existe |
+```css
+/* ================================================
+   PREMIUM SIDEBAR - Animações e Scrollbar
+   ================================================ */
+
+/* Scrollbar customizada */
+.scrollbar-custom {
+  scrollbar-width: thin;
+  scrollbar-color: #D1D5DB transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 9999px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Slide-in animation para itens */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 300ms ease-out forwards;
+}
+
+/* Badge pulse (Growth) */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Breathing divider */
+@keyframes breathing {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+.divider-breathing {
+  animation: breathing 3s ease-in-out infinite;
+}
+```
+
+---
+
+## 10. SubAccountLayout.tsx - Integração
+
+### Modificações Necessárias
+
+```tsx
+// Imports
+import { PremiumSidebar } from '@/components/layout/PremiumSidebar';
+
+// No return do componente - SUBSTITUIR sidebar atual
+return (
+  <div className="min-h-screen client-bg flex">
+    {/* Nova Premium Sidebar - Desktop */}
+    <div className="hidden md:block">
+      <PremiumSidebar 
+        isPlatformAdmin={isPlatformAdmin}
+        onHelpClick={handleHelpClick}
+      />
+    </div>
+
+    {/* Main Content - Margin dinâmica (72px colapsada) */}
+    <main className="flex-1 md:ml-[72px] transition-[margin] duration-300">
+      <div className={cn('min-h-screen', isMobile ? 'pb-20' : '')}>
+        <div className="p-4 md:p-8 max-w-5xl mx-auto">{children}</div>
+      </div>
+    </main>
+
+    {/* Mobile Bottom Nav (mantém existente) */}
+    {isMobile && <MobileBottomNav showAdvanced={showAdvancedNav} />}
+
+    {/* Floating Chat (mantém existente) */}
+    {!isMobile && <FloatingSupportChat />}
+  </div>
+);
+```
+
+---
+
+## Resumo de Badges
+
+| Tipo | Estilo | Exemplo |
+|------|--------|---------|
+| Contador (default) | `bg-[#F3F4F6] text-[#4B5563]` | "15", "3" |
+| Sucesso (sites conectados) | `bg-[#DCFCE7] text-[#16A34A]` + dot pulsante | "3" sites |
+| Purple (plano) | `bg-[#EDE9FE] text-[#7C3AED]` + ícone Star | "Growth" |
+| CTA (novo) | `bg-[#7C3AED] text-white` | "Novo" |
+
+---
+
+## Paleta de Cores Consolidada
+
+| Token | Cor | Uso |
+|-------|-----|-----|
+| Primary | `#7C3AED` | Itens ativos, badges, PIN |
+| Primary Light | `#EDE9FE` | Background item ativo |
+| Secondary | `#3B82F6` | Gradientes do logo |
+| Success | `#16A34A` | Badge sites conectados |
+| Success Light | `#DCFCE7` | Background badge sucesso |
+| Danger | `#EF4444` | Botão "Sair" |
+| Background | `#FFFFFF` | Sidebar principal |
+| Background Alt | `#FAFAFA` | Seção CONFIGURAÇÕES |
+| Border | `#E5E7EB` | Bordas |
+| Text Primary | `#111827` | Texto principal |
+| Text Secondary | `#6B7280` | Texto secundário |
+| Text Muted | `#9CA3AF` | Labels, hints |
 
 ---
 
@@ -298,40 +801,60 @@ Todas as rotas já existem em `App.tsx`:
 
 | # | Critério | Validação |
 |---|----------|-----------|
-| 1 | Sidebar tem 64px de largura | Inspecionar elemento |
-| 2 | Cor de acento é laranja (#FF8A00) | Verificar hover e ativo |
-| 3 | Item ativo tem barra lateral laranja | Verificar visualmente |
-| 4 | Todos os itens do sidebar navegam | Testar clique em cada um |
-| 5 | Nenhum menu fica preso após clique | Testar hover + click |
-| 6 | Hover apenas mostra UI | Testar mouse enter/leave |
-| 7 | Click sempre navega | Testar cada item |
-| 8 | Portal acessível | `/client/portal` |
-| 9 | Artigos acessível | `/client/articles` |
-| 10 | Páginas SEO acessível | `/client/landing-pages` |
-| 11 | Minha Conta acessível | `/client/account` |
-| 12 | Minha Empresa acessível | `/client/company` |
-| 13 | Estratégia acessível | Via painel hover |
-| 14 | Plano & Cobrança acessível | Via painel hover |
-| 15 | F5 mantém todas as rotas | Testar reload |
-| 16 | Animações em 200ms | Verificar transições |
+| 1 | Sidebar colapsada: 72px exatos | Inspecionar elemento |
+| 2 | Sidebar expandida: 280px exatos | Inspecionar elemento |
+| 3 | Hover expande sidebar | Testar mouse enter |
+| 4 | Sair mouse colapsa sidebar | Testar mouse leave |
+| 5 | PIN mantém expandida | Clicar no botão PIN |
+| 6 | Logo cresce 40px → 48px ao expandir | Verificar transição |
+| 7 | Seção PRINCIPAL: fundo branco | Verificar cor |
+| 8 | Seção CONFIGURAÇÕES: fundo #FAFAFA | Verificar cor |
+| 9 | Divisor com fade gradient | Verificar visual |
+| 10 | Tooltips aparecem após 300ms | Testar delay |
+| 11 | Item ativo: borda roxa + background | Verificar visual |
+| 12 | Badge "15" em Artigos | Verificar numérico |
+| 13 | Badge "3" verde pulsante em Publicar | Verificar dot animado |
+| 14 | Badge "Growth" roxo em Plano | Verificar com ícone Star |
+| 15 | Menu flutuante abre ao clicar usuário | Testar interação |
+| 16 | Overlay fecha menu ao clicar | Testar interação |
+| 17 | Menu se reposiciona com sidebar | Verificar left dinâmico |
+| 18 | Botão "Sair" vermelho funcional | Testar logout |
+| 19 | Mobile drawer abre em < 1024px | Testar responsivo |
+| 20 | Drawer sempre expandido no mobile | Verificar visual |
+| 21 | Todas as 12 rotas navegam | Testar cada item |
+| 22 | Keyboard navigation (Tab, Enter, Esc) | Testar acessibilidade |
+| 23 | Transições 300ms suaves | Verificar performance |
+| 24 | Dark mode suportado | Alternar tema |
+| 25 | F5 mantém estado correto | Testar reload |
 
 ---
 
-## Resumo de Mudanças
+## Estimativa de Código
 
-| Arquivo | Linhas Afetadas | Tipo de Mudança |
-|---------|-----------------|-----------------|
-| `MinimalSidebar.tsx` | ~100 linhas | Refatoração completa da estrutura |
-| `SidebarNavItem.tsx` | ~10 linhas | Atualizar cores para laranja |
-| `AccountBlock.tsx` | ~30 linhas | Substituir menuItems |
-| `SubAccountLayout.tsx` | 2 linhas | Mudar w-20 → w-16 |
+| Arquivo | Linhas | Complexidade |
+|---------|--------|--------------|
+| `PremiumSidebar.tsx` | ~200 | Alta |
+| `SidebarHeader.tsx` | ~80 | Média |
+| `NavSection.tsx` | ~60 | Baixa |
+| `NavItem.tsx` | ~150 | Alta |
+| `SidebarFooter.tsx` | ~100 | Média |
+| `UserMenu.tsx` | ~180 | Alta |
+| `MobileDrawer.tsx` | ~100 | Média |
+| `index.ts` | ~10 | Baixa |
+| `index.css` (adicional) | ~50 | Baixa |
+| `SubAccountLayout.tsx` (mod) | ~20 | Baixa |
+
+**Total estimado**: ~950 linhas de código novo
 
 ---
 
 ## Impacto
 
-- **Zero breaking changes** nas rotas (todas já existem)
-- **Restauração completa** de funcionalidades desconectadas
-- **UX premium** com padrão SaaS moderno
-- **Navegação fluida** sem fricção ou menus travados
-- **OmniSeen utilizável** como plataforma SaaS real
+- **UX Premium**: Navegação fluida estilo Notion/Linear/Slack
+- **Produtividade**: Acesso rápido a todas as funcionalidades core
+- **Diferenciação visual clara**: Seções PRINCIPAL vs CONFIGURAÇÕES
+- **Acessibilidade total**: Keyboard + screen reader
+- **Mobile-first**: Drawer responsivo funcional
+- **Dark mode**: Suporte completo
+- **Zero breaking changes**: Compatível com todas as rotas existentes
+- **Performance**: Transições 300ms CSS nativo, sem re-renders desnecessários
