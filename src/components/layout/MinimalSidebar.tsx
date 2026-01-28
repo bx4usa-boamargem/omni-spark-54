@@ -124,6 +124,7 @@ export function MinimalSidebar({ onHelpClick }: MinimalSidebarProps) {
           icon={PenTool}
           label="Criar"
           isActive={isCreationActive()}
+          onClick={() => navigate('/client/create')}
           panel={<SidebarHoverPanel items={creationTools} onNavigate={navigate} />}
         />
 
@@ -132,6 +133,7 @@ export function MinimalSidebar({ onHelpClick }: MinimalSidebarProps) {
           icon={FileText}
           label="Documentos"
           isActive={isDocumentsActive()}
+          onClick={() => navigate('/client/articles')}
           panel={<SidebarHoverPanel items={documentItems} onNavigate={navigate} />}
         />
 
