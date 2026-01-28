@@ -787,3 +787,75 @@ body.dark {
     opacity: 1 !important;
   }
 }
+
+/* ================================================
+   PREMIUM SIDEBAR - Animações e Scrollbar Custom
+   ================================================ */
+
+/* Scrollbar customizada para sidebar */
+.scrollbar-custom {
+  scrollbar-width: thin;
+  scrollbar-color: #D1D5DB transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 9999px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Slide-in animation para itens da sidebar */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 300ms ease-out forwards;
+}
+
+/* Badge pulse para Growth */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Breathing effect para divisor */
+@keyframes breathing {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+.divider-breathing {
+  animation: breathing 3s ease-in-out infinite;
+}
+
+/* Reduced motion: desativar animações da sidebar */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in,
+  .badge-pulse,
+  .divider-breathing {
+    animation: none !important;
+  }
+}
