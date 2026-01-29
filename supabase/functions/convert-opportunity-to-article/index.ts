@@ -124,6 +124,42 @@ serve(async (req) => {
       url: `/blog/${a.slug}`
     })) || [];
 
+    // ========================================================================
+    // CITY FALLBACK CHAIN: territory → profile → extracted from title → Brasil
+    // ========================================================================
+    let resolvedCity: string | undefined;
+
+    // 1. Tentar do território
+    if (territory?.official_name) {
+      resolvedCity = territory.official_name;
+      console.log(`[CONVERT] City from territory: ${resolvedCity}`);
+    }
+
+    // 2. Fallback: business_profile.city ou region
+    if (!resolvedCity && profile) {
+      resolvedCity = (profile as any).city || (profile as any).region || (profile as any).state;
+      if (resolvedCity) {
+        console.log(`[CONVERT] City from profile: ${resolvedCity}`);
+      }
+    }
+
+    // 3. Fallback: Extrair cidade do título (regex: "em [Cidade]")
+    if (!resolvedCity) {
+      const cityMatch = opportunity.suggested_title.match(/\b(?:em|para|de)\s+([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]+)?)/i);
+      if (cityMatch && cityMatch[1]) {
+        resolvedCity = cityMatch[1].trim();
+        console.log(`[CONVERT] City extracted from title: ${resolvedCity}`);
+      }
+    }
+
+    // 4. Fallback final: 'Brasil'
+    if (!resolvedCity) {
+      resolvedCity = 'Brasil';
+      console.warn(`[CONVERT] Using fallback city: ${resolvedCity}`);
+    }
+
+    console.log(`[CONVERT] Resolved city: ${resolvedCity}`);
+
     // 5. Gerar conteúdo via generate-article-structured
     // V2.0: Tenta com geo_mode=true primeiro, fallback para geo_mode=false se QA falhar
     console.log(`[CONVERT] Generating article content for: "${opportunity.suggested_title}" with geo_mode=true`);
@@ -139,6 +175,10 @@ serve(async (req) => {
       geo_mode: true, // V2.0: Try with GEO first
       source: 'opportunity',
       auto_publish: false, // SEMPRE draft
+      // ===== CORREÇÃO: city, niche e businessName explícitos =====
+      city: resolvedCity,
+      niche: profile?.niche || 'pest_control',
+      businessName: profile?.company_name || undefined,
       // Territorial data for GEO
       territoryId: opportunity.territory_id || territory?.id,
       google_place: territory ? {

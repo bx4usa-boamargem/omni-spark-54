@@ -1414,17 +1414,38 @@ serve(async (req) => {
     // ============================================================================
     console.log('[QualityGate] Step 1: Validating request context...');
 
-    // Extract city from request body (already parsed) or territory
+    // Extract city with multiple fallbacks
     let city = requestCity || territoryData?.official_name || '';
+
+    // FALLBACK 1: Extract city from theme (e.g., "Serviço em Teresina" → "Teresina")
+    if (!city && theme) {
+      const cityMatch = theme.match(/\b(?:em|para|de)\s+([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]+)?)/i);
+      if (cityMatch && cityMatch[1]) {
+        city = cityMatch[1].trim();
+        console.log(`[QualityGate] City extracted from theme: ${city}`);
+      }
+    }
+
+    // FALLBACK 2: From google_place if available
+    if (!city && google_place?.official_name && typeof google_place.official_name === 'string') {
+      city = google_place.official_name as string;
+      console.log(`[QualityGate] City from google_place: ${city}`);
+    }
     
     // HARD GATE: City is mandatory for local authority articles
     if (!city || city.trim() === '') {
-      console.error('[QualityGate] ❌ ABORT: Missing city');
+      console.error('[QualityGate] ❌ ABORT: Missing city after all fallbacks');
       return new Response(
         JSON.stringify({
           error: 'QUALITY_GATE_FAILED',
           code: ERROR_CODES.MISSING_CITY,
-          message: ERROR_MESSAGES[ERROR_CODES.MISSING_CITY]
+          message: ERROR_MESSAGES[ERROR_CODES.MISSING_CITY],
+          debug: {
+            requestCity,
+            territoryName: territoryData?.official_name,
+            googlePlaceName: google_place?.official_name,
+            theme,
+          }
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
