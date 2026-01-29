@@ -1308,9 +1308,9 @@ serve(async (req) => {
     const geo_mode = true; // HARDCODED - NEVER false
     console.log(`[OMNICORE GEO V2.0] geo_mode=true FORCED - No article exists outside OmniCore GEO Writer`);
 
-    // RESOLVER GENERATION_MODE: Nunca undefined - GEO mode forces deep
-    const generation_mode = 'deep'; // GEO mode always uses deep mode
-    console.log(`[GENERATION MODE] Forced: deep (OmniCore GEO always generates 1200-3000 words)`);
+    // RESOLVER GENERATION_MODE: Respeitar request ou usar deep como padrão
+    const generation_mode = requestedGenerationMode || 'deep';
+    console.log(`[GENERATION MODE] Resolved: ${generation_mode} (requested: ${requestedGenerationMode || 'none'})`);
 
     if (!theme) {
       return new Response(
@@ -1397,15 +1397,26 @@ serve(async (req) => {
         territoryData: (territoryData as unknown as GeoTerritoryData) || null,
       });
     } catch (e) {
+      // V2.2: FALLBACK AUTOMÁTICO - Gerar sem pesquisa em vez de bloquear
       const msg = e instanceof Error ? e.message : String(e);
-      await logStage(supabase, blog_id, 'research', 'perplexity', 'research-package', false, 0, {}, 0, 0, msg);
-      return new Response(
-        JSON.stringify({
-          error: 'RESEARCH_REQUIRED',
-          message: msg,
-        }),
-        { status: 424, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn(`[RESEARCH] Fallback mode - no web research: ${msg}`);
+      await logStage(supabase, blog_id, 'research', 'perplexity', 'research-package', false, 0, { fallback: true }, 0, 0, msg);
+      
+      // Create empty research package (allows generation without web research)
+      researchPackage = {
+        geo: { 
+          facts: [], 
+          trends: [],
+          sources: [], 
+          rawQuery: primaryKeyword,
+          fetchedAt: new Date().toISOString()
+        },
+        serp: { commonTerms: [], topTitles: [], contentGaps: [], averages: {} },
+        sources: [],
+        generatedAt: new Date().toISOString(),
+      };
+      
+      console.log(`[RESEARCH] Proceeding with empty research package (fallback mode)`);
     }
 
     // ============================================================================
@@ -1562,7 +1573,10 @@ ${buildMasterPrompt(editorial_template || null, theme, keywords, tone)}
 
 Prazo de entrega: Data de referência é Janeiro de 2026. Todos os dados, tendências e referências devem ser contextualizados para esta data.`;
 
-    const targetImageCount = Math.min(Math.max(image_count, 1), 5);
+    // V2.2: image_count dinâmico por modo - Authority permite até 10
+    const maxImagesByMode = mode === 'authority' ? 10 : 5;
+    const targetImageCount = Math.min(Math.max(image_count, 1), maxImagesByMode);
+    console.log(`[IMAGES] Mode: ${mode}, requested: ${image_count}, target: ${targetImageCount} (max: ${maxImagesByMode})`);
 
     const createArticleTool = {
       type: 'function' as const,
