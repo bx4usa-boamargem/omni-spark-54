@@ -189,7 +189,7 @@ export default function ArticleGenerator() {
     startProgressSimulation();
     
     try {
-      // Prepare payload for edge function
+      // Prepare payload for edge function with full Article Engine parameters
       const payload = {
         keyword: formData.keyword.trim(),
         city: formData.city.trim(),
@@ -202,7 +202,11 @@ export default function ArticleGenerator() {
         businessName: businessProfile?.company_name || blog.name,
         businessWhatsapp: businessProfile?.whatsapp,
         useEat: formData.eatInjection,
-        contextualAlt: formData.imageAlt
+        contextualAlt: formData.imageAlt,
+        // V2.2: Article Engine parameters based on mode
+        image_count: formData.mode === 'authority' ? 6 : 3,
+        word_count: formData.mode === 'authority' ? 2400 : 1000,
+        generation_mode: formData.mode === 'authority' ? 'deep' : 'fast',
       };
       
       // Call edge function

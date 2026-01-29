@@ -192,9 +192,9 @@ O arquivo já envia `image_count` e `word_count` corretamente via `options.image
 
 ## Checklist de Implementação
 
-- [ ] Modificar `generate-article-structured/index.ts`: fallback de pesquisa
-- [ ] Modificar `generate-article-structured/index.ts`: image_count dinâmico por modo
-- [ ] Modificar `generate-article-structured/index.ts`: respeitar generation_mode do payload
-- [ ] Modificar `ArticleGenerator.tsx`: incluir image_count, word_count, generation_mode
-- [ ] Deploy da edge function
+- [x] Modificar `generate-article-structured/index.ts`: fallback de pesquisa
+- [x] Modificar `generate-article-structured/index.ts`: image_count dinâmico por modo
+- [x] Modificar `generate-article-structured/index.ts`: respeitar generation_mode do payload
+- [x] Modificar `ArticleGenerator.tsx`: incluir image_count, word_count, generation_mode
+- [x] Deploy da edge function
 - [ ] Testar fluxo completo com mode=authority e webResearch=false
