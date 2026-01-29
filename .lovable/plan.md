@@ -1,366 +1,270 @@
 
-# Sprint 4: Interface de Geração Manual de Artigos
+
+# Melhorar Interface de Geração: Progress Bar + Etapas Visíveis
 
 ## Contexto Atual
 
-### O que já existe:
-| Recurso | Localização | Status |
-|---------|-------------|--------|
-| **Backend - Template Selector** | `supabase/functions/_shared/templateSelector.ts` | ✅ Implementado |
-| **Backend - Pipeline Stages** | `supabase/functions/_shared/pipelineStages.ts` | ✅ Implementado |
-| **Backend - E-E-A-T por Nicho** | `supabase/functions/_shared/geoWriterCore.ts` | ✅ Implementado |
-| **Backend - ALT de Imagens** | `supabase/functions/_shared/imageAltGenerator.ts` | ✅ Implementado |
-| **Frontend - Types** | `src/lib/article-engine/types.ts` | ✅ Implementado |
-| **Frontend - Templates** | `src/lib/article-engine/templates.ts` | ✅ Implementado |
-| **Frontend - Niches** | `src/lib/article-engine/niches.ts` | ✅ Implementado |
-| **Formulário Simples** | `src/components/client/SimpleArticleForm.tsx` | ✅ Existe (inspiração) |
-| **Editor de Artigos** | `src/pages/client/ClientArticleEditor.tsx` | ✅ Existe (1351 linhas) |
-| **Lista de Artigos** | `src/pages/client/ClientArticles.tsx` | ✅ Existe (487 linhas) |
-| **Edge Function** | `generate-article-structured` | ✅ Existe |
+### O que existe:
+| Componente | Localização | Status |
+|------------|-------------|--------|
+| `GenerationStepList` | `src/components/client/GenerationStepList.tsx` | ✅ Já existe (excelente!) |
+| `LiveArticlePreview` | `src/components/client/LiveArticlePreview.tsx` | ✅ Já existe |
+| `ArticleGenerationScreen` | `src/components/client/ArticleGenerationScreen.tsx` | ✅ Usa o padrão completo |
+| `ArticleGenerator` | `src/pages/client/ArticleGenerator.tsx` | ⚠️ Apenas loader simples |
+| `Progress` (shadcn) | `src/components/ui/progress.tsx` | ✅ Disponível |
 
-### Rotas Atuais (`/client/*`):
-- `/client/create` → `ClientArticleEditor` (formulário simplificado)
-- `/client/articles/:id/edit` → `ClientArticleEditor` (edição)
-- `/client/articles` → `ClientArticles` (listagem)
+### O Problema
 
----
+A página `ArticleGenerator.tsx` (Sprint 4) tem UX inferior:
+- Botão mostra apenas: `<Loader2 /> "Validando brief..."`
+- Sem progress bar visual
+- Sem lista de etapas
+- Sem feedback de tempo estimado
+- Sem timeout warning
 
-## Objetivo do Sprint 4
-
-Criar uma **interface avançada de geração** que expõe os novos recursos do Article Engine (seleção de template, E-E-A-T, preview de estrutura) para usuários avançados, mantendo o fluxo simples existente para usuários básicos.
+Enquanto `ArticleGenerationScreen.tsx` já implementa:
+- Progress bar animada com porcentagem
+- Lista de 7 etapas com ícones
+- Estados: pending/active/completed
+- Preview de conteúdo em tempo real
 
 ---
 
 ## Arquitetura da Solução
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE GERAÇÃO AVANÇADA                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  [1] /client/articles/generate                                      │
-│      └── ArticleGenerator.tsx (Formulário Avançado)                 │
-│          ├── Campos: keyword, cidade, estado, nicho                 │
-│          ├── Modo: Entry vs Authority                               │
-│          ├── Template: Auto ou Manual (5 opções)                    │
-│          ├── Toggles: Web Research, E-E-A-T, ALT de Imagens         │
-│          └── Botões: [PREVIEW TEMPLATE] [GERAR ARTIGO]              │
-│                                                                     │
-│  [2] Modal: ArticleTemplatePreviewModal                             │
-│      └── Mostra estrutura do template selecionado                   │
-│          ├── Template + Variante + Intent                           │
-│          ├── Word Count Range + H2 Count                            │
-│          ├── Lista de seções com targetWords                        │
-│          └── Reason (por que este template foi escolhido)           │
-│                                                                     │
-│  [3] /client/articles/:id/preview                                   │
-│      └── ArticlePreview.tsx (Preview Completo)                      │
-│          ├── Metadados: Word Count, SEO Score, H2 Count             │
-│          ├── Renderização: H1, TL;DR, Seções, FAQ, CTA              │
-│          ├── Imagens: ALT contextualizado                           │
-│          └── Ações: [EDITAR] [PUBLICAR] [REGENERAR]                 │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FLUXO PROPOSTO                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ArticleGenerator.tsx (formulário)                                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                                                                      │   │
+│  │  [Formulário de configuração]                                       │   │
+│  │                                                                      │   │
+│  │  QUANDO isGenerating = true:                                        │   │
+│  │  ┌──────────────────────────────────────────────────────────────┐   │   │
+│  │  │                                                               │   │   │
+│  │  │  ┌─────────────────────┐  ┌─────────────────────────────────┐│   │   │
+│  │  │  │ ArticleGeneration-  │  │  LiveArticlePreview             ││   │   │
+│  │  │  │ Progress (NOVO)     │  │  (streaming content)            ││   │   │
+│  │  │  │                     │  │                                  ││   │   │
+│  │  │  │ • Lista de etapas   │  │  • Título aparecendo            ││   │   │
+│  │  │  │ • Progress bar      │  │  • Conteúdo crescendo           ││   │   │
+│  │  │  │ • Tempo estimado    │  │  • Cursor piscando              ││   │   │
+│  │  │  │ • Timeout warning   │  │                                  ││   │   │
+│  │  │  └─────────────────────┘  └─────────────────────────────────┘│   │   │
+│  │  │                                                               │   │   │
+│  │  └──────────────────────────────────────────────────────────────┘   │   │
+│  │                                                                      │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Etapas de Implementação
+
+### 1. Criar Componente: `ArticleGenerationProgress.tsx`
+
+**Caminho:** `src/components/client/ArticleGenerationProgress.tsx`
+
+Componente dedicado para o `ArticleGenerator` que mostra:
+- Header com título e tempo estimado
+- Lista de 8 etapas do Article Engine
+- Progress bar com porcentagem
+- Timeout warning após 2 minutos
+
+**Etapas específicas do Article Engine:**
+
+```typescript
+const GENERATION_STAGES = [
+  { key: 'validating', label: 'Validando brief...', icon: CheckCircle, progress: 5 },
+  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 15 },
+  { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 25 },
+  { key: 'researching', label: 'Pesquisando na web...', icon: Search, progress: 45 },
+  { key: 'outlining', label: 'Gerando estrutura...', icon: ListTree, progress: 55 },
+  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 75 },
+  { key: 'optimizing', label: 'Otimizando SEO...', icon: Target, progress: 90 },
+  { key: 'done', label: 'Concluído!', icon: CheckCircle2, progress: 100 }
+];
+```
+
+---
+
+### 2. Refatorar `ArticleGenerator.tsx`
+
+#### 2.1 Adicionar Estados
+
+```typescript
+const [generationProgress, setGenerationProgress] = useState(0);
+const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+const timeoutWarningRef = useRef<NodeJS.Timeout | null>(null);
+```
+
+#### 2.2 Implementar Progresso Simulado
+
+Como a edge function não retorna progresso em tempo real via streaming, simular no cliente:
+
+```typescript
+const startProgressSimulation = () => {
+  const progressSequence = [
+    { stage: 'validating', delay: 500, progress: 5 },
+    { stage: 'classifying', delay: 1000, progress: 15 },
+    { stage: 'selecting', delay: 1500, progress: 25 },
+    { stage: 'researching', delay: 15000, progress: 45 }, // Perplexity demora mais
+    { stage: 'outlining', delay: 3000, progress: 55 },
+    { stage: 'writing', delay: 25000, progress: 75 }, // Escrita demora mais
+    { stage: 'optimizing', delay: 5000, progress: 90 }
+  ];
+  
+  let accumulatedDelay = 0;
+  progressSequence.forEach(({ stage, delay, progress }) => {
+    accumulatedDelay += delay;
+    setTimeout(() => {
+      if (isGenerating) {
+        setGenerationStage(stage);
+        setGenerationProgress(progress);
+      }
+    }, accumulatedDelay);
+  });
+};
+```
+
+#### 2.3 Timeout Warning
+
+```typescript
+useEffect(() => {
+  if (isGenerating) {
+    // Timeout warning após 2 minutos
+    timeoutWarningRef.current = setTimeout(() => {
+      setShowTimeoutWarning(true);
+      toast.warning(
+        'A geração está demorando mais que o esperado. Aguarde mais um momento...',
+        { duration: 8000 }
+      );
+    }, 120000);
+    
+    return () => {
+      if (timeoutWarningRef.current) {
+        clearTimeout(timeoutWarningRef.current);
+      }
+    };
+  }
+}, [isGenerating]);
+```
+
+#### 2.4 Substituir UI de Loading
+
+**Antes (linha 402-432):**
+```tsx
+{isGenerating ? (
+  <>
+    <Loader2 className="h-5 w-5 animate-spin" />
+    {getStageLabel()}
+  </>
+) : (
+  // ...
+)}
+```
+
+**Depois:**
+```tsx
+{isGenerating && (
+  <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
+    <div className="w-full max-w-lg">
+      <ArticleGenerationProgress
+        currentStage={generationStage}
+        progress={generationProgress}
+        showTimeoutWarning={showTimeoutWarning}
+        keyword={formData.keyword}
+      />
+    </div>
+  </div>
+)}
+```
+
+---
+
+### 3. Interface do Componente
+
+```typescript
+interface ArticleGenerationProgressProps {
+  currentStage: string | null;
+  progress: number;
+  showTimeoutWarning?: boolean;
+  keyword: string;
+}
+```
+
+---
+
+### 4. Visual do Componente
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  🧠 Gerando Artigo de Autoridade Local                     │
+│  "desentupidora em São Paulo"                              │
+│  ⏱️ Tempo estimado: 1-2 minutos                           │
+│                                                            │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45%                │
+│                                                            │
+│  ✓ Validando brief...                         ✓ Concluído │
+│  ✓ Classificando intenção...                  ✓ Concluído │
+│  ✓ Selecionando template...                   ✓ Concluído │
+│  ● Pesquisando na web...                    Em andamento...│
+│  ○ Gerando estrutura...                                    │
+│  ○ Escrevendo conteúdo...                                  │
+│  ○ Otimizando SEO...                                       │
+│                                                            │
+│  ⚠️ Geração está demorando mais que o esperado...          │
+│                                                            │
+│  [Cancelar]                                                │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Arquivos a Criar
 
-### 1. Página Principal: `ArticleGenerator.tsx`
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/client/ArticleGenerationProgress.tsx` | Componente de progresso com etapas |
 
-**Caminho:** `src/pages/client/ArticleGenerator.tsx`
+## Arquivos a Modificar
 
-**Estrutura do formulário:**
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│  🎯 Gerar Artigo de Autoridade Local                      │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  📝 Informações Básicas                                    │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │ Palavra-chave *                                      │ │
-│  │ [________________________________]                   │ │
-│  │                                                      │ │
-│  │ Cidade *              Estado                         │ │
-│  │ [______________]      [SP ▼]                        │ │
-│  │                                                      │ │
-│  │ Nicho *                                              │ │
-│  │ [Desentupidora (plumbing) ▼]                        │ │
-│  └──────────────────────────────────────────────────────┘ │
-│                                                            │
-│  ⚙️ Configurações Avançadas                                │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │ Modo de Geração                                      │ │
-│  │ ○ Entry (800-1.200 palavras)                        │ │
-│  │ ● Authority (1.200-3.000 palavras)                  │ │
-│  │                                                      │ │
-│  │ Template Estrutural                                  │ │
-│  │ ● Auto-selecionar (inteligente)                     │ │
-│  │ ○ Guia Completo                                     │ │
-│  │ ○ Perguntas & Respostas                             │ │
-│  │ ○ Comparativo Técnico                               │ │
-│  │ ○ Problema → Solução                                │ │
-│  │ ○ Educacional em Etapas                             │ │
-│  │                                                      │ │
-│  │ ☑ Usar Web Research (Perplexity)                    │ │
-│  │ ☑ Incluir E-E-A-T local                             │ │
-│  │ ☑ Gerar ALT de imagens contextualizado              │ │
-│  └──────────────────────────────────────────────────────┘ │
-│                                                            │
-│  [PREVIEW TEMPLATE]       [GERAR ARTIGO →]                │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Funcionalidades:**
-- Carrega blog atual via `useBlog()`
-- Lista de nichos do frontend (`NICHE_RULESETS`)
-- Lista de templates do frontend (`ARTICLE_TEMPLATES`)
-- Validação em tempo real (keyword >= 3 chars, cidade obrigatória)
-- Botão "Preview Template" abre modal com estrutura
-- Botão "Gerar Artigo" chama edge function
-
----
-
-### 2. Componente Modal: `ArticleTemplatePreviewModal.tsx`
-
-**Caminho:** `src/components/client/ArticleTemplatePreviewModal.tsx`
-
-**Estrutura:**
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│  📋 Preview: Template Selecionado                    [✕]  │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  🏷️ Template: Problema → Solução                          │
-│  📊 Variante: urgent_first                                │
-│  🎯 Intenção: transactional (urgência alta)               │
-│                                                            │
-│  ─────────────────────────────────────────────────────────│
-│                                                            │
-│  📈 Especificações                                         │
-│  • Word Count: 1.600 - 2.800 palavras                     │
-│  • Seções H2: 8 - 12                                      │
-│  • FAQ: 8-12 perguntas                                    │
-│                                                            │
-│  ─────────────────────────────────────────────────────────│
-│                                                            │
-│  📑 Estrutura das Seções                                   │
-│  1. Introdução (150 palavras)                             │
-│  2. Sinais de que você precisa [LISTA] (200)              │
-│  3. Por que isso acontece? (250)                          │
-│  4. Riscos de não resolver (200)                          │
-│  5. A solução: profissional (250)                         │
-│  6. Fazer sozinho ou contratar? [TABELA] (300)            │
-│  7. Como resolver passo a passo [LISTA] (350)             │
-│  8. Como prevenir [LISTA] (250)                           │
-│  9. Quando chamar profissional [E-E-A-T] (200)            │
-│  10. Serviço em {{cidade}} [GEO] (200)                    │
-│  11. Perguntas frequentes (300)                           │
-│  12. Precisa de ajuda urgente? [CTA] (150)                │
-│                                                            │
-│  ─────────────────────────────────────────────────────────│
-│                                                            │
-│  💡 Por que este template?                                 │
-│  "A keyword 'desentupidora urgente' indica intenção       │
-│   transacional com alta urgência."                        │
-│                                                            │
-│  [VOLTAR]                    [GERAR COM ESTE TEMPLATE]    │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Dados a buscar:**
-- Chama `selectTemplateForBrief()` do pipelineStages (via edge function)
-- Ou calcula localmente usando funções do frontend
-
----
-
-### 3. Página de Preview: `ArticleAdvancedPreview.tsx`
-
-**Caminho:** `src/pages/client/ArticleAdvancedPreview.tsx`
-
-**Estrutura:**
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│  ← Voltar    Desentupidora em São Paulo: Guia 2026        │
-│              [EDITAR] [PUBLICAR] [REGENERAR]               │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  📊 Metadados do Artigo                                    │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ Word Count     SEO Score    H2 Count    FAQ Count  │   │
-│  │ 2.450/2.800 ✅  85/100 ✅    10 ✅       10 ✅     │   │
-│  │                                                     │   │
-│  │ Imagens       E-E-A-T      Template                 │   │
-│  │ 8 ✅          Presente ✅   problem_solution ✅    │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  [RENDERIZAÇÃO DO ARTIGO]                                  │
-│                                                            │
-│  # Desentupidora em São Paulo: Solução Definitiva         │
-│                                                            │
-│  TL;DR:                                                    │
-│  • Atendimento 24h em toda São Paulo                      │
-│  • Orçamento gratuito e garantia de 90 dias               │
-│  • Equipamentos modernos e profissionais capacitados       │
-│                                                            │
-│  [Imagem Hero]                                             │
-│  ALT: "Equipe de desentupidora da Desentup Rápido..."     │
-│                                                            │
-│  ## Sinais de que você precisa de desentupidora           │
-│  ...conteúdo...                                            │
-│                                                            │
-│  ## Por que isso acontece?                                 │
-│  ...conteúdo...                                            │
-│                                                            │
-│  [FAQ section com JSON-LD]                                 │
-│                                                            │
-│  ## Próximo passo: solicite orçamento                     │
-│  [CTA com WhatsApp]                                        │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Rotas a Adicionar
-
-No arquivo `src/App.tsx`, adicionar dentro do `ClientRoutes`:
-
-```typescript
-// Geração avançada
-<Route path="articles/generate" element={<ArticleGenerator />} />
-
-// Preview do artigo gerado
-<Route path="articles/:id/preview" element={<ArticleAdvancedPreview />} />
-```
-
----
-
-## Componentes Auxiliares a Criar
-
-| Componente | Responsabilidade |
-|------------|------------------|
-| `ArticleGeneratorForm.tsx` | Formulário com campos e validação |
-| `TemplateSelectorRadio.tsx` | Radio buttons dos 5 templates |
-| `NicheSelectorDropdown.tsx` | Dropdown com 13 nichos |
-| `ArticleMetadataCard.tsx` | Card com métricas (word count, SEO) |
-| `OutlineSectionsList.tsx` | Lista de seções do outline |
-
----
-
-## Integração com Backend
-
-### Edge Function a chamar:
-
-```typescript
-const { data, error } = await supabase.functions.invoke('generate-article-structured', {
-  body: {
-    keyword: formData.keyword,
-    city: formData.city,
-    state: formData.state,
-    niche: formData.niche,
-    mode: formData.mode, // 'entry' | 'authority'
-    webResearch: formData.webResearch,
-    templateOverride: formData.template !== 'auto' ? formData.template : undefined,
-    blogId: blog.id,
-    businessName: businessProfile?.company_name,
-    businessPhone: businessProfile?.phone,
-    businessWhatsapp: businessProfile?.whatsapp,
-    // Flags do novo Article Engine
-    useEat: formData.eatInjection,
-    contextualAlt: formData.imageAlt
-  }
-});
-```
-
-### Preview de Template (Local):
-
-Para preview rápido sem chamar o backend, podemos calcular no frontend:
-
-```typescript
-import { classifyIntent } from '@/lib/article-engine/intent';
-import { ARTICLE_TEMPLATES, getWordCountRange } from '@/lib/article-engine/templates';
-
-const preview = {
-  intent: classifyIntent(keyword),
-  template: intent.recommendedTemplate,
-  specs: ARTICLE_TEMPLATES[intent.recommendedTemplate],
-  wordCountRange: getWordCountRange(specs, mode)
-};
-```
-
----
-
-## Estados de Loading
-
-```typescript
-const [isPreviewingTemplate, setIsPreviewingTemplate] = useState(false);
-const [isGenerating, setIsGenerating] = useState(false);
-const [generationProgress, setGenerationProgress] = useState(0);
-const [generationStage, setGenerationStage] = useState<string | null>(null);
-
-// Stages possíveis:
-// 'validating' → 'classifying' → 'researching' → 'outlining' → 'writing' → 'optimizing' → 'done'
-```
-
----
-
-## Validações
-
-### No Formulário:
-- ✅ Keyword: mínimo 3 caracteres
-- ✅ Cidade: obrigatória
-- ✅ Nicho: obrigatório (dropdown)
-- ✅ Modo: entry ou authority (radio)
-- ✅ Template: auto ou específico (radio)
-
-### Após Geração:
-- ✅ Word count dentro do range do template
-- ✅ H2 count dentro do range (8-12)
-- ✅ Keyword density 1-2%
-- ✅ E-E-A-T presente (se habilitado)
-- ✅ ALT de imagens contextualizado (se habilitado)
-
----
-
-## Checklist de Implementação
-
-### Arquivos a Criar:
-- [ ] `src/pages/client/ArticleGenerator.tsx`
-- [ ] `src/pages/client/ArticleAdvancedPreview.tsx`
-- [ ] `src/components/client/ArticleTemplatePreviewModal.tsx`
-- [ ] `src/components/client/ArticleGeneratorForm.tsx`
-- [ ] `src/components/client/TemplateSelectorRadio.tsx`
-- [ ] `src/components/client/NicheSelectorDropdown.tsx`
-- [ ] `src/components/client/ArticleMetadataCard.tsx`
-- [ ] `src/components/client/OutlineSectionsList.tsx`
-
-### Arquivos a Modificar:
-- [ ] `src/App.tsx` - adicionar rotas
-
-### Validações:
-- [ ] Formulário com validação em tempo real
-- [ ] Preview de template funciona localmente
-- [ ] Botão "Gerar" chama edge function corretamente
-- [ ] Preview do artigo renderiza markdown
-- [ ] Metadados são calculados corretamente
-- [ ] Botões EDITAR/PUBLICAR/REGENERAR funcionam
+| Arquivo | Modificações |
+|---------|--------------|
+| `src/pages/client/ArticleGenerator.tsx` | Adicionar overlay de progresso, simulação de etapas, timeout warning |
 
 ---
 
 ## Resumo Técnico
 
-| Item | Descrição |
-|------|-----------|
-| **Páginas novas** | 2 (`ArticleGenerator`, `ArticleAdvancedPreview`) |
-| **Componentes novos** | 6 (Modal, Form, Selectors, Cards) |
-| **Rotas novas** | 2 (`/articles/generate`, `/articles/:id/preview`) |
-| **Integração backend** | `generate-article-structured` + preview local |
-| **Dependências frontend** | `@/lib/article-engine/*` já existentes |
+| Item | Detalhes |
+|------|----------|
+| Componentes novos | 1 (`ArticleGenerationProgress`) |
+| Arquivos modificados | 1 (`ArticleGenerator.tsx`) |
+| Progresso simulado | Cliente simula etapas baseado em tempos médios |
+| Timeout warning | Após 120s mostra aviso |
+| Ícones usados | Brain, LayoutTemplate, Search, FileText, Target, CheckCircle |
+| Progress bar | Gradient animado com shimmer effect |
+| Cancellation | Botão para cancelar e voltar ao formulário |
+
+---
+
+## Checklist de Implementação
+
+- [ ] Criar `ArticleGenerationProgress.tsx` com etapas do Article Engine
+- [ ] Adicionar estados de progresso no `ArticleGenerator.tsx`
+- [ ] Implementar simulação de progresso sequencial
+- [ ] Adicionar timeout warning após 2 minutos
+- [ ] Adicionar overlay fullscreen durante geração
+- [ ] Adicionar botão de cancelar
+- [ ] Limpar timers ao desmontar/cancelar
+- [ ] Testar fluxo completo de geração
 
