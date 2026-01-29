@@ -5,7 +5,7 @@
  * Rota: /client/articles/generate
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ArticleTemplatePreviewModal } from '@/components/client/ArticleTemplatePreviewModal';
 import { NicheSelectorDropdown } from '@/components/client/NicheSelectorDropdown';
 import { TemplateSelectorRadio } from '@/components/client/TemplateSelectorRadio';
+import { ArticleGenerationProgress } from '@/components/client/ArticleGenerationProgress';
 import type { TemplateType, ArticleMode, NicheType } from '@/lib/article-engine/types';
 import { useQuery } from '@tanstack/react-query';
 
@@ -47,6 +48,17 @@ const STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
+
+// Progress simulation sequence
+const PROGRESS_SEQUENCE = [
+  { stage: 'validating', delay: 500, progress: 5 },
+  { stage: 'classifying', delay: 1000, progress: 15 },
+  { stage: 'selecting', delay: 1500, progress: 25 },
+  { stage: 'researching', delay: 15000, progress: 45 },
+  { stage: 'outlining', delay: 3000, progress: 55 },
+  { stage: 'writing', delay: 25000, progress: 75 },
+  { stage: 'optimizing', delay: 5000, progress: 90 }
 ];
 
 interface GeneratorFormData {
@@ -94,13 +106,75 @@ export default function ArticleGenerator() {
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+  
+  // Refs for timers
+  const progressTimersRef = useRef<NodeJS.Timeout[]>([]);
+  const timeoutWarningRef = useRef<NodeJS.Timeout | null>(null);
   
   // Validation
   const isValid = formData.keyword.trim().length >= 3 && formData.city.trim().length > 0;
   
+  // Clear all timers
+  const clearAllTimers = () => {
+    progressTimersRef.current.forEach(timer => clearTimeout(timer));
+    progressTimersRef.current = [];
+    if (timeoutWarningRef.current) {
+      clearTimeout(timeoutWarningRef.current);
+      timeoutWarningRef.current = null;
+    }
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => clearAllTimers();
+  }, []);
+  
+  // Timeout warning effect
+  useEffect(() => {
+    if (isGenerating) {
+      timeoutWarningRef.current = setTimeout(() => {
+        setShowTimeoutWarning(true);
+        toast.warning(
+          'A geração está demorando mais que o esperado. Aguarde mais um momento...',
+          { duration: 8000 }
+        );
+      }, 120000); // 2 minutes
+      
+      return () => {
+        if (timeoutWarningRef.current) {
+          clearTimeout(timeoutWarningRef.current);
+        }
+      };
+    }
+  }, [isGenerating]);
+  
+  const startProgressSimulation = () => {
+    let accumulatedDelay = 0;
+    
+    PROGRESS_SEQUENCE.forEach(({ stage, delay, progress }) => {
+      accumulatedDelay += delay;
+      const timer = setTimeout(() => {
+        setGenerationStage(stage);
+        setGenerationProgress(progress);
+      }, accumulatedDelay);
+      progressTimersRef.current.push(timer);
+    });
+  };
+  
   const handleInputChange = (field: keyof GeneratorFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+  
+  const handleCancel = () => {
+    clearAllTimers();
+    setIsGenerating(false);
+    setGenerationStage(null);
+    setGenerationProgress(0);
+    setShowTimeoutWarning(false);
+    toast.info('Geração cancelada');
   };
   
   const handleGenerate = async () => {
@@ -108,6 +182,11 @@ export default function ArticleGenerator() {
     
     setIsGenerating(true);
     setGenerationStage('validating');
+    setGenerationProgress(5);
+    setShowTimeoutWarning(false);
+    
+    // Start progress simulation
+    startProgressSimulation();
     
     try {
       // Prepare payload for edge function
@@ -126,8 +205,6 @@ export default function ArticleGenerator() {
         contextualAlt: formData.imageAlt
       };
       
-      setGenerationStage('classifying');
-      
       // Call edge function
       const { data, error } = await supabase.functions.invoke('generate-article-structured', {
         body: payload
@@ -141,7 +218,10 @@ export default function ArticleGenerator() {
         throw new Error('Artigo não foi criado corretamente');
       }
       
+      // Clear timers and set done
+      clearAllTimers();
       setGenerationStage('done');
+      setGenerationProgress(100);
       toast.success('Artigo gerado com sucesso!');
       
       // Navigate to preview
@@ -149,23 +229,13 @@ export default function ArticleGenerator() {
       
     } catch (err: any) {
       console.error('Generation error:', err);
+      clearAllTimers();
       toast.error(err.message || 'Erro ao gerar artigo');
     } finally {
       setIsGenerating(false);
       setGenerationStage(null);
-    }
-  };
-  
-  const getStageLabel = () => {
-    switch (generationStage) {
-      case 'validating': return 'Validando brief...';
-      case 'classifying': return 'Classificando intenção...';
-      case 'researching': return 'Pesquisando web...';
-      case 'outlining': return 'Gerando outline...';
-      case 'writing': return 'Escrevendo seções...';
-      case 'optimizing': return 'Otimizando SEO...';
-      case 'done': return 'Concluído!';
-      default: return 'Processando...';
+      setGenerationProgress(0);
+      setShowTimeoutWarning(false);
     }
   };
 
@@ -420,7 +490,7 @@ export default function ArticleGenerator() {
             {isGenerating ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                {getStageLabel()}
+                Gerando...
               </>
             ) : (
               <>
@@ -431,6 +501,21 @@ export default function ArticleGenerator() {
           </Button>
         </div>
       </div>
+      
+      {/* Generation Progress Overlay */}
+      {isGenerating && (
+        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="w-full max-w-lg">
+            <ArticleGenerationProgress
+              currentStage={generationStage}
+              progress={generationProgress}
+              showTimeoutWarning={showTimeoutWarning}
+              keyword={formData.keyword}
+              onCancel={handleCancel}
+            />
+          </div>
+        </div>
+      )}
       
       {/* Template Preview Modal */}
       <ArticleTemplatePreviewModal
