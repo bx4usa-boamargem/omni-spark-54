@@ -1337,6 +1337,9 @@ serve(async (req) => {
     // ============================================================================
     const geo_mode = true; // HARDCODED - NEVER false
     console.log(`[OMNICORE GEO V2.0] geo_mode=true FORCED - No article exists outside OmniCore GEO Writer`);
+    
+    // Log Article Engine parameters
+    console.log(`[Article Engine] Params: useEat=${useEat}, niche=${niche}, mode=${mode}, businessName=${businessName || 'not set'}`);
 
     // RESOLVER GENERATION_MODE: Respeitar request ou usar deep como padrão
     const generation_mode = requestedGenerationMode || 'deep';
@@ -1844,8 +1847,11 @@ REGRAS CRÍTICAS:
 
     let contentWithEat = seoOut.content || writerOut.content || '';
 
-    if (useEat && niche) {
+    console.log(`[Article Engine] E-E-A-T check: useEat=${useEat}, niche="${niche}", hasContent=${contentWithEat.length > 0}`);
+    
+    if (useEat && niche && niche !== 'default') {
       try {
+        console.log(`[Article Engine] Attempting E-E-A-T injection for niche: ${niche}`);
         const territoryName = territoryData?.official_name || 'Brasil';
         const neighborhoods = territoryData?.neighborhood_tags?.slice(0, 2) || [];
         
