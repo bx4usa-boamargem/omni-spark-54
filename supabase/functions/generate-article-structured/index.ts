@@ -1495,13 +1495,19 @@ serve(async (req) => {
       isDefaultStrategy = resolution.isDefault;
     } else {
       clientStrategy = {
-        dor_principal: '',
-        empresa_nome: 'a empresa',
-        empresa_proposta: 'soluções para seu negócio',
-        segmentos_atendidos: [],
-        dores_do_cliente: [],
-        cta_principal: 'Fale conosco',
-        exemplos_texto_marca: []
+        empresa_nome: null,
+        tipo_negocio: 'serviços',
+        regiao_atuacao: 'Brasil',
+        tipo_publico: 'B2B/B2C',
+        nivel_consciencia: 'consciente_problema',
+        nivel_conhecimento: 'iniciante',
+        dor_principal: null,
+        desejo_principal: null,
+        o_que_oferece: null,
+        principais_beneficios: null,
+        diferenciais: null,
+        acao_desejada: 'entre em contato',
+        canal_cta: 'WhatsApp'
       };
     }
 
