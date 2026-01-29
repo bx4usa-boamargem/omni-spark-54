@@ -1,245 +1,180 @@
 
+# Adicionar Interface de Progresso ao ClientArticleEditor
 
-# Melhorar Interface de Geração: Progress Bar + Etapas Visíveis
+## Problema Identificado
 
-## Contexto Atual
+O fluxo de conversão de oportunidades usa a rota `/client/create` que renderiza `ClientArticleEditor.tsx`. Este componente usa uma interface de progresso simples (`GenerationProgress` do `src/components/seo/GenerationProgress.tsx`) com apenas 4 etapas genéricas.
 
-### O que existe:
-| Componente | Localização | Status |
-|------------|-------------|--------|
-| `GenerationStepList` | `src/components/client/GenerationStepList.tsx` | ✅ Já existe (excelente!) |
-| `LiveArticlePreview` | `src/components/client/LiveArticlePreview.tsx` | ✅ Já existe |
-| `ArticleGenerationScreen` | `src/components/client/ArticleGenerationScreen.tsx` | ✅ Usa o padrão completo |
-| `ArticleGenerator` | `src/pages/client/ArticleGenerator.tsx` | ⚠️ Apenas loader simples |
-| `Progress` (shadcn) | `src/components/ui/progress.tsx` | ✅ Disponível |
+O novo componente `ArticleGenerationProgress.tsx` com 7 etapas detalhadas, shimmer effect e timeout warning foi implementado apenas no `ArticleGenerator.tsx` (rota `/client/articles/generate`).
 
-### O Problema
+## Solução
 
-A página `ArticleGenerator.tsx` (Sprint 4) tem UX inferior:
-- Botão mostra apenas: `<Loader2 /> "Validando brief..."`
-- Sem progress bar visual
-- Sem lista de etapas
-- Sem feedback de tempo estimado
-- Sem timeout warning
-
-Enquanto `ArticleGenerationScreen.tsx` já implementa:
-- Progress bar animada com porcentagem
-- Lista de 7 etapas com ícones
-- Estados: pending/active/completed
-- Preview de conteúdo em tempo real
+Integrar o novo componente `ArticleGenerationProgress` também no `ClientArticleEditor.tsx` para que TODOS os fluxos de geração tenham a mesma UX premium.
 
 ---
 
-## Arquitetura da Solução
+## Arquivos a Modificar
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FLUXO PROPOSTO                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ArticleGenerator.tsx (formulário)                                          │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                                                                      │   │
-│  │  [Formulário de configuração]                                       │   │
-│  │                                                                      │   │
-│  │  QUANDO isGenerating = true:                                        │   │
-│  │  ┌──────────────────────────────────────────────────────────────┐   │   │
-│  │  │                                                               │   │   │
-│  │  │  ┌─────────────────────┐  ┌─────────────────────────────────┐│   │   │
-│  │  │  │ ArticleGeneration-  │  │  LiveArticlePreview             ││   │   │
-│  │  │  │ Progress (NOVO)     │  │  (streaming content)            ││   │   │
-│  │  │  │                     │  │                                  ││   │   │
-│  │  │  │ • Lista de etapas   │  │  • Título aparecendo            ││   │   │
-│  │  │  │ • Progress bar      │  │  • Conteúdo crescendo           ││   │   │
-│  │  │  │ • Tempo estimado    │  │  • Cursor piscando              ││   │   │
-│  │  │  │ • Timeout warning   │  │                                  ││   │   │
-│  │  │  └─────────────────────┘  └─────────────────────────────────┘│   │   │
-│  │  │                                                               │   │   │
-│  │  └──────────────────────────────────────────────────────────────┘   │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/pages/client/ClientArticleEditor.tsx` | Substituir `GenerationProgress` pelo `ArticleGenerationProgress` |
+
+---
+
+## Implementação Detalhada
+
+### 1. Adicionar Import do Novo Componente
+
+No `ClientArticleEditor.tsx`, adicionar:
+```typescript
+import { ArticleGenerationProgress } from '@/components/client/ArticleGenerationProgress';
 ```
 
----
+### 2. Adicionar Estados Necessários
 
-## Etapas de Implementação
-
-### 1. Criar Componente: `ArticleGenerationProgress.tsx`
-
-**Caminho:** `src/components/client/ArticleGenerationProgress.tsx`
-
-Componente dedicado para o `ArticleGenerator` que mostra:
-- Header com título e tempo estimado
-- Lista de 8 etapas do Article Engine
-- Progress bar com porcentagem
-- Timeout warning após 2 minutos
-
-**Etapas específicas do Article Engine:**
-
+O componente já possui `generationProgress` e `generationStage`. Adicionar apenas:
 ```typescript
-const GENERATION_STAGES = [
-  { key: 'validating', label: 'Validando brief...', icon: CheckCircle, progress: 5 },
-  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 15 },
-  { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 25 },
-  { key: 'researching', label: 'Pesquisando na web...', icon: Search, progress: 45 },
-  { key: 'outlining', label: 'Gerando estrutura...', icon: ListTree, progress: 55 },
-  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 75 },
-  { key: 'optimizing', label: 'Otimizando SEO...', icon: Target, progress: 90 },
-  { key: 'done', label: 'Concluído!', icon: CheckCircle2, progress: 100 }
-];
-```
-
----
-
-### 2. Refatorar `ArticleGenerator.tsx`
-
-#### 2.1 Adicionar Estados
-
-```typescript
-const [generationProgress, setGenerationProgress] = useState(0);
 const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
-const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
 const timeoutWarningRef = useRef<NodeJS.Timeout | null>(null);
 ```
 
-#### 2.2 Implementar Progresso Simulado
-
-Como a edge function não retorna progresso em tempo real via streaming, simular no cliente:
-
-```typescript
-const startProgressSimulation = () => {
-  const progressSequence = [
-    { stage: 'validating', delay: 500, progress: 5 },
-    { stage: 'classifying', delay: 1000, progress: 15 },
-    { stage: 'selecting', delay: 1500, progress: 25 },
-    { stage: 'researching', delay: 15000, progress: 45 }, // Perplexity demora mais
-    { stage: 'outlining', delay: 3000, progress: 55 },
-    { stage: 'writing', delay: 25000, progress: 75 }, // Escrita demora mais
-    { stage: 'optimizing', delay: 5000, progress: 90 }
-  ];
-  
-  let accumulatedDelay = 0;
-  progressSequence.forEach(({ stage, delay, progress }) => {
-    accumulatedDelay += delay;
-    setTimeout(() => {
-      if (isGenerating) {
-        setGenerationStage(stage);
-        setGenerationProgress(progress);
-      }
-    }, accumulatedDelay);
-  });
-};
-```
-
-#### 2.3 Timeout Warning
+### 3. Adicionar Efeito de Timeout Warning
 
 ```typescript
 useEffect(() => {
   if (isGenerating) {
-    // Timeout warning após 2 minutos
     timeoutWarningRef.current = setTimeout(() => {
       setShowTimeoutWarning(true);
       toast.warning(
         'A geração está demorando mais que o esperado. Aguarde mais um momento...',
         { duration: 8000 }
       );
-    }, 120000);
+    }, 120000); // 2 minutos
     
     return () => {
       if (timeoutWarningRef.current) {
         clearTimeout(timeoutWarningRef.current);
+        setShowTimeoutWarning(false);
       }
     };
+  } else {
+    setShowTimeoutWarning(false);
   }
 }, [isGenerating]);
 ```
 
-#### 2.4 Substituir UI de Loading
+### 4. Criar Função de Cancelamento
 
-**Antes (linha 402-432):**
-```tsx
-{isGenerating ? (
-  <>
-    <Loader2 className="h-5 w-5 animate-spin" />
-    {getStageLabel()}
-  </>
-) : (
-  // ...
-)}
+```typescript
+const handleCancelGeneration = () => {
+  generationLockRef.current = false;
+  setIsGenerating(false);
+  setPhase('form');
+  setGenerationStage(null);
+  setGenerationProgress(0);
+  setShowTimeoutWarning(false);
+  if (timeoutWarningRef.current) {
+    clearTimeout(timeoutWarningRef.current);
+  }
+  toast.info('Geração cancelada');
+};
 ```
 
-**Depois:**
+### 5. Mapear Stages para o Novo Formato
+
+O `ClientArticleEditor` usa stages diferentes (`'analyzing' | 'structuring' | 'generating' | 'finalizing'`). Mapear para os stages do Article Engine:
+
+```typescript
+const mapStageToArticleEngine = (stage: GenerationStage): string | null => {
+  const mapping: Record<string, string> = {
+    'analyzing': 'validating',
+    'structuring': 'researching',
+    'generating': 'writing',
+    'finalizing': 'optimizing'
+  };
+  return stage ? mapping[stage] || stage : null;
+};
+```
+
+### 6. Substituir UI de Geração
+
+Linha ~1237-1251: Substituir o card simples pelo novo overlay:
+
+**ANTES:**
 ```tsx
-{isGenerating && (
-  <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
-    <div className="w-full max-w-lg">
-      <ArticleGenerationProgress
-        currentStage={generationStage}
-        progress={generationProgress}
-        showTimeoutWarning={showTimeoutWarning}
-        keyword={formData.keyword}
-      />
-    </div>
+{phase === 'generating' && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+    <Card className="h-full flex flex-col">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          Gerando Artigo...
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 flex flex-col justify-center">
+        <GenerationProgress stage={generationStage} progress={generationProgress} isActive={isGenerating} />
+      </CardContent>
+    </Card>
+    <ArticlePreview article={null} streamingText={streamingText} isStreaming={isGenerating} />
   </div>
 )}
 ```
 
----
-
-### 3. Interface do Componente
-
-```typescript
-interface ArticleGenerationProgressProps {
-  currentStage: string | null;
-  progress: number;
-  showTimeoutWarning?: boolean;
-  keyword: string;
-}
+**DEPOIS:**
+```tsx
+{phase === 'generating' && (
+  <>
+    {/* Overlay com progresso detalhado */}
+    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="w-full max-w-lg">
+        <ArticleGenerationProgress
+          currentStage={mapStageToArticleEngine(generationStage)}
+          progress={generationProgress}
+          showTimeoutWarning={showTimeoutWarning}
+          keyword={title || themeParam || 'Artigo'}
+          onCancel={handleCancelGeneration}
+        />
+      </div>
+    </div>
+    
+    {/* Preview em background (opcional - pode ser removido) */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full opacity-30 pointer-events-none">
+      <Card className="h-full" />
+      <ArticlePreview article={null} streamingText={streamingText} isStreaming={isGenerating} />
+    </div>
+  </>
+)}
 ```
 
 ---
 
-### 4. Visual do Componente
+## Fluxo Após Implementação
 
 ```text
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  🧠 Gerando Artigo de Autoridade Local                     │
-│  "desentupidora em São Paulo"                              │
-│  ⏱️ Tempo estimado: 1-2 minutos                           │
-│                                                            │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45%                │
-│                                                            │
-│  ✓ Validando brief...                         ✓ Concluído │
-│  ✓ Classificando intenção...                  ✓ Concluído │
-│  ✓ Selecionando template...                   ✓ Concluído │
-│  ● Pesquisando na web...                    Em andamento...│
-│  ○ Gerando estrutura...                                    │
-│  ○ Escrevendo conteúdo...                                  │
-│  ○ Otimizando SEO...                                       │
-│                                                            │
-│  ⚠️ Geração está demorando mais que o esperado...          │
-│                                                            │
-│  [Cancelar]                                                │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│              QUALQUER FLUXO DE GERAÇÃO                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Rotas que ativam a UI de progresso:                            │
+│                                                                  │
+│  /client/create?quick=true&fromOpportunity=...                  │
+│  /client/create?quick=true&theme=...                            │
+│  /client/articles/:id/edit (status='generating')                │
+│  /client/articles/generate                                       │
+│                                                                  │
+│  TODAS usam:                                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  ArticleGenerationProgress                                │   │
+│  │                                                           │   │
+│  │  • 7 etapas do Article Engine                            │   │
+│  │  • Progress bar com shimmer                              │   │
+│  │  • Ícones de status (✓, loading, pending)                │   │
+│  │  • Timeout warning após 2 min                            │   │
+│  │  • Botão cancelar                                         │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/client/ArticleGenerationProgress.tsx` | Componente de progresso com etapas |
-
-## Arquivos a Modificar
-
-| Arquivo | Modificações |
-|---------|--------------|
-| `src/pages/client/ArticleGenerator.tsx` | Adicionar overlay de progresso, simulação de etapas, timeout warning |
 
 ---
 
@@ -247,24 +182,22 @@ interface ArticleGenerationProgressProps {
 
 | Item | Detalhes |
 |------|----------|
-| Componentes novos | 1 (`ArticleGenerationProgress`) |
-| Arquivos modificados | 1 (`ArticleGenerator.tsx`) |
-| Progresso simulado | Cliente simula etapas baseado em tempos médios |
-| Timeout warning | Após 120s mostra aviso |
-| Ícones usados | Brain, LayoutTemplate, Search, FileText, Target, CheckCircle |
-| Progress bar | Gradient animado com shimmer effect |
-| Cancellation | Botão para cancelar e voltar ao formulário |
+| Arquivos modificados | 1 (`ClientArticleEditor.tsx`) |
+| Imports adicionados | 1 (`ArticleGenerationProgress`) |
+| Estados adicionados | 2 (`showTimeoutWarning`, `timeoutWarningRef`) |
+| Funções adicionadas | 2 (`handleCancelGeneration`, `mapStageToArticleEngine`) |
+| Effects adicionados | 1 (timeout warning) |
+| UI substituída | Seção `phase === 'generating'` |
 
 ---
 
 ## Checklist de Implementação
 
-- [ ] Criar `ArticleGenerationProgress.tsx` com etapas do Article Engine
-- [ ] Adicionar estados de progresso no `ArticleGenerator.tsx`
-- [ ] Implementar simulação de progresso sequencial
-- [ ] Adicionar timeout warning após 2 minutos
-- [ ] Adicionar overlay fullscreen durante geração
-- [ ] Adicionar botão de cancelar
-- [ ] Limpar timers ao desmontar/cancelar
-- [ ] Testar fluxo completo de geração
-
+- [ ] Adicionar import do `ArticleGenerationProgress`
+- [ ] Adicionar estados `showTimeoutWarning` e `timeoutWarningRef`
+- [ ] Adicionar função `mapStageToArticleEngine`
+- [ ] Adicionar função `handleCancelGeneration`
+- [ ] Adicionar `useEffect` para timeout warning
+- [ ] Substituir UI do `phase === 'generating'`
+- [ ] Testar fluxo de conversão de oportunidade
+- [ ] Verificar timeout warning após 2 minutos
