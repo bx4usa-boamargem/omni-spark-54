@@ -1,84 +1,106 @@
 
-## Objetivo (rollback total imediato)
-Restaurar o projeto para a **última versão estável** (antes das mudanças recentes), de forma segura e rápida, usando os recursos de **Histórico/Restore** do Lovable (em vez de comandos Git).
+# Desabilitar Web Research Completamente (Temporário)
+
+## Problema
+
+A geração de artigos está travando em "Pesquisando na web..." por mais de 2 minutos porque a etapa de research (Perplexity + analyze-serp) está fazendo timeout antes do fallback entrar em ação.
+
+## Solução
+
+Pular completamente a chamada `runResearchStage` e criar o pacote de pesquisa vazio imediatamente, sem tentar Perplexity.
 
 ---
 
-## Por que não vou executar “git reset --hard” aqui
-No ambiente do Lovable eu não tenho acesso para rodar comandos Git/CLI nem fazer force-push. O caminho correto e mais seguro é o **History (Histórico de edições)** do Lovable, que é justamente feito para rollback rápido.
+## Arquivo a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `supabase/functions/generate-article-structured/index.ts` | Comentar chamada ao `runResearchStage` e usar fallback direto |
 
 ---
 
-## Passo a passo do rollback total (o que você faz agora)
-### 1) Abrir o Histórico
-1. No topo do chat, clique em **History** (Histórico).
-2. Você verá uma lista de edições/alterações (como “Improve AI tool call resilience”, “Emergency rollback”, etc.).
+## Implementação
 
-### 2) Encontrar a versão estável
-Procure a última edição onde o sistema “estava bom”, tipicamente:
-- Antes de qualquer mudança relacionada a:
-  - “Improve AI tool call resilience”
-  - “Fallback JSON extraction”
-  - “Emergency rollback”
-  - Alterações de geração de imagens/score recentes
+Modificar o bloco de research (linhas 1388-1420) para pular completamente a chamada ao Perplexity:
 
-Dica prática:
-- Abra 1–3 versões anteriores em “Preview” (quando disponível) para checar rapidamente se o comportamento voltou.
+```typescript
+// ============================================================================
+// STAGE 1 (RESEARCH - TEMPORARIAMENTE DESABILITADO)
+// ============================================================================
+let researchPackage: ResearchPackage;
 
-### 3) Restaurar a versão
-- Clique em **Restore** na versão estável escolhida.
-- Aguarde o rebuild/atualização do preview.
+// ⚠️ TEMPORÁRIO: Web research desabilitado para evitar timeouts
+// TODO: Reativar quando Perplexity estiver estável
+console.log('[TEMPORARY] Web research DISABLED - using empty package immediately');
 
-### 4) Hard refresh / cache
-Após o restore:
-- Faça **hard refresh** (Ctrl+Shift+R / Cmd+Shift+R).
-- Se ainda estiver estranho, abra em **aba anônima** para evitar cache e localStorage interferindo.
+researchPackage = {
+  geo: { 
+    facts: [], 
+    trends: [],
+    sources: [], 
+    rawQuery: primaryKeyword,
+    fetchedAt: new Date().toISOString()
+  },
+  serp: { commonTerms: [], topTitles: [], contentGaps: [], averages: {} },
+  sources: [],
+  generatedAt: new Date().toISOString(),
+};
 
----
+await logStage(supabase, blog_id, 'research', 'skipped', 'empty-package', true, 0, { 
+  reason: 'TEMPORARY_DISABLED' 
+});
 
-## Validação pós-rollback (checklist objetivo)
-### A) Confirmação visual de “1 editor”
-- Navegue pelo fluxo de artigos e confirme se existe **um único caminho principal** para editar artigos (sem duplicidade/confusão).
+console.log('[TEMPORARY] Proceeding with empty research package');
 
-### B) Teste de geração (quando houver crédito de IA)
-- Gere 1 artigo teste (ex.: “Dedetização em [cidade]”).
-- Verifique:
-  - Estrutura (H2/H3 coerentes, metas SEO dentro dos limites)
-  - Presença de imagens conforme esperado
-  - E-E-A-T presente quando habilitado
-  - Tempo total “normal” (aprox. esperado do seu baseline)
-
-> Observação crítica: se o aviso “AI balance acabou” continuar, a geração não vai executar (não é bug do código). Ainda assim, o rollback garante que, ao retornar os créditos, o comportamento volte ao baseline estável.
-
-### C) Conferência rápida do que deve ter voltado
-Após o restore, o estado “estável” deve refletir principalmente nestes pontos:
-- `supabase/functions/generate-article-structured/index.ts` sem as mudanças problemáticas (retry/fallback agressivo etc.)
-- `src/pages/client/ArticleGenerator.tsx` e/ou fluxo de geração consistente (sem defaults quebrados)
-- Fluxo do editor principal sem duplicidade
-
----
-
-## Se o problema “2 editores” persistir mesmo após rollback
-Isso normalmente indica que:
-- O “editor duplicado” já existia antes (não era só mudança recente), ou
-- Há rotas/menu apontando para duas telas diferentes, e o rollback escolhido ainda não era o ponto “antes” disso.
-
-Ação nesse caso:
-1. Volte ao History e teste **mais 1–3 versões ainda mais antigas**.
-2. Anote quais rotas aparecem no menu para “Editar artigo” (ex.: /client/articles/... vs /client/editor/...) para eu mapear com precisão depois.
+// CÓDIGO ORIGINAL COMENTADO:
+// try {
+//   researchPackage = await runResearchStage({
+//     supabase,
+//     blogId: blog_id!,
+//     theme,
+//     primaryKeyword,
+//     territoryName: territoryData?.official_name || null,
+//     territoryData: (territoryData as unknown as GeoTerritoryData) || null,
+//   });
+// } catch (e) {
+//   ... fallback code ...
+// }
+```
 
 ---
 
-## Plano de contingência (se não achar a versão estável rapidamente)
-1. Escolher uma versão de ~48h atrás (como você sugeriu).
-2. Restaurar.
-3. Confirmar rapidamente se o menu e as rotas do editor voltaram ao normal.
-4. Só então testar geração (quando o crédito permitir).
+## Resultado Esperado
+
+| Antes | Depois |
+|-------|--------|
+| Trava 2+ min tentando Perplexity | Pula imediatamente para geração |
+| Timeout infinito | Geração em ~30-60 segundos |
+| Erro 424 se Perplexity falhar | Sempre gera (sem fontes externas) |
 
 ---
 
-## Entregáveis (resultado esperado após concluir)
-- Projeto restaurado para uma edição estável
-- Interface sem “confusão de 2 editores” (ou, no mínimo, reduzida ao comportamento antigo)
-- Fluxo de geração e preview no baseline anterior assim que a IA estiver disponível
+## Impacto Temporário
 
+- Artigos gerados **sem** pesquisa web (fatos, trends, fontes)
+- E-E-A-T e ALT contextual continuam funcionando normalmente
+- Template selection e estrutura funcionam normalmente
+- Nicho e modo (Entry/Authority) funcionam normalmente
+
+---
+
+## Próximos Passos (Após Estabilizar)
+
+1. Investigar timeout do Perplexity
+2. Adicionar timeout explícito de 30s na chamada
+3. Reativar research com timeout seguro
+4. Ou: adicionar toggle no frontend para "usar pesquisa web" (já existe mas não está funcionando)
+
+---
+
+## Checklist
+
+- [ ] Comentar chamada ao `runResearchStage`
+- [ ] Criar pacote de pesquisa vazio imediatamente
+- [ ] Log indicando que research está temporariamente desabilitado
+- [ ] Deploy da edge function
+- [ ] Testar geração (deve completar em ~1 minuto)

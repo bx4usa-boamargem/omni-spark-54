@@ -58,13 +58,6 @@ import {
   type GeneratedAlt
 } from '../_shared/imageAltGenerator.ts';
 
-import { 
-  generateArticleImages,
-  generateCoverImage,
-  type ImageGenerationRequest,
-  type GeneratedImage
-} from '../_shared/imageGenerator.ts';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -84,8 +77,7 @@ interface ArticleData {
   reading_time?: number;
   featured_image_url?: string | null;
   featured_image_alt?: string | null;
-  image_prompts?: Array<{ context: string; prompt: string; after_section: number; url?: string | null; alt?: string; generated_by?: string }>;
-  content_images?: Array<{ url: string; context: string; alt: string; after_section: number }> | null;
+  image_prompts?: Array<{ context: string; prompt: string; after_section: number }>;
   // deno-lint-ignore no-explicit-any
   images?: any;
 }
@@ -346,9 +338,6 @@ async function callLovableJsonTool(params: {
 }): Promise<{ arguments: Record<string, unknown>; usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }> {
   const { url, apiKey, model, system, user, toolName, toolSchema, temperature = 0.4 } = params;
 
-  // SIMPLE DIRECT CALL - NO RETRY (rollback)
-  console.log(`[AI] callLovableJsonTool for tool: ${toolName}`);
-  
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -374,18 +363,13 @@ async function callLovableJsonTool(params: {
 
   const rawText = await res.text();
   const data = safeJsonParse<any>(rawText);
-  
-  // Primary path: tool call response
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-  if (toolCall?.function?.arguments) {
-    console.log(`[AI] Tool call received successfully`);
-    const parsedArgs = parseArticleJSON(toolCall.function.arguments);
-    return { arguments: parsedArgs, usage: data.usage };
+  if (!toolCall?.function?.arguments) {
+    throw new Error('AI_OUTPUT_INVALID: missing tool call arguments');
   }
-  
-  // If no tool call, throw error immediately (no fallback)
-  console.error(`[AI] Missing tool call arguments in response`);
-  throw new Error('AI_OUTPUT_INVALID: missing tool call arguments');
+
+  const parsedArgs = parseArticleJSON(toolCall.function.arguments);
+  return { arguments: parsedArgs, usage: data.usage };
 }
 
 async function callLovableQa(params: {
@@ -603,17 +587,15 @@ async function persistArticleToDb(
     
     // UPDATE existing article instead of creating duplicate
     // Convert image_prompts to content_images format for persistence
-    // Use generated URLs if available
-    const contentImages = (articleData.content_images || (articleData.image_prompts || []).map((prompt: any, index: number) => ({
+    const contentImages = (articleData.image_prompts || []).map((prompt: any, index: number) => ({
       context: prompt.context || `Imagem ${index + 1}`,
       prompt: prompt.prompt || '',
       alt: prompt.alt || prompt.context || `Imagem do artigo`,
       title: prompt.title || '',
       caption: prompt.caption || '',
       after_section: prompt.after_section || index + 1,
-      url: prompt.url || null, // Use generated URL if available
-      generated_by: prompt.generated_by || 'none'
-    })));
+      url: null // URL será preenchido quando imagem for gerada
+    }));
     
     console.log(`[PERSIST] Saving ${contentImages.length} content_images for article update`);
     
@@ -656,16 +638,14 @@ async function persistArticleToDb(
   }
   
   // Convert image_prompts to content_images format for persistence
-  // Use generated URLs if available, or use content_images directly
-  const contentImagesForInsert = articleData.content_images || (articleData.image_prompts || []).map((prompt: any, index: number) => ({
+  const contentImagesForInsert = (articleData.image_prompts || []).map((prompt: any, index: number) => ({
     context: prompt.context || `Imagem ${index + 1}`,
     prompt: prompt.prompt || '',
     alt: prompt.alt || prompt.context || `Imagem do artigo`,
     title: prompt.title || '',
     caption: prompt.caption || '',
     after_section: prompt.after_section || index + 1,
-    url: prompt.url || null, // Use generated URL if available
-    generated_by: prompt.generated_by || 'none'
+    url: null // URL será preenchido quando imagem for gerada
   }));
   
   console.log(`[PERSIST] Saving ${contentImagesForInsert.length} content_images for new article`);
@@ -1344,9 +1324,9 @@ serve(async (req) => {
       google_place,
       // V2.1: Article Engine fields (Sprint 4 Integration)
       templateOverride,
-      useEat = true,  // ROLLBACK: Default to true for E-E-A-T injection
-      contextualAlt = true,  // ROLLBACK: Default to true for image generation
-      niche = 'pest_control',  // ROLLBACK: Default to pest_control, NOT 'default'
+      useEat = false,
+      contextualAlt = false,
+      niche = 'default',
       mode = 'authority',
       businessName,
       businessWhatsapp
@@ -1952,179 +1932,6 @@ REGRAS CRÍTICAS:
     }
 
     // ============================================================================
-    // V2.2: AI IMAGE GENERATION - ALWAYS generate images from prompts
-    // FIX: Removida condição `&& contextualAlt` que bloqueava geração
-    // ============================================================================
-    
-    let generatedImages: GeneratedImage[] = [];
-    let featuredImageUrl: string | null = null;
-    
-    // SEMPRE gerar imagens quando houver prompts (independente de toggles)
-    if (processedImagePrompts.length > 0) {
-      try {
-        console.log(`[Images] FORÇANDO geração de ${processedImagePrompts.length} imagens...`);
-        
-        // Prepare article slug for image naming
-        const articleSlug = (seoOut.title || writerOut.title || theme)
-          .toString()
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, '-')
-          .substring(0, 50);
-        
-        // Build image generation requests with niche for style optimization
-        const imageRequests: ImageGenerationRequest[] = processedImagePrompts.map((prompt: any) => ({
-          prompt: prompt.prompt,
-          context: prompt.context || 'article-image',
-          alt: prompt.alt || '',
-          aspectRatio: '16:9' as const,
-          niche: niche || undefined  // Pass niche for style optimization
-        }));
-        
-        // TIMEOUT: 90s para geração de imagens (evita travar o artigo)
-        const IMAGE_GENERATION_TIMEOUT = 90000;
-        
-        const imagePromise = generateArticleImages(
-          imageRequests,
-          blog_id!,
-          articleSlug
-        );
-        
-        const timeoutPromise = new Promise<GeneratedImage[]>((_, reject) =>
-          setTimeout(() => reject(new Error('IMAGE_TIMEOUT: Geração excedeu 90s')), IMAGE_GENERATION_TIMEOUT)
-        );
-        
-        try {
-          // Race: geração vs timeout
-          generatedImages = await Promise.race([imagePromise, timeoutPromise]);
-          
-          // Update processedImagePrompts with generated URLs
-          processedImagePrompts = processedImagePrompts.map((prompt: any, idx: number) => ({
-            ...prompt,
-            url: generatedImages[idx]?.url || null,
-            generated_by: generatedImages[idx]?.generated_by || 'none'
-          }));
-          
-          // Set featured image as first generated image
-          if (generatedImages.length > 0 && generatedImages[0].url) {
-            featuredImageUrl = generatedImages[0].url;
-            console.log(`[Images] Featured image URL: ${featuredImageUrl}`);
-          }
-          
-          const aiCount = generatedImages.filter(g => g.generated_by === 'lovable_ai').length;
-          console.log(`[Images] ✅ Geração completa: ${aiCount} AI / ${generatedImages.length - aiCount} fallback`);
-          
-        } catch (raceError) {
-          // Timeout ou erro na geração - usar fallback Unsplash
-          console.warn(`[Images] Timeout/erro, usando Unsplash fallback:`, raceError);
-          
-          // GARANTIR que SEMPRE tem URLs (Unsplash)
-          const fallbackTerritoryName = territoryData?.official_name || 'brazil';
-          generatedImages = processedImagePrompts.map((prompt: any, idx: number) => {
-            const keywords = [
-              prompt.context || 'business',
-              niche || 'professional',
-              fallbackTerritoryName
-            ].filter(Boolean).join(',');
-            
-            const seed = `${blog_id}-${idx}-${Date.now()}`;
-            
-            return {
-              url: `https://source.unsplash.com/1024x768/?${encodeURIComponent(keywords)}&sig=${seed}`,
-              prompt: prompt.prompt || '',
-              alt: prompt.alt || `Imagem ${idx + 1}`,
-              context: prompt.context || 'business',
-              generated_by: 'unsplash_fallback' as const
-            };
-          });
-          
-          // Update processedImagePrompts with fallback URLs
-          processedImagePrompts = processedImagePrompts.map((prompt: any, idx: number) => ({
-            ...prompt,
-            url: generatedImages[idx]?.url || null,
-            generated_by: 'unsplash_fallback'
-          }));
-          
-          // Set featured image from fallback
-          if (generatedImages.length > 0) {
-            featuredImageUrl = generatedImages[0].url;
-          }
-          
-          console.log(`[Images] ✅ Fallback Unsplash aplicado: ${generatedImages.length} imagens`);
-        }
-        
-      } catch (imageError) {
-        console.error(`[Images] Erro crítico na geração:`, imageError);
-        
-        // ÚLTIMO FALLBACK: URLs Unsplash genéricas
-        generatedImages = processedImagePrompts.map((prompt: any, idx: number) => ({
-          url: `https://source.unsplash.com/1024x768/?business,professional&sig=${blog_id}-${idx}`,
-          prompt: prompt.prompt || '',
-          alt: prompt.alt || `Imagem ${idx + 1}`,
-          context: prompt.context || 'business',
-          generated_by: 'unsplash_fallback' as const
-        }));
-        
-        processedImagePrompts = processedImagePrompts.map((prompt: any, idx: number) => ({
-          ...prompt,
-          url: generatedImages[idx]?.url || null,
-          generated_by: 'unsplash_fallback'
-        }));
-        
-        if (generatedImages.length > 0) {
-          featuredImageUrl = generatedImages[0].url;
-        }
-        
-        console.log(`[Images] Fallback genérico aplicado: ${generatedImages.length} imagens`);
-      }
-    } else {
-      console.log(`[Images] Nenhum prompt de imagem para gerar`);
-    }
-
-    // ============================================================================
-    // ROLLBACK: FORCE MINIMUM 8 IMAGES (Unsplash fallback if needed)
-    // ============================================================================
-    if (processedImagePrompts.length < 6) {
-      console.log(`[Images] FORÇANDO imagens mínimas: ${processedImagePrompts.length} → 8`);
-      const needed = 8 - processedImagePrompts.length;
-      const fallbackTerritoryName = territoryData?.official_name || 'brazil';
-      
-      for (let i = 0; i < needed; i++) {
-        const keywords = [
-          niche || 'business',
-          primaryKeyword.split(' ')[0],
-          fallbackTerritoryName
-        ].filter(Boolean);
-        
-        const fillerPrompt = {
-          context: `filler-${i + 1}`,
-          prompt: `Professional ${keywords.join(' ')} service`,
-          alt: `Imagem profissional ${i + 1}`,
-          url: `https://source.unsplash.com/1024x768/?${encodeURIComponent(keywords.join(','))}&sig=${blog_id}-filler-${i}-${Date.now()}`,
-          after_section: processedImagePrompts.length + 1,
-          generated_by: 'unsplash_fallback' as const
-        };
-        
-        processedImagePrompts.push(fillerPrompt);
-        generatedImages.push({
-          url: fillerPrompt.url,
-          prompt: fillerPrompt.prompt,
-          alt: fillerPrompt.alt,
-          context: fillerPrompt.context,
-          generated_by: 'unsplash_fallback' as const
-        });
-      }
-      
-      // Update featured image if not set
-      if (!featuredImageUrl && generatedImages.length > 0) {
-        featuredImageUrl = generatedImages[0].url;
-      }
-      
-      console.log(`[Images] ✅ Mínimo garantido: ${processedImagePrompts.length} imagens totais`);
-    }
-
-    // ============================================================================
     // From here: continue using seoOut as the article payload (persist/cache/etc.)
     // ============================================================================
 
@@ -2136,16 +1943,9 @@ REGRAS CRÍTICAS:
       content: contentWithEat,  // Content with E-E-A-T injected
       faq: Array.isArray(seoOut.faq) ? seoOut.faq : (Array.isArray(writerOut.faq) ? writerOut.faq : []),
       reading_time: Number(writerOut.reading_time || Math.ceil((contentWithEat.split(' ').length) / 200)),
-      image_prompts: processedImagePrompts,  // With contextual ALTs and URLs
+      image_prompts: processedImagePrompts,  // With contextual ALTs
       images: writerOut.images,
-      featured_image_url: featuredImageUrl,  // AI-generated featured image
-      featured_image_alt: featuredImageAlt,  // Contextual ALT
-      content_images: generatedImages.length > 1 ? generatedImages.slice(1).map((img, idx) => ({
-        url: img.url,
-        context: img.context,
-        alt: img.alt,
-        after_section: processedImagePrompts[idx + 1]?.after_section || idx + 1
-      })) : null
+      featured_image_alt: featuredImageAlt  // Contextual ALT
     };
 
     // NEW: infer category/tags (used downstream)
