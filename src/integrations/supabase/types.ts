@@ -1049,6 +1049,7 @@ export type Database = {
           conversion_intent_count: number | null
           conversion_visibility_count: number | null
           created_at: string
+          cta: Json | null
           excerpt: string | null
           external_post_id: string | null
           external_post_url: string | null
@@ -1057,10 +1058,14 @@ export type Database = {
           featured_image_url: string | null
           funnel_mode: string | null
           funnel_stage: string | null
+          generation_progress: number | null
           generation_source: string | null
+          generation_stage: string | null
           highlights: Json | null
           id: string
+          images_completed: number | null
           images_pending: boolean | null
+          images_total: number | null
           keywords: string[] | null
           last_content_change_at: string | null
           last_score_change_reason: string | null
@@ -1113,6 +1118,7 @@ export type Database = {
           conversion_intent_count?: number | null
           conversion_visibility_count?: number | null
           created_at?: string
+          cta?: Json | null
           excerpt?: string | null
           external_post_id?: string | null
           external_post_url?: string | null
@@ -1121,10 +1127,14 @@ export type Database = {
           featured_image_url?: string | null
           funnel_mode?: string | null
           funnel_stage?: string | null
+          generation_progress?: number | null
           generation_source?: string | null
+          generation_stage?: string | null
           highlights?: Json | null
           id?: string
+          images_completed?: number | null
           images_pending?: boolean | null
+          images_total?: number | null
           keywords?: string[] | null
           last_content_change_at?: string | null
           last_score_change_reason?: string | null
@@ -1177,6 +1187,7 @@ export type Database = {
           conversion_intent_count?: number | null
           conversion_visibility_count?: number | null
           created_at?: string
+          cta?: Json | null
           excerpt?: string | null
           external_post_id?: string | null
           external_post_url?: string | null
@@ -1185,10 +1196,14 @@ export type Database = {
           featured_image_url?: string | null
           funnel_mode?: string | null
           funnel_stage?: string | null
+          generation_progress?: number | null
           generation_source?: string | null
+          generation_stage?: string | null
           highlights?: Json | null
           id?: string
+          images_completed?: number | null
           images_pending?: boolean | null
+          images_total?: number | null
           keywords?: string[] | null
           last_content_change_at?: string | null
           last_score_change_reason?: string | null
