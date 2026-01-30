@@ -1,184 +1,150 @@
 
 
-# Correção Crítica: Destravar Geração Imediata + SEO Assíncrono
+# Plano de Implementação: Timeout Agressivo + Imagens Assíncronas
 
-## Diagnóstico Técnico
+## Resumo dos Ajustes
 
-### Problema Identificado
-O sistema está **travando na etapa "Pesquisando na web..."** porque o fluxo atual executa **`analyze-serp` (Perplexity + Firecrawl)** de forma **SÍNCRONA** dentro do `runResearchStage`:
-
-```text
-Fluxo Atual (PROBLEMÁTICO):
-┌─────────────────────────────────────────────────────────────────┐
-│ generate-article-structured                                      │
-│  ├── runResearchStage() ← BLOQUEIA UI por ~45-60s              │
-│  │     ├── analyze-serp (Perplexity ~4s + Firecrawl ~50s)      │
-│  │     └── fetchGeoResearchData (Perplexity ~4s)                │
-│  ├── callWriter() (~12s)                                        │
-│  ├── callSEO() (~8s)                                            │
-│  ├── callQA() (~5s)                                             │
-│  └── persistArticle()                                           │
-└─────────────────────────────────────────────────────────────────┘
-Tempo Total: 80-100 segundos (inaceitável)
-```
-
-O `analyze-serp` com `useFirecrawl: true` está no **caminho crítico** (linhas 265-277 de `generate-article-structured`), fazendo scraping de 8 URLs (~7s cada = ~56s total).
+| Ajuste | Arquivo | Mudança Principal |
+|--------|---------|-------------------|
+| 1 - Research Timeout | `supabase/functions/_shared/aiProviders.ts` | 45s → 20s + SEM fallback Gemini |
+| 2 - Imagens Assíncronas | `supabase/functions/generate-article-structured/index.ts` + Nova Edge Function | Timeout 5s + background job |
 
 ---
 
-## Solução Proposta
+## AJUSTE 1: Research Stage - Timeout 20s + Fail Fast
 
-### Arquitetura Nova: Pesquisa Leve (Síncrona) + SEO Profundo (Assíncrono)
+### Arquivo: `supabase/functions/_shared/aiProviders.ts`
 
-```text
-Fluxo Novo (RÁPIDO):
-┌─────────────────────────────────────────────────────────────────┐
-│ FASE 1: GERAÇÃO IMEDIATA (< 30s)                                │
-│ generate-article-structured                                      │
-│  ├── runLightResearchStage() ← SÓ Perplexity (~5s)             │
-│  ├── callWriter() (~12s)                                        │
-│  ├── persistArticle() ← SALVA IMEDIATAMENTE                    │
-│  └── dispatchSEOEnhancerJob() ← BACKGROUND (não bloqueia)      │
-└─────────────────────────────────────────────────────────────────┘
+#### Mudança 1A: Reduzir timeout de Perplexity (linha 379)
 
-┌─────────────────────────────────────────────────────────────────┐
-│ FASE 2: ENRIQUECIMENTO ASSÍNCRONO (background)                  │
-│ seo-enhancer-job                                                │
-│  ├── analyze-serp com Firecrawl (~50s)                         │
-│  ├── callSEO() - otimização profunda                           │
-│  ├── FAQ adicional                                              │
-│  ├── Interlinks                                                 │
-│  └── UPDATE articles SET content=... WHERE id=article_id       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Alterações Necessárias
-
-### 1. Backend: `generate-article-structured/index.ts`
-
-#### A) Criar `runLightResearchStage` (Perplexity Only - SEM Firecrawl)
-
-**Nova função** que substitui `runResearchStage` no fluxo crítico:
-
+**Antes:**
 ```typescript
-async function runLightResearchStage(params: {
-  supabase: any;
-  blogId: string;
-  theme: string;
-  primaryKeyword: string;
-  territoryName: string | null;
-  territoryData: GeoTerritoryData | null;
-}): Promise<ResearchPackage> {
-  const { supabase, blogId, theme, primaryKeyword, territoryName, territoryData } = params;
-  const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
-  
-  if (!PERPLEXITY_API_KEY) {
-    throw new Error('PERPLEXITY_API_KEY not configured');
+45000 // 45s timeout for research
+```
+
+**Depois:**
+```typescript
+20000 // 20s timeout for research (V4.1: Fail-fast)
+```
+
+#### Mudança 1B: Desabilitar fallback Gemini no Research (linhas 501-533)
+
+O fluxo atual tenta Gemini se Perplexity falhar. Isso adiciona até +45s de espera.
+
+**Antes (função `callResearch`):**
+```typescript
+} catch (perplexityError) {
+  // ... Fallback to Google
+  try {
+    const result = await callGoogleResearch(request);
+    // ...
+  } catch (googleError) {
+    // ...
   }
-
-  const start = Date.now();
-
-  // ✅ APENAS Perplexity (rápido, ~5s) - SEM analyze-serp/Firecrawl
-  const geo = await fetchGeoResearchData(
-    theme,
-    territoryData,
-    PERPLEXITY_API_KEY,
-    undefined,
-    supabase,
-    blogId,
-    undefined
-  );
-
-  if (!geo) {
-    throw new Error('Perplexity research returned null');
-  }
-
-  const pkg: ResearchPackage = {
-    geo,
-    serp: {}, // SERP vazia - será preenchida pelo job assíncrono
-    sources: geo.sources || [],
-    generatedAt: new Date().toISOString(),
-    provider: 'perplexity',
-  };
-
-  const duration = Date.now() - start;
-  console.log(`[LightResearch] Completed in ${duration}ms (Perplexity only)`);
-
-  await logStage(supabase, blogId, 'research', 'perplexity', 'light-research', true, duration, {
-    sources_count: pkg.sources.length,
-    firecrawl_skipped: true,
-  });
-
-  return pkg;
 }
 ```
 
-#### B) Substituir chamada de research no fluxo principal
-
-**Linhas ~1581-1624:** Substituir `runResearchStage` por `runLightResearchStage`:
-
+**Depois:**
 ```typescript
-// ANTES (bloqueante):
-// researchPackage = await runResearchStage({...});
-
-// DEPOIS (rápido):
-researchPackage = await runLightResearchStage({
-  supabase,
-  blogId: blog_id!,
-  theme,
-  primaryKeyword,
-  territoryName: territoryData?.official_name || null,
-  territoryData: (territoryData as unknown as GeoTerritoryData) || null,
-});
+} catch (perplexityError) {
+  const errorMsg = perplexityError instanceof Error ? perplexityError.message : 'Unknown error';
+  const duration = Date.now() - start;
+  
+  console.warn(`[AI_CONFIG] Research: Perplexity failed (${duration}ms) - ${errorMsg}`);
+  console.log('[AI_CONFIG] Research: ❌ NO FALLBACK - using minimal package (V4.1: fail-fast)');
+  
+  // V4.1: NO Gemini fallback - return failure immediately for minimal package handling upstream
+  logAICall('research', 'perplexity', false, duration, false, errorMsg);
+  
+  return {
+    success: false,
+    provider: 'perplexity',
+    usedFallback: false,
+    fallbackReason: errorMsg,
+    durationMs: duration
+  };
+}
 ```
 
-#### C) Disparar job assíncrono APÓS persistência
+#### Mudança 1C: Garantir minimal package no generate-article-structured
 
-**Após** `persistArticleToDb` (linhas ~2350+), adicionar:
+No arquivo `generate-article-structured/index.ts`, a função `runLightResearchStage` já tem fallback para minimal package no catch block (linhas ~1566-1596). Precisamos garantir que o timeout é respeitado e o minimal package é usado imediatamente.
+
+**Verificar/Ajustar** no tratamento de erro do light research stage para garantir que retorna minimal package sem tentar novamente:
 
 ```typescript
-// Disparar SEO Enhancer em background (não awaited)
-EdgeRuntime.waitUntil(
-  fetch(`${SUPABASE_URL}/functions/v1/seo-enhancer-job`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
+} catch (e) {
+  const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+  console.warn(`[LightResearch] ⚠️ Failed: ${errorMsg} - using minimal package (V4.1)`);
+  
+  // V4.1: FAIL-FAST - Use minimal package immediately, NO retries
+  researchPackage = {
+    geo: {
+      facts: [`Informações sobre ${theme} para clientes locais`],
+      trends: ['Mercado em crescimento contínuo'],
+      sources: [],
+      rawQuery: primaryKeyword,
+      fetchedAt: new Date().toISOString()
     },
-    body: JSON.stringify({
-      article_id: persistedArticle.id,
-      blog_id,
-      request_id: requestId,
-      keyword: primaryKeyword,
-      territory: territoryData?.official_name || null,
-    }),
-  }).catch(e => console.error('[SEO-Job] Failed to dispatch:', e))
-);
+    serp: {},
+    sources: [],
+    generatedAt: new Date().toISOString(),
+    provider: 'minimal_fallback',
+  };
+  
+  await logStage(supabase, blog_id!, 'research', 'minimal_fallback', 'light-research-fallback', true, 0, {
+    error: errorMsg,
+    minimal_package: true
+  });
+}
 ```
 
 ---
 
-### 2. Nova Edge Function: `seo-enhancer-job`
+## AJUSTE 2: Imagens Assíncronas com Fallback 5s
 
-#### Criar `supabase/functions/seo-enhancer-job/index.ts`
+### Parte 2A: Adicionar coluna `images_pending` na tabela articles
+
+**Migração SQL:**
+```sql
+ALTER TABLE articles 
+  ADD COLUMN IF NOT EXISTS images_pending BOOLEAN DEFAULT FALSE;
+
+COMMENT ON COLUMN articles.images_pending IS 'True when images are being generated in background';
+```
+
+### Parte 2B: Criar Edge Function `generate-images-background`
+
+**Novo arquivo:** `supabase/functions/generate-images-background/index.ts`
+
+Esta função:
+1. Recebe `article_id`, `image_prompts`, `niche`, `city`
+2. Gera as imagens usando o provider layer
+3. Atualiza o artigo com as URLs reais
+4. Define `images_pending = false`
 
 ```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callImageGeneration, generateUnsplashFallback } from '../_shared/aiProviders.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SEOJobRequest {
+interface BackgroundImageRequest {
   article_id: string;
   blog_id: string;
   request_id: string;
-  keyword: string;
-  territory?: string;
+  image_prompts: Array<{
+    context: string;
+    prompt: string;
+    after_section: number;
+    alt?: string;
+  }>;
+  niche: string;
+  city: string;
 }
 
 serve(async (req) => {
@@ -191,105 +157,66 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
   try {
-    const { article_id, blog_id, request_id, keyword, territory }: SEOJobRequest = await req.json();
+    const body: BackgroundImageRequest = await req.json();
+    const { article_id, blog_id, request_id, image_prompts, niche, city } = body;
     
-    console.log(`[${request_id}][SEO-Job] Starting async enhancement for article ${article_id}`);
+    console.log(`[${request_id}][ImageJob] Starting background generation for ${image_prompts.length} images`);
 
-    // 1. Buscar artigo atual
-    const { data: article, error: fetchError } = await supabase
-      .from('articles')
-      .select('content, title, faq, keywords')
-      .eq('id', article_id)
-      .single();
-
-    if (fetchError || !article) {
-      console.error(`[${request_id}][SEO-Job] Article not found`);
-      return new Response(JSON.stringify({ error: 'Article not found' }), { 
-        status: 404, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    // Generate each image
+    for (let i = 0; i < image_prompts.length; i++) {
+      const imgPrompt = image_prompts[i];
+      
+      const result = await callImageGeneration({
+        prompt: imgPrompt.prompt || `Professional ${imgPrompt.context} image`,
+        context: imgPrompt.context,
+        niche,
+        city
       });
+      
+      if (result.success && result.data) {
+        imgPrompt.url = result.data.url;
+        imgPrompt.generated_by = result.data.generatedBy;
+      }
+      
+      // Small delay between requests
+      if (i < image_prompts.length - 1) {
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
 
-    // 2. Executar analyze-serp COM Firecrawl (agora em background, sem pressa)
-    console.log(`[${request_id}][SEO-Job] Running deep SERP analysis...`);
-    const serpResponse = await fetch(`${SUPABASE_URL}/functions/v1/analyze-serp`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        keyword,
-        territory,
-        blogId: blog_id,
-        forceRefresh: true,
-        useFirecrawl: true,
-      }),
-    });
+    // Set featured image from first prompt
+    const featuredUrl = image_prompts[0]?.url || null;
 
-    let serpMatrix = {};
-    if (serpResponse.ok) {
-      const serpData = await serpResponse.json();
-      serpMatrix = serpData.matrix || {};
-      console.log(`[${request_id}][SEO-Job] SERP analysis complete: ${serpMatrix.competitors?.length || 0} competitors`);
-    }
-
-    // 3. Otimização SEO com dados completos
-    // (Implementar lógica de SEO optimization aqui se necessário)
-
-    // 4. Gerar FAQs adicionais baseadas em SERP gaps
-    const contentGaps = serpMatrix.contentGaps || [];
-    const additionalFaqs = contentGaps.slice(0, 2).map(gap => ({
-      question: gap,
-      answer: `Resposta baseada na análise de mercado para "${keyword}".`
-    }));
-
-    // 5. UPDATE no artigo (incrementalmente)
-    const existingFaq = article.faq || [];
-    const mergedFaq = [...existingFaq, ...additionalFaqs].slice(0, 8);
-
+    // Update article with real images
     const { error: updateError } = await supabase
       .from('articles')
       .update({
-        faq: mergedFaq,
-        serp_enhanced: true,
-        serp_enhanced_at: new Date().toISOString(),
-        // Futuramente: content otimizado, interlinks, etc.
+        image_prompts: image_prompts,
+        featured_image_url: featuredUrl,
+        images_pending: false,
+        updated_at: new Date().toISOString()
       })
       .eq('id', article_id);
 
     if (updateError) {
-      console.error(`[${request_id}][SEO-Job] Update failed:`, updateError);
-    } else {
-      console.log(`[${request_id}][SEO-Job] Article ${article_id} enhanced successfully`);
+      console.error(`[${request_id}][ImageJob] Update failed:`, updateError);
+      return new Response(JSON.stringify({ error: 'Update failed' }), { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
     }
 
-    // 6. Registrar consumo
-    await supabase.from('consumption_logs').insert({
-      user_id: null, // Background job
-      blog_id,
-      action_type: 'seo_enhancement',
-      action_description: `SEO async enhancement for article ${article_id}`,
-      metadata: {
-        request_id,
-        keyword,
-        competitors_analyzed: serpMatrix.competitors?.length || 0,
-      },
-    });
+    console.log(`[${request_id}][ImageJob] ✅ Article ${article_id} images updated`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      article_id,
-      enhancements: {
-        faqs_added: additionalFaqs.length,
-        serp_competitors: serpMatrix.competitors?.length || 0,
-      }
+      images_generated: image_prompts.length 
     }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
 
   } catch (error) {
-    console.error('[SEO-Job] Error:', error);
+    console.error('[ImageJob] Error:', error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Unknown error' 
     }), { 
@@ -300,136 +227,175 @@ serve(async (req) => {
 });
 ```
 
-#### Adicionar ao `supabase/config.toml`
+### Parte 2C: Modificar `generate-article-structured/index.ts` - Timeout de Imagens
 
+**Localização:** Linhas ~2226-2240 (geração de imagens)
+
+**Antes:**
+```typescript
+if (articleWithImages.image_prompts && articleWithImages.image_prompts.length > 0) {
+  try {
+    articleWithImages = await generateArticleImagesViaProvider(
+      articleWithImages,
+      effectiveNiche,
+      city
+    );
+  } catch (imgError) {
+    console.error('[QualityGate] ⚠️ Image generation failed:', imgError);
+  }
+}
+```
+
+**Depois:**
+```typescript
+const IMAGE_TIMEOUT_MS = 5000; // V4.1: 5 segundos máximo para imagens síncronas
+let imagesTimedOut = false;
+
+if (articleWithImages.image_prompts && articleWithImages.image_prompts.length > 0) {
+  try {
+    // V4.1: Race between image generation and timeout
+    const imageGenPromise = generateArticleImagesViaProvider(
+      articleWithImages,
+      effectiveNiche,
+      city
+    );
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('IMAGE_TIMEOUT')), IMAGE_TIMEOUT_MS);
+    });
+    
+    articleWithImages = await Promise.race([imageGenPromise, timeoutPromise]);
+    console.log(`[${requestId}][Images] ✅ Generated in sync within ${IMAGE_TIMEOUT_MS}ms`);
+    
+  } catch (imgError) {
+    const errorMsg = imgError instanceof Error ? imgError.message : 'Unknown';
+    
+    if (errorMsg === 'IMAGE_TIMEOUT') {
+      console.warn(`[${requestId}][Images] ⏱️ Timeout after ${IMAGE_TIMEOUT_MS}ms - will generate in background`);
+      imagesTimedOut = true;
+      
+      // Use Unsplash placeholders for immediate response
+      for (const imgPrompt of articleWithImages.image_prompts) {
+        const placeholder = generateUnsplashFallback({
+          prompt: '',
+          context: imgPrompt.context || 'business',
+          niche: effectiveNiche,
+          city
+        });
+        imgPrompt.url = placeholder.url;
+        imgPrompt.generated_by = 'unsplash_placeholder';
+      }
+      
+      // Set placeholder for featured image
+      if (!articleWithImages.featured_image_url && articleWithImages.image_prompts[0]) {
+        articleWithImages.featured_image_url = articleWithImages.image_prompts[0].url;
+      }
+    } else {
+      console.error(`[${requestId}][Images] ⚠️ Generation failed:`, errorMsg);
+    }
+  }
+}
+```
+
+### Parte 2D: Dispatch background job se timeout
+
+**Após persistência (linhas ~2395+)**, adicionar dispatch do job de imagens:
+
+```typescript
+// V4.1: Dispatch background image generation if timed out
+if (imagesTimedOut && persistedArticle.id) {
+  console.log(`[${requestId}][Images] Dispatching background image job for article ${persistedArticle.id}`);
+  
+  // Mark article as having pending images
+  await supabase
+    .from('articles')
+    .update({ images_pending: true })
+    .eq('id', persistedArticle.id);
+  
+  // Fire-and-forget background job
+  fetch(`${SUPABASE_URL}/functions/v1/generate-images-background`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      article_id: persistedArticle.id,
+      blog_id,
+      request_id: requestId,
+      image_prompts: articleWithImages.image_prompts,
+      niche: effectiveNiche,
+      city
+    }),
+  }).then(res => {
+    console.log(`[${requestId}][ImageJob] Dispatch status: ${res.status}`);
+  }).catch(e => {
+    console.error(`[${requestId}][ImageJob] Dispatch failed:`, e);
+  });
+}
+```
+
+### Parte 2E: Registrar edge function no config.toml
+
+**Adicionar em `supabase/config.toml`:**
 ```toml
-[functions.seo-enhancer-job]
+[functions.generate-images-background]
 verify_jwt = false
 ```
 
----
+### Parte 2F: Exportar generateUnsplashFallback em aiProviders.ts
 
-### 3. Frontend: UI Stages Corrigidos
+A função `generateUnsplashFallback` precisa ser exportada para ser usada no main flow:
 
-#### `src/components/client/ArticleGenerationProgress.tsx`
-
-**Atualizar stages** para refletir o novo fluxo rápido:
-
+**Em `aiProviders.ts` (linha 733):**
 ```typescript
-const GENERATION_STAGES: GenerationStage[] = [
-  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 15 },
-  { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 25 },
-  { key: 'researching', label: 'Pesquisando referências...', icon: Search, progress: 40 },
-  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 70 },
-  { key: 'images', label: 'Gerando imagens...', icon: Image, progress: 85 },
-  { key: 'finalizing', label: 'Finalizando artigo...', icon: Target, progress: 95 },
-];
-```
+// Mudar de:
+function generateUnsplashFallback(request: ImageRequest): ImageResponse {
 
-**Notas:**
-- Removido stage separado de "outlining" (agora é parte de "selecting")
-- "Pesquisando referências" = Apenas Perplexity (rápido)
-- Removido "optimizing SEO" do fluxo síncrono (agora é background)
-
-#### `src/pages/client/ClientArticleEditor.tsx`
-
-**Atualizar mapeamento** (linhas ~133-143):
-
-```typescript
-const mapStageToArticleEngine = (stage: GenerationStage): string | null => {
-  if (!stage) return null;
-  const mapping: Record<string, string> = {
-    'analyzing': 'classifying',
-    'structuring': 'selecting',
-    'generating': 'writing',
-    'images': 'images',
-    'finalizing': 'finalizing'
-  };
-  return mapping[stage] || stage;
-};
-```
-
-**Atualizar tempo estimado** (componente `ArticleGenerationProgress`):
-
-```tsx
-<span>Tempo estimado: 20-30 segundos</span>
-```
-
----
-
-### 4. Database: Nova Coluna para Tracking
-
-**Migração SQL** para tracking de enriquecimento:
-
-```sql
--- Adicionar colunas para SEO async tracking
-ALTER TABLE articles 
-  ADD COLUMN IF NOT EXISTS serp_enhanced BOOLEAN DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS serp_enhanced_at TIMESTAMPTZ;
-
--- Índice para queries de jobs pendentes
-CREATE INDEX IF NOT EXISTS idx_articles_serp_pending 
-  ON articles(blog_id, serp_enhanced) 
-  WHERE serp_enhanced = FALSE;
+// Para:
+export function generateUnsplashFallback(request: ImageRequest): ImageResponse {
 ```
 
 ---
 
 ## Resumo de Arquivos Alterados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/generate-article-structured/index.ts` | Criar `runLightResearchStage`, substituir chamada, disparar job |
-| `supabase/functions/seo-enhancer-job/index.ts` | **NOVO** - Job assíncrono de SEO |
-| `supabase/config.toml` | Adicionar `seo-enhancer-job` |
-| `src/components/client/ArticleGenerationProgress.tsx` | Atualizar stages e tempo estimado |
-| `src/pages/client/ClientArticleEditor.tsx` | Atualizar mapeamento de stages |
-| **Migração SQL** | Adicionar `serp_enhanced`, `serp_enhanced_at` |
+| Arquivo | Alterações |
+|---------|------------|
+| `supabase/functions/_shared/aiProviders.ts` | Timeout 45s→20s, remover fallback Gemini, exportar `generateUnsplashFallback` |
+| `supabase/functions/generate-article-structured/index.ts` | Timeout 5s imagens, dispatch background job, flag `images_pending` |
+| `supabase/functions/generate-images-background/index.ts` | **NOVO** - Job assíncrono de imagens |
+| `supabase/config.toml` | Registrar `generate-images-background` |
+| **Migração SQL** | Adicionar coluna `images_pending` |
 
 ---
 
-## Fluxo Final Esperado
+## Timeouts Efetivos Finais
+
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| Perplexity Research | 45s | **20s** |
+| Gemini Research Fallback | +45s | **0s (removido)** |
+| Image Generation (sync) | ~30s ilimitado | **5s máx** |
+| Image Generation (background) | N/A | Sem limite (async) |
+| **Total máx caminho crítico** | ~120s | **~35s** |
+
+---
+
+## Fluxo Final
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│ USUÁRIO CLICA "GERAR"                                         │
-└──────────────────────────┬────────────────────────────────────┘
-                           ▼
-┌───────────────────────────────────────────────────────────────┐
-│ FASE SÍNCRONA (UI bloqueante) - ~25 segundos                  │
-│  1. Classificar intenção (LLM) ─────────────────── 2s         │
-│  2. Selecionar template ────────────────────────── 1s         │
-│  3. Pesquisa leve (Perplexity only) ────────────── 5s         │
-│  4. Gerar conteúdo (Writer LLM) ────────────────── 12s        │
-│  5. Gerar imagens ──────────────────────────────── 4s         │
-│  6. SALVAR ARTIGO ──────────────────────────────── 1s         │
-│  7. Retornar success + navegar para /edit                     │
-└──────────────────────────┬────────────────────────────────────┘
-                           ▼
-                     ┌─────────────┐
-                     │ BACKGROUND  │
-                     └─────┬───────┘
-                           ▼
-┌───────────────────────────────────────────────────────────────┐
-│ FASE ASSÍNCRONA (seo-enhancer-job) - ~60 segundos             │
-│  1. analyze-serp com Firecrawl (scraping profundo)            │
-│  2. Otimização SEO baseada em SERP                            │
-│  3. FAQ adicional baseado em gaps                             │
-│  4. Interlinks (futuro)                                       │
-│  5. UPDATE articles SET ... WHERE id = article_id             │
-└───────────────────────────────────────────────────────────────┘
+FASE SÍNCRONA (< 35s):
+├── Research Perplexity ──── máx 20s (ou minimal package)
+├── Writer GPT-4o/Gemini ─── ~15s
+├── QA Gemini ────────────── ~5s
+├── Imagens ──────────────── máx 5s (placeholders se timeout)
+├── Persistência ─────────── ~1s
+└── RETORNO AO USUÁRIO
+
+FASE ASSÍNCRONA (background):
+├── generate-images-background ── gera imagens reais
+├── seo-enhancer-job ────────── scraping + SEO profundo
+└── UPDATE articles incrementais
 ```
-
----
-
-## Resultados Esperados
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Tempo de geração (UI) | 80-100s | **20-30s** |
-| Etapa travada | "Pesquisando na web..." | Nenhuma |
-| Firecrawl no caminho crítico | ✅ Sim | ❌ Não |
-| Artigo disponível para edição | Após 100s | **Após 25s** |
-| SEO profundo | Síncrono | Background |
-| Geração duplicada | Possível | Bloqueada |
 
