@@ -1404,21 +1404,35 @@ serve(async (req) => {
       mode = 'authority',
       businessName,
       businessWhatsapp,
-      city: requestCity
-    }: ArticleRequest & { funnel_mode?: FunnelMode; article_goal?: ArticleGoal | null; auto_publish?: boolean } = await req.json();
+      city: requestCity,
+      request_id: incomingRequestId
+    }: ArticleRequest & { funnel_mode?: FunnelMode; article_goal?: ArticleGoal | null; auto_publish?: boolean; request_id?: string } = await req.json();
+
+    // A) Usar request_id do caller OU gerar novo
+    const requestId = incomingRequestId || crypto.randomUUID();
+    console.log(`[${requestId}] Starting article generation (incoming: ${incomingRequestId ? 'yes' : 'no'})`);
 
     // ============================================================================
     // V2.0: GEO MODE IS ALWAYS TRUE - NO EXCEPTIONS
     // ============================================================================
     const geo_mode = true; // HARDCODED - NEVER false
-    console.log(`[OMNICORE GEO V2.0] geo_mode=true FORCED - No article exists outside OmniCore GEO Writer`);
+    console.log(`[${requestId}][OMNICORE GEO V2.0] geo_mode=true FORCED - No article exists outside OmniCore GEO Writer`);
+    
+    // B) Log obrigatório do payload recebido
+    console.log(`[${requestId}][PAYLOAD] Received:`, JSON.stringify({
+      requestedGenerationMode,
+      mode,
+      niche,
+      city: requestCity,
+      businessName
+    }));
     
     // Log Article Engine parameters
-    console.log(`[Article Engine] Params: useEat=${useEat}, niche=${niche}, mode=${mode}, businessName=${businessName || 'not set'}`);
+    console.log(`[${requestId}][Article Engine] Params: useEat=${useEat}, niche=${niche}, mode=${mode}, businessName=${businessName || 'not set'}`);
 
     // RESOLVER GENERATION_MODE: Respeitar request ou usar deep como padrão
     const generation_mode = requestedGenerationMode || 'deep';
-    console.log(`[GENERATION MODE] Resolved: ${generation_mode} (requested: ${requestedGenerationMode || 'none'})`);
+    console.log(`[${requestId}][GENERATION MODE] Resolved: ${generation_mode} (requested: ${requestedGenerationMode || 'none'})`);
 
     // ============================================================================
     // HOTFIX: Forçar mode='entry' quando generation_mode='fast'
@@ -1426,8 +1440,11 @@ serve(async (req) => {
     let effectiveMode = mode;
     if (generation_mode === 'fast') {
       effectiveMode = 'entry';
-      console.log('[HOTFIX] mode forced to entry because generation_mode=fast');
+      console.log(`[${requestId}][HOTFIX] mode forced to entry because generation_mode=fast`);
     }
+    
+    // C) Log de resolução final
+    console.log(`[${requestId}][MODE RESOLUTION] effectiveMode=${effectiveMode}, articleMode will be ${effectiveMode === 'entry' ? 'entry' : 'authority'}`);
 
     // ============ TERRITORIAL DATA FETCH (needed for research) ============
     let territoryData: TerritoryData | null = null;
@@ -1447,7 +1464,7 @@ serve(async (req) => {
     // ============================================================================
     // V3.0 QUALITY GATE - STEP 1: CONTEXT VALIDATION (HARD GATES)
     // ============================================================================
-    console.log('[QualityGate] Step 1: Validating request context...');
+    console.log(`[${requestId}][QualityGate] Step 1: Validating request context...`);
 
     // Extract city with multiple fallbacks
     let city = requestCity || territoryData?.official_name || '';
@@ -1457,24 +1474,25 @@ serve(async (req) => {
       const cityMatch = theme.match(/\b(?:em|para|de)\s+([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]+)?)/i);
       if (cityMatch && cityMatch[1]) {
         city = cityMatch[1].trim();
-        console.log(`[QualityGate] City extracted from theme: ${city}`);
+        console.log(`[${requestId}][QualityGate] City extracted from theme: ${city}`);
       }
     }
 
     // FALLBACK 2: From google_place if available
     if (!city && google_place?.official_name && typeof google_place.official_name === 'string') {
       city = google_place.official_name as string;
-      console.log(`[QualityGate] City from google_place: ${city}`);
+      console.log(`[${requestId}][QualityGate] City from google_place: ${city}`);
     }
     
     // HARD GATE: City is mandatory for local authority articles
     if (!city || city.trim() === '') {
-      console.error('[QualityGate] ❌ ABORT: Missing city after all fallbacks');
+      console.error(`[${requestId}][QualityGate] ❌ ABORT: Missing city after all fallbacks`);
       return new Response(
         JSON.stringify({
           error: 'QUALITY_GATE_FAILED',
           code: ERROR_CODES.MISSING_CITY,
           message: ERROR_MESSAGES[ERROR_CODES.MISSING_CITY],
+          request_id: requestId,
           debug: {
             requestCity,
             territoryName: territoryData?.official_name,
@@ -1489,18 +1507,18 @@ serve(async (req) => {
     // Niche fallback with warning (never 'default')
     let effectiveNiche = niche;
     if (!effectiveNiche || effectiveNiche.trim() === '' || effectiveNiche === 'default') {
-      console.warn('[QualityGate] ⚠️ Niche invalid, using fallback: pest_control');
+      console.warn(`[${requestId}][QualityGate] ⚠️ Niche invalid, using fallback: pest_control`);
       effectiveNiche = 'pest_control';
     }
 
     // BusinessName fallback with warning
     let effectiveBusinessName = businessName;
     if (!effectiveBusinessName || effectiveBusinessName.trim() === '') {
-      console.warn('[QualityGate] ⚠️ BusinessName missing, using fallback: Empresa Local');
+      console.warn(`[${requestId}][QualityGate] ⚠️ BusinessName missing, using fallback: Empresa Local`);
       effectiveBusinessName = 'Empresa Local';
     }
 
-    console.log('[QualityGate] ✅ Context validated:', { city, niche: effectiveNiche, businessName: effectiveBusinessName });
+    console.log(`[${requestId}][QualityGate] ✅ Context validated:`, { city, niche: effectiveNiche, businessName: effectiveBusinessName });
 
     // ============================================================================
     // V2.1: ARTICLE ENGINE - Template Selection & Outline
@@ -2252,24 +2270,35 @@ Reestruture e retorne via tool optimize_article.`;
     // ============================================================================
     // V3.0: QUALITY GATE - FINAL VALIDATION (FAIL-FAST)
     // ============================================================================
-    console.log('[QualityGate] Step 4: Running quality validation...');
+    console.log(`[${requestId}][QualityGate] Step 4: Running quality validation...`);
     
     // Determine mode for validation - HOTFIX: usar effectiveMode
     const articleMode: ArticleMode = effectiveMode === 'entry' ? 'entry' : 'authority';
-    console.log('[QualityGate] Running validation for mode:', articleMode);
-    const gateResult = runQualityGate(articleWithImages, articleMode);
+    console.log(`[${requestId}][QualityGate] Running validation for mode: ${articleMode}`);
+    
+    // 5. Chamada do Quality Gate com allowWarnings
+    const gateResult = runQualityGate(articleWithImages, articleMode, {
+      allowWarnings: generation_mode === 'fast' || articleMode === 'entry',
+      generationMode: generation_mode,
+      requestId: requestId
+    });
+
+    // Log warnings se existirem
+    if (gateResult.warnings && gateResult.warnings.length > 0) {
+      console.warn(`[${requestId}][QualityGate] Passed with warnings:`, gateResult.warnings);
+    }
 
     if (!gateResult.passed) {
-      console.error(`[QualityGate] ❌ ABORT: ${gateResult.code}`);
-      console.error(`[QualityGate] Details: ${gateResult.details}`);
+      console.error(`[${requestId}][QualityGate] ❌ ABORT: ${gateResult.code}`);
+      console.error(`[${requestId}][QualityGate] Details: ${gateResult.details}`);
       
       // V3.2: Enhanced error payload with diagnostic info
       const introLen = articleWithImages.introduction?.length || 0;
       const firstH2Index = contentWithEat.search(/^##\s+/m);
       const contentSource = seoOut.content ? 'seoOut' : 'writerOut';
       
-      console.error(`[QualityGate] Diagnostic: intro_len=${introLen}, first_h2_index=${firstH2Index}, source=${contentSource}`);
-      console.error(`[QualityGate] Content prefix: "${contentWithEat.substring(0, 150)}"`);
+      console.error(`[${requestId}][QualityGate] Diagnostic: intro_len=${introLen}, first_h2_index=${firstH2Index}, source=${contentSource}`);
+      console.error(`[${requestId}][QualityGate] Content prefix: "${contentWithEat.substring(0, 150)}"`);
       
       return new Response(
         JSON.stringify({
@@ -2278,6 +2307,7 @@ Reestruture e retorne via tool optimize_article.`;
           message: ERROR_MESSAGES[gateResult.code] || 'Artigo não atende critérios de qualidade',
           details: gateResult.details,
           suggestion: 'Tente novamente com tema mais específico ou verifique os parâmetros',
+          request_id: requestId,
           // V3.2: Diagnostic fields (for debugging only)
           _debug: {
             intro_len: introLen,
@@ -2290,8 +2320,8 @@ Reestruture e retorne via tool optimize_article.`;
       );
     }
 
-    console.log('[QualityGate] ✅ ALL GATES PASSED');
-    console.log('[QualityGate] Metrics:', gateResult.metrics);
+    console.log(`[${requestId}][QualityGate] ✅ ALL GATES PASSED`);
+    console.log(`[${requestId}][QualityGate] Metrics:`, gateResult.metrics);
 
     // Build final article object for persistence
     const article = {

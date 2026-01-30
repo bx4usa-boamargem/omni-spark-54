@@ -42,6 +42,7 @@ export interface QualityGateResult {
   passed: boolean;
   code: string;
   details: string;
+  warnings?: string[];
   metrics?: {
     wordCount: number;
     h2Count: number;

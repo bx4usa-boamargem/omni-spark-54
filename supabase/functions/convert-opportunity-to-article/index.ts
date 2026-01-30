@@ -36,13 +36,16 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { opportunityId, blogId }: ConvertRequest = await req.json();
+    
+    // A) Receber request_id do frontend
+    const { opportunityId, blogId, request_id }: ConvertRequest & { request_id?: string } = await req.json();
+    const requestId = request_id || crypto.randomUUID();
 
     if (!opportunityId || !blogId) {
       throw new Error("opportunityId and blogId are required");
     }
 
-    console.log(`[CONVERT] Starting conversion for opportunity ${opportunityId} in blog ${blogId}`);
+    console.log(`[${requestId}][CONVERT] Starting conversion for opportunity ${opportunityId} in blog ${blogId}`);
 
     // 1. Buscar oportunidade completa
     const { data: opportunity, error: oppError } = await supabase
@@ -52,18 +55,19 @@ serve(async (req) => {
       .single();
 
     if (oppError || !opportunity) {
-      console.error("[CONVERT] Opportunity not found:", oppError);
+      console.error(`[${requestId}][CONVERT] Opportunity not found:`, oppError);
       throw new Error(`Opportunity not found: ${oppError?.message || 'Unknown error'}`);
     }
 
     // Verificar se já foi convertida
     if (opportunity.status === 'converted') {
-      console.log(`[CONVERT] Opportunity ${opportunityId} already converted to article ${opportunity.converted_article_id}`);
+      console.log(`[${requestId}][CONVERT] Opportunity ${opportunityId} already converted to article ${opportunity.converted_article_id}`);
       return new Response(
         JSON.stringify({
           success: true,
           message: "Opportunity already converted",
           article_id: opportunity.converted_article_id,
+          request_id: requestId
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -83,7 +87,7 @@ serve(async (req) => {
       .maybeSingle();
 
     // 3. ROTAÇÃO ESTRUTURAL - Determinar próximo modelo editorial
-    console.log(`[CONVERT] Calculating next structure type for blog ${blogId}...`);
+    console.log(`[${requestId}][CONVERT] Calculating next structure type for blog ${blogId}...`);
     const { structureType, template, activitySlug } = await getNextStructureWithTemplate(
       supabase,
       blogId,
@@ -91,17 +95,17 @@ serve(async (req) => {
       profile?.services
     );
     
-    console.log(`[CONVERT] Structure rotation: type=${structureType}, activity=${activitySlug}, template=${template?.display_name || 'fallback'}`);
+    console.log(`[${requestId}][CONVERT] Structure rotation: type=${structureType}, activity=${activitySlug}, template=${template?.display_name || 'fallback'}`);
 
     // 3b. ROTAÇÃO EDITORIAL - Determinar próximo modelo de conteúdo
-    console.log(`[CONVERT] Calculating next editorial model for blog ${blogId}...`);
+    console.log(`[${requestId}][CONVERT] Calculating next editorial model for blog ${blogId}...`);
     const editorialModel: EditorialModel = await getNextEditorialModel(
       supabase,
       blogId,
       profile?.niche
     );
     
-    console.log(`[CONVERT] Editorial rotation: model=${editorialModel}`);
+    console.log(`[${requestId}][CONVERT] Editorial rotation: model=${editorialModel}`);
     // 4. Buscar dados adicionais para GEO mode (território e whatsapp)
     const { data: territory } = await supabase
       .from("territories")
@@ -132,14 +136,14 @@ serve(async (req) => {
     // 1. Tentar do território
     if (territory?.official_name) {
       resolvedCity = territory.official_name;
-      console.log(`[CONVERT] City from territory: ${resolvedCity}`);
+      console.log(`[${requestId}][CONVERT] City from territory: ${resolvedCity}`);
     }
 
     // 2. Fallback: business_profile.city ou region
     if (!resolvedCity && profile) {
       resolvedCity = (profile as any).city || (profile as any).region || (profile as any).state;
       if (resolvedCity) {
-        console.log(`[CONVERT] City from profile: ${resolvedCity}`);
+        console.log(`[${requestId}][CONVERT] City from profile: ${resolvedCity}`);
       }
     }
 
@@ -148,21 +152,21 @@ serve(async (req) => {
       const cityMatch = opportunity.suggested_title.match(/\b(?:em|para|de)\s+([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]+)?)/i);
       if (cityMatch && cityMatch[1]) {
         resolvedCity = cityMatch[1].trim();
-        console.log(`[CONVERT] City extracted from title: ${resolvedCity}`);
+        console.log(`[${requestId}][CONVERT] City extracted from title: ${resolvedCity}`);
       }
     }
 
     // 4. Fallback final: 'Brasil'
     if (!resolvedCity) {
       resolvedCity = 'Brasil';
-      console.warn(`[CONVERT] Using fallback city: ${resolvedCity}`);
+      console.warn(`[${requestId}][CONVERT] Using fallback city: ${resolvedCity}`);
     }
 
-    console.log(`[CONVERT] Resolved city: ${resolvedCity}`);
+    console.log(`[${requestId}][CONVERT] Resolved city: ${resolvedCity}`);
 
     // 5. Gerar conteúdo via generate-article-structured
     // V2.0: Tenta com geo_mode=true primeiro, fallback para geo_mode=false se QA falhar
-    console.log(`[CONVERT] Generating article content for: "${opportunity.suggested_title}" with geo_mode=true`);
+    console.log(`[${requestId}][CONVERT] Generating article content for: "${opportunity.suggested_title}" with geo_mode=true`);
 
     const generatePayload = {
       blog_id: blogId,
@@ -197,13 +201,16 @@ serve(async (req) => {
       activity_slug: activitySlug,
       // ROTAÇÃO EDITORIAL - Modelo de conteúdo
       editorial_model: editorialModel,
+      // D) Propagar request_id para generate-article-structured
+      request_id: requestId,
     };
 
     // HOTFIX: Log de diagnóstico antes da chamada
-    console.log('[CONVERT] Calling generate with:', {
+    console.log(`[${requestId}][CONVERT] Calling generate with:`, {
       generation_mode: generatePayload.generation_mode,
       mode: (generatePayload as any).mode,
-      city: generatePayload.city
+      city: generatePayload.city,
+      request_id: requestId
     });
 
     let generateResponse = await fetch(`${SUPABASE_URL}/functions/v1/generate-article-structured`, {
@@ -220,7 +227,7 @@ serve(async (req) => {
     
     // FALLBACK: If QA failed (422), retry without geo_mode
     if (generateResponse.status === 422) {
-      console.warn("[CONVERT] GEO mode QA failed, retrying with geo_mode=false (fallback)...");
+      console.warn(`[${requestId}][CONVERT] GEO mode QA failed, retrying with geo_mode=false (fallback)...`);
       
       const fallbackPayload = {
         ...generatePayload,
@@ -228,6 +235,7 @@ serve(async (req) => {
         mode: 'entry',  // HOTFIX: Alinhar mode com generation_mode fast
         geo_mode: false,
         word_count: 800,
+        request_id: requestId,
       };
       
       generateResponse = await fetch(`${SUPABASE_URL}/functions/v1/generate-article-structured`, {
@@ -242,23 +250,24 @@ serve(async (req) => {
       responseText = await generateResponse.text();
       
       if (generateResponse.ok) {
-        console.log("[CONVERT] Fallback generation succeeded");
+        console.log(`[${requestId}][CONVERT] Fallback generation succeeded`);
       }
     }
     
     if (!generateResponse.ok) {
-      console.error("[CONVERT] Article generation failed:", responseText);
+      console.error(`[${requestId}][CONVERT] Article generation failed:`, responseText);
       
-      // Try to parse error for better messaging
+      // E) Retorno estruturado com error_type e reason_code
       try {
         const errorData = JSON.parse(responseText);
-        // Return 422 as-is (QA failure), other errors as 500
         const statusCode = generateResponse.status === 422 ? 422 : 500;
         return new Response(
           JSON.stringify({
             success: false,
-            error: errorData.error || "GENERATION_FAILED",
+            error_type: statusCode === 422 ? 'QUALITY_GATE_FAILED' : 'GENERATION_FAILED',
+            reason_code: errorData.code || errorData.error || 'unknown',
             message: errorData.message || `Falha na geração do artigo (${generateResponse.status})`,
+            request_id: requestId,
             debug: errorData.debug || null,
           }),
           { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -267,8 +276,9 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "GENERATION_FAILED",
+            error_type: 'GENERATION_FAILED',
             message: `Falha na geração do artigo (${generateResponse.status})`,
+            request_id: requestId,
           }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -280,7 +290,7 @@ serve(async (req) => {
     try {
       generatedResult = JSON.parse(responseText);
     } catch (parseError) {
-      console.error("[CONVERT] Failed to parse generation response:", responseText.substring(0, 500));
+      console.error(`[${requestId}][CONVERT] Failed to parse generation response:`, responseText.substring(0, 500));
       throw new Error("Failed to parse article generation response");
     }
 
@@ -290,11 +300,11 @@ serve(async (req) => {
     const articleSlug = generatedResult.article?.slug || generatedResult.slug;
     
     if (!articleId) {
-      console.error("[CONVERT] No article ID in response:", JSON.stringify(generatedResult).substring(0, 500));
+      console.error(`[${requestId}][CONVERT] No article ID in response:`, JSON.stringify(generatedResult).substring(0, 500));
       throw new Error("Article was generated but no ID was returned. Response structure may have changed.");
     }
 
-    console.log(`[CONVERT] Article generated successfully, id: ${articleId}`);
+    console.log(`[${requestId}][CONVERT] Article generated successfully, id: ${articleId}`);
 
     // 4. Verificar que o artigo existe no banco antes de atualizar
     const { data: articleCheck } = await supabase
@@ -304,11 +314,11 @@ serve(async (req) => {
       .single();
 
     if (!articleCheck) {
-      console.error("[CONVERT] Article not found in database after generation");
+      console.error(`[${requestId}][CONVERT] Article not found in database after generation`);
       throw new Error("Article was not persisted correctly");
     }
 
-    console.log(`[CONVERT] Article ${articleId} confirmed in database`);
+    console.log(`[${requestId}][CONVERT] Article ${articleId} confirmed in database`);
 
     // 5. Atualizar artigo com opportunity_id e funnel_stage (OBRIGATÓRIO)
     const { error: linkError } = await supabase
@@ -321,10 +331,10 @@ serve(async (req) => {
       .eq("id", articleId);
 
     if (linkError) {
-      console.error("[CONVERT] CRITICAL: Failed to link article:", linkError);
+      console.error(`[${requestId}][CONVERT] CRITICAL: Failed to link article:`, linkError);
       // Continue anyway - article exists
     } else {
-      console.log(`[CONVERT] Article linked to opportunity successfully`);
+      console.log(`[${requestId}][CONVERT] Article linked to opportunity successfully`);
     }
 
     // 6. Mapear e atualizar article_goal (valores em PORTUGUÊS conforme constraint)
@@ -349,9 +359,9 @@ serve(async (req) => {
         .eq("id", articleId);
 
       if (goalError) {
-        console.warn("[CONVERT] Goal update failed (non-blocking):", goalError);
+        console.warn(`[${requestId}][CONVERT] Goal update failed (non-blocking):`, goalError);
       } else {
-        console.log(`[CONVERT] Article goal set to: ${mappedGoal}`);
+        console.log(`[${requestId}][CONVERT] Article goal set to: ${mappedGoal}`);
       }
     }
 
@@ -366,7 +376,7 @@ serve(async (req) => {
       .eq("id", opportunityId);
 
     if (updateOppError) {
-      console.error("[CONVERT] Failed to update opportunity status:", updateOppError);
+      console.error(`[${requestId}][CONVERT] Failed to update opportunity status:`, updateOppError);
       // Non-blocking - article was created
     }
 
@@ -374,11 +384,11 @@ serve(async (req) => {
     // 6. GERAR IMAGENS AUTOMATICAMENTE (NOVO!)
     // Gera imagem de capa + 2 imagens do corpo para artigos convertidos
     // =========================================================================
-    console.log(`[CONVERT] Generating images for article ${articleId}...`);
+    console.log(`[${requestId}][CONVERT] Generating images for article ${articleId}...`);
 
     try {
       // 6.1 Gerar imagem de capa
-      console.log(`[CONVERT] Generating cover image...`);
+      console.log(`[${requestId}][CONVERT] Generating cover image...`);
       const coverResponse = await fetch(`${SUPABASE_URL}/functions/v1/generate-image`, {
         method: "POST",
         headers: {
@@ -395,15 +405,15 @@ serve(async (req) => {
 
       if (coverResponse.ok) {
         const coverResult = await coverResponse.json();
-        console.log(`[CONVERT] Cover image generated: ${coverResult.publicUrl ? 'success' : 'no url'}`);
+        console.log(`[${requestId}][CONVERT] Cover image generated: ${coverResult.publicUrl ? 'success' : 'no url'}`);
       } else {
-        console.warn(`[CONVERT] Cover image generation failed: ${coverResponse.status}`);
+        console.warn(`[${requestId}][CONVERT] Cover image generation failed: ${coverResponse.status}`);
       }
 
       // 6.2 Gerar imagens do corpo (problem + solution)
       const bodyContexts = ['problem', 'solution'];
       for (const ctx of bodyContexts) {
-        console.log(`[CONVERT] Generating ${ctx} image...`);
+        console.log(`[${requestId}][CONVERT] Generating ${ctx} image...`);
         const imgResponse = await fetch(`${SUPABASE_URL}/functions/v1/generate-image`, {
           method: "POST",
           headers: {
@@ -420,20 +430,21 @@ serve(async (req) => {
 
         if (imgResponse.ok) {
           const imgResult = await imgResponse.json();
-          console.log(`[CONVERT] ${ctx} image generated: ${imgResult.publicUrl ? 'success' : 'no url'}`);
+          console.log(`[${requestId}][CONVERT] ${ctx} image generated: ${imgResult.publicUrl ? 'success' : 'no url'}`);
         } else {
-          console.warn(`[CONVERT] ${ctx} image generation failed: ${imgResponse.status}`);
+          console.warn(`[${requestId}][CONVERT] ${ctx} image generation failed: ${imgResponse.status}`);
         }
       }
 
-      console.log(`[CONVERT] ✅ Images generated for article ${articleId}`);
+      console.log(`[${requestId}][CONVERT] ✅ Images generated for article ${articleId}`);
     } catch (imageError) {
       // Non-blocking - article was created, images can be generated later
-      console.error("[CONVERT] Image generation error (non-blocking):", imageError);
+      console.error(`[${requestId}][CONVERT] Image generation error (non-blocking):`, imageError);
     }
 
-    console.log(`[CONVERT] ✅ Conversion complete: Opportunity ${opportunityId} → Article ${articleId}`);
+    console.log(`[${requestId}][CONVERT] ✅ Conversion complete: Opportunity ${opportunityId} → Article ${articleId}`);
 
+    // E) Retorno estruturado de sucesso
     return new Response(
       JSON.stringify({
         success: true,
@@ -442,16 +453,19 @@ serve(async (req) => {
         article_slug: articleSlug,
         opportunity_id: opportunityId,
         funnel_stage: opportunity.funnel_stage,
+        request_id: requestId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
     console.error("[CONVERT] Error:", error);
+    // E) Retorno estruturado de erro
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error_type: 'UNEXPECTED_ERROR',
+        message: error instanceof Error ? error.message : "Unknown error",
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

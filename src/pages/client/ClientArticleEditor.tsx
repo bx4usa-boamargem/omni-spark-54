@@ -235,34 +235,34 @@ export default function ClientArticleEditor() {
   // CONVERT OPPORTUNITY: Handle fromOpportunity param via edge function
   // ====================================================================
   const handleConvertOpportunity = async (oppId: string, blogId: string) => {
+    // A) Gerar request_id no início para rastreabilidade
+    const requestId = crypto.randomUUID();
+    console.log(`[${requestId}][ConvertOpportunity] Starting conversion for opportunity:`, oppId);
+    
     setPhase('generating');
     setGenerationStage('analyzing');
     setGenerationProgress(10);
 
+    // C) Garantir limpeza com try/finally
+    const progressInterval = setInterval(() => {
+      setGenerationProgress((prev) => Math.min(prev + 8, 85));
+    }, 2000);
+
     try {
-      // Gradual progress update
-      const progressInterval = setInterval(() => {
-        setGenerationProgress((prev) => Math.min(prev + 8, 85));
-      }, 2000);
-
-      console.log('[ConvertOpportunity] Starting conversion for opportunity:', oppId);
-
+      // B) Enviar request_id no body do invoke
       const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
-        body: { opportunityId: oppId, blogId },
+        body: { 
+          opportunityId: oppId, 
+          blogId,
+          request_id: requestId
+        },
       });
 
-      clearInterval(progressInterval);
-
-      // =====================================================================
-      // HOTFIX: Tratamento específico de erros do Quality Gate (HTTP 422)
-      // =====================================================================
+      // D) Tratamento explícito de erro
       if (error) {
-        console.error('[ConvertOpportunity] Edge function error:', error);
-        
-        // Tentar extrair mensagem específica do Quality Gate
+        console.error(`[${requestId}][ConvertOpportunity] Edge function error:`, error);
         const errorMessage = error.message || 'Erro desconhecido';
         
-        // Detectar erros específicos do Quality Gate
         if (errorMessage.includes('insufficient_sections') || errorMessage.includes('QUALITY_GATE')) {
           toast.error('Estrutura do artigo insuficiente. Tente com outro tema.');
         } else if (errorMessage.includes('insufficient_faq')) {
@@ -273,22 +273,21 @@ export default function ClientArticleEditor() {
           toast.error(`Erro ao gerar: ${errorMessage}`);
         }
         
-        // Resetar estado
         setPhase('form');
         setGenerationProgress(0);
         setGenerationStage(null);
         return;
       }
 
-      // Verificar se retornou sucesso
+      // D) Verificar success e ler error_type/reason_code
       if (!data?.success) {
-        console.error('[ConvertOpportunity] Conversion failed:', data);
+        console.error(`[${requestId}][ConvertOpportunity] Conversion failed:`, data);
         
-        // Extrair mensagem específica do backend
+        const errorType = data?.error_type || '';
+        const reasonCode = data?.reason_code || '';
         const failReason = data?.message || data?.details || data?.error || 'Erro na conversão';
         
-        // Detectar falhas do Quality Gate no payload
-        if (failReason.includes('insufficient') || failReason.includes('QUALITY_GATE')) {
+        if (errorType === 'QUALITY_GATE_FAILED' || reasonCode.includes('insufficient')) {
           toast.error(`Validação falhou: ${failReason}`);
         } else {
           toast.error(failReason);
@@ -300,23 +299,22 @@ export default function ClientArticleEditor() {
         return;
       }
 
-      // Sucesso!
+      // Sucesso
       setGenerationProgress(100);
       toast.success('Artigo criado com sucesso!');
-
-      console.log('[ConvertOpportunity] Success, redirecting to article:', data.article_id);
-
-      // Redirect to the real editor with the created article
+      console.log(`[${requestId}][ConvertOpportunity] Success, redirecting to article:`, data.article_id);
       smartNavigate(navigate, getClientArticleEditPath(data.article_id));
-    } catch (err) {
-      console.error('[ConvertOpportunity] Unexpected error:', err);
       
+    } catch (err) {
+      console.error(`[${requestId}][ConvertOpportunity] Unexpected error:`, err);
       const errorMsg = err instanceof Error ? err.message : 'Erro inesperado';
       toast.error(`Erro ao criar artigo: ${errorMsg}`);
-      
       setPhase('form');
       setGenerationProgress(0);
       setGenerationStage(null);
+    } finally {
+      // C) clearInterval SEMPRE no finally
+      clearInterval(progressInterval);
     }
   };
 
