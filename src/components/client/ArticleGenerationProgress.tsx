@@ -1,9 +1,11 @@
 /**
- * Article Generation Progress Component
+ * Article Generation Progress Component V4.2
  * 
  * Exibe progresso visual da geração de artigos com etapas do Article Engine.
+ * Agora com suporte a polling real de estágios e botão de diagnóstico.
  */
 
+import { useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { 
@@ -17,11 +19,13 @@ import {
   Circle,
   Clock,
   AlertTriangle,
-  ListTree,
-  X
+  X,
+  Activity,
+  Image
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
+import { GenerationDiagnosticsDialog } from './GenerationDiagnosticsDialog';
 
 interface GenerationStage {
   key: string;
@@ -31,18 +35,43 @@ interface GenerationStage {
 }
 
 /**
- * V4.0: Updated stages - Removed heavy SERP/Firecrawl from sync flow
- * "Pesquisando referências" = Only Perplexity (~5s) - NOT full SERP
- * SEO deep analysis now happens in background (seo-enhancer-job)
+ * V4.2: Complete stage list matching backend exactly
  */
 const GENERATION_STAGES: GenerationStage[] = [
   { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 15 },
   { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 25 },
   { key: 'researching', label: 'Pesquisando referências...', icon: Search, progress: 40 },
   { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 70 },
-  { key: 'images', label: 'Gerando imagens...', icon: Target, progress: 85 },
+  { key: 'images', label: 'Gerando imagens...', icon: Image, progress: 85 },
   { key: 'finalizing', label: 'Finalizando artigo...', icon: Target, progress: 95 },
 ];
+
+interface DiagnosticsData {
+  research?: {
+    provider: string;
+    durationMs: number;
+    success: boolean;
+    usedFallback?: boolean;
+  };
+  writer?: {
+    provider: string;
+    durationMs: number;
+    success: boolean;
+  };
+  qa?: {
+    provider: string;
+    durationMs: number;
+    score?: number;
+  };
+  images?: {
+    total: number;
+    completed: number;
+    pending: boolean;
+    usedPlaceholders: boolean;
+    durationMs?: number;
+  };
+  totalDurationMs?: number;
+}
 
 interface ArticleGenerationProgressProps {
   currentStage: string | null;
@@ -50,6 +79,9 @@ interface ArticleGenerationProgressProps {
   showTimeoutWarning?: boolean;
   keyword: string;
   onCancel?: () => void;
+  isStuck?: boolean;
+  stuckDuration?: number;
+  diagnostics?: DiagnosticsData | null;
 }
 
 export function ArticleGenerationProgress({ 
@@ -57,9 +89,17 @@ export function ArticleGenerationProgress({
   progress,
   showTimeoutWarning = false,
   keyword,
-  onCancel
+  onCancel,
+  isStuck = false,
+  stuckDuration = 0,
+  diagnostics = null
 }: ArticleGenerationProgressProps) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  
   const currentStageIndex = GENERATION_STAGES.findIndex(s => s.key === currentStage);
+  
+  // Determine if we should show "waiting for server" message
+  const showWaitingMessage = isStuck && currentStage === 'classifying' && progress >= 80;
   
   return (
     <div className="bg-card border rounded-2xl shadow-2xl p-8 space-y-6 animate-in fade-in duration-300">
@@ -164,8 +204,32 @@ export function ArticleGenerationProgress({
         })}
       </div>
       
+      {/* Waiting for Server Warning (when stuck) */}
+      {showWaitingMessage && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+          <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-spin" />
+          <div className="flex-1">
+            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+              Aguardando resposta do servidor...
+            </p>
+            <p className="text-xs text-blue-600/70 dark:text-blue-400/70">
+              A geração está em progresso. Aguarde mais um momento.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDiagnostics(true)}
+            className="gap-1 text-blue-600 hover:text-blue-700"
+          >
+            <Activity className="h-4 w-4" />
+            Diagnóstico
+          </Button>
+        </div>
+      )}
+      
       {/* Timeout Warning */}
-      {showTimeoutWarning && (
+      {showTimeoutWarning && !showWaitingMessage && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
           <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
           <p className="text-sm text-yellow-700 dark:text-yellow-300">
@@ -174,9 +238,9 @@ export function ArticleGenerationProgress({
         </div>
       )}
       
-      {/* Cancel Button */}
-      {onCancel && (
-        <div className="flex justify-center pt-2">
+      {/* Action Buttons */}
+      <div className="flex justify-center gap-3 pt-2">
+        {onCancel && (
           <Button
             variant="ghost"
             size="sm"
@@ -186,8 +250,27 @@ export function ArticleGenerationProgress({
             <X className="h-4 w-4" />
             Cancelar
           </Button>
-        </div>
-      )}
+        )}
+        
+        {diagnostics && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDiagnostics(true)}
+            className="gap-2"
+          >
+            <Activity className="h-4 w-4" />
+            Ver Diagnóstico
+          </Button>
+        )}
+      </div>
+      
+      {/* Diagnostics Dialog */}
+      <GenerationDiagnosticsDialog
+        diagnostics={diagnostics}
+        isOpen={showDiagnostics}
+        onOpenChange={setShowDiagnostics}
+      />
     </div>
   );
 }

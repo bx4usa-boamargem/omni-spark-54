@@ -515,6 +515,138 @@ function inferTags(theme: string, content: string, keywords: string[], category:
 
 // ============ FIM CATEGORIA E TAGS ============
 
+// ============ SANITIZADOR DE CONTEÚDO ============
+// Remove lixo, repetições, e textos estranhos antes de persistir
+
+interface SanitizeResult {
+  content: string;
+  removed: string[];
+}
+
+function sanitizeContent(content: string): SanitizeResult {
+  const removed: string[] = [];
+  let sanitized = content;
+  
+  // 1. Remove ocorrências repetidas de "ATENÇÃO" (case-insensitive)
+  const atencaoPattern = /(?:^|\n)(?:>?\s*)?(?:⚠️?\s*)?ATENÇÃO[:\s!]*[^\n]*\n?/gi;
+  const atencaoMatches = sanitized.match(atencaoPattern);
+  if (atencaoMatches && atencaoMatches.length > 1) {
+    // Keep only the first occurrence
+    let count = 0;
+    sanitized = sanitized.replace(atencaoPattern, (match) => {
+      count++;
+      if (count > 1) {
+        removed.push(`Duplicate ATENÇÃO block removed`);
+        return '';
+      }
+      return match;
+    });
+  }
+  
+  // 2. Remove strange phrases: "varredura", "verdade dura"
+  const strangePatterns = [
+    /\b(?:varredura|verdade\s+dura)\b[^.]*\.\s*/gi,
+    /(?:^|\n)[^#\n]*(?:varredura|verdade\s+dura)[^#\n]*(?:\n|$)/gi
+  ];
+  for (const pattern of strangePatterns) {
+    const match = sanitized.match(pattern);
+    if (match) {
+      removed.push(`Strange text removed: "${match[0].substring(0, 50)}..."`);
+      sanitized = sanitized.replace(pattern, '\n');
+    }
+  }
+  
+  // 3. Remove consecutive duplicate lines
+  const lines = sanitized.split('\n');
+  const cleanLines: string[] = [];
+  let prevLine = '';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && trimmed === prevLine.trim()) {
+      removed.push(`Duplicate line removed: "${trimmed.substring(0, 40)}..."`);
+      continue;
+    }
+    cleanLines.push(line);
+    prevLine = line;
+  }
+  sanitized = cleanLines.join('\n');
+  
+  // 4. Remove duplicate H2 headings (keep only first occurrence)
+  const h2Pattern = /^##\s+(.+)$/gm;
+  const seenH2s = new Map<string, number>();
+  sanitized = sanitized.replace(h2Pattern, (match, heading) => {
+    const normalizedHeading = heading.toLowerCase().trim();
+    const count = seenH2s.get(normalizedHeading) || 0;
+    seenH2s.set(normalizedHeading, count + 1);
+    if (count > 0) {
+      removed.push(`Duplicate H2 removed: "${heading}"`);
+      return ''; // Remove duplicate H2
+    }
+    return match;
+  });
+  
+  // 5. Clean up excessive whitespace
+  sanitized = sanitized.replace(/\n{4,}/g, '\n\n\n');
+  
+  if (removed.length > 0) {
+    console.log(`[Sanitizer] Removed ${removed.length} issues:`, removed);
+  }
+  
+  return { content: sanitized.trim(), removed };
+}
+
+// ============ CTA BUILDER ============
+// Builds CTA JSON from business profile
+
+interface ArticleCTA {
+  company_name?: string;
+  phone?: string;
+  whatsapp?: string;
+  booking_url?: string;
+  site?: string;
+  email?: string;
+}
+
+async function buildArticleCTA(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  blogId: string
+): Promise<ArticleCTA | null> {
+  try {
+    // Fetch business profile for CTA data
+    const { data: profile } = await supabaseClient
+      .from('business_profile')
+      .select('company_name, phone, whatsapp, booking_url, site, email')
+      .eq('blog_id', blogId)
+      .maybeSingle();
+    
+    if (!profile) {
+      console.log('[CTA] No business profile found for blog');
+      return null;
+    }
+    
+    const cta: ArticleCTA = {};
+    
+    if (profile.company_name) cta.company_name = profile.company_name;
+    if (profile.phone) cta.phone = profile.phone;
+    if (profile.whatsapp) cta.whatsapp = profile.whatsapp;
+    if (profile.booking_url) cta.booking_url = profile.booking_url;
+    if (profile.site) cta.site = profile.site;
+    if (profile.email) cta.email = profile.email;
+    
+    // Only return if we have at least one contact method
+    if (cta.phone || cta.whatsapp || cta.booking_url || cta.site || cta.email) {
+      console.log(`[CTA] Built CTA for "${cta.company_name || 'unnamed'}"`);
+      return cta;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('[CTA] Error fetching business profile:', error);
+    return null;
+  }
+}
+
 // ============ PERSISTÊNCIA DE ARTIGO ============
 // Função obrigatória para salvar artigo na tabela 'articles'
 // CRÍTICO: Sem esta persistência, o frontend recebe artigo sem id/slug/status
@@ -557,7 +689,9 @@ async function persistArticleToDb(
   userId?: string | null,  // User ID for RLS policy
   // V2.1: Article Engine metadata
   articleStructureType?: string | null,
-  sourcePayload?: Record<string, unknown> | null
+  sourcePayload?: Record<string, unknown> | null,
+  // V4.2: CTA data
+  ctaData?: ArticleCTA | null
 ): Promise<{ id: string; slug: string; status: string; title: string }> {
   console.log(`[PERSIST] Preparing to save article: "${articleData.title}" for blog ${blogId}`);
   
@@ -671,13 +805,19 @@ async function persistArticleToDb(
   
   console.log(`[PERSIST] Saving ${contentImagesForInsert.length} content_images for new article`);
   
+  // V4.2: Sanitize content before persisting
+  const { content: sanitizedContent, removed: sanitizeRemoved } = sanitizeContent(articleData.content || '');
+  if (sanitizeRemoved.length > 0) {
+    console.log(`[PERSIST] Content sanitized, removed ${sanitizeRemoved.length} issues`);
+  }
+  
   // Preparar dados para inserção (no duplicate found)
   const insertData = {
     blog_id: blogId,
     title: articleData.title || 'Artigo sem título',
     title_fingerprint: titleFingerprint, // NEW: For deduplication
     slug: uniqueSlug,
-    content: articleData.content || '',
+    content: sanitizedContent, // V4.2: Use sanitized content
     excerpt: articleData.excerpt || articleData.meta_description || '',
     meta_description: articleData.meta_description || '',
     category: inferredCategory || null,
@@ -699,6 +839,8 @@ async function persistArticleToDb(
     source_payload: sourcePayload || null,
     // V2.2: Content images (from image_prompts)
     content_images: contentImagesForInsert.length > 0 ? contentImagesForInsert : null,
+    // V4.2: CTA data from business profile
+    cta: ctaData || null,
   };
   
   console.log(`[PERSIST] Inserting article with slug: ${uniqueSlug}, status: ${insertData.status}, blog_id: ${blogId}`);
@@ -2382,6 +2524,9 @@ Reestruture e retorne via tool optimize_article.`;
       }
     } : null;
 
+    // V4.2: Build CTA from business profile
+    const articleCTA = await buildArticleCTA(supabase, blog_id!);
+
     let persistedArticle;
     try {
       persistedArticle = await persistArticleToDb(
@@ -2395,7 +2540,9 @@ Reestruture e retorne via tool optimize_article.`;
         user?.id,
         // V2.1: Article Engine metadata
         articleEngineTemplate?.template || null,
-        articleEnginePayload
+        articleEnginePayload,
+        // V4.2: CTA
+        articleCTA
       );
       console.log(`[${requestId}] SUCCESS: id=${persistedArticle.id}`);
       
