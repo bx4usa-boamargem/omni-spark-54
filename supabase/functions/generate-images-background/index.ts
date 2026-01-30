@@ -1,5 +1,5 @@
 /**
- * V4.2: Background Image Generation Job with Retries + Incremental Updates
+ * V4.7: Background Image Generation Job with Content Injection
  * 
  * This edge function generates high-quality images asynchronously
  * after the article has been delivered with placeholders.
@@ -7,12 +7,14 @@
  * Features:
  * - Retry logic with exponential backoff (500ms, 1500ms, 3000ms)
  * - Incremental database updates after each image
- * - Proper tracking with images_total / images_completed
+ * - V4.7: Uses content_images (NOT image_prompts which doesn't exist)
+ * - V4.7: Injects images into content HTML with Structure Guard
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callImageGeneration } from '../_shared/aiProviders.ts';
+import { injectImagesIntoContent, validateContentStructure } from '../_shared/imageInjector.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -101,7 +103,7 @@ serve(async (req) => {
     const totalImages = image_prompts.length;
     let completedImages = 0;
 
-    // V4.3: Initialize tracking columns - NUNCA alterar generation_stage
+    // V4.7: Initialize tracking columns - NUNCA alterar generation_stage
     await supabase
       .from('articles')
       .update({ 
@@ -112,7 +114,7 @@ serve(async (req) => {
       })
       .eq('id', article_id);
 
-    // V4.3: Generate each image with resilient loop - NUNCA abortar
+    // V4.7: Generate each image with resilient loop - NUNCA abortar
     for (let i = 0; i < image_prompts.length; i++) {
       const imgPrompt = image_prompts[i];
       const imageIndex = i + 1;
@@ -136,12 +138,24 @@ serve(async (req) => {
         continue;
       }
       
+      // V4.7: Convert to content_images format and update incrementally
+      const contentImagesForDb = image_prompts
+        .filter((p: ImagePrompt) => p.url)
+        .map((p: ImagePrompt, idx: number) => ({
+          context: p.context,
+          url: p.url!,
+          alt: p.alt || p.context,
+          after_section: p.after_section || (idx + 1)
+        }));
+
+      console.log(`[${request_id}][IMAGES][SAVE] content_images count=${contentImagesForDb.length}`);
+
       // INCREMENTAL UPDATE: Update article after each image
       try {
         const { error: incrementalError } = await supabase
           .from('articles')
           .update({
-            image_prompts: image_prompts,
+            content_images: contentImagesForDb, // V4.7: Coluna correta (NOT image_prompts)
             images_completed: completedImages,
             // Update featured image if this is the first image
             ...(i === 0 && imgPrompt.url ? { featured_image_url: imgPrompt.url } : {}),
@@ -164,15 +178,58 @@ serve(async (req) => {
       }
     }
 
+    // V4.7: Build final content_images array
+    const finalContentImages = image_prompts
+      .filter((p: ImagePrompt) => p.url)
+      .map((p: ImagePrompt, idx: number) => ({
+        context: p.context,
+        url: p.url!,
+        alt: p.alt || p.context,
+        after_section: p.after_section || (idx + 1)
+      }));
+
+    // V4.7: Inject images into content HTML (Structure Guard protected)
+    let contentUpdated = false;
+    if (finalContentImages.length > 0) {
+      const { data: articleData } = await supabase
+        .from('articles')
+        .select('content')
+        .eq('id', article_id)
+        .single();
+      
+      if (articleData?.content) {
+        console.log(`[${request_id}][IMAGES] Injecting images into content`);
+        const injectionResult = injectImagesIntoContent(articleData.content, finalContentImages);
+        
+        if (injectionResult.structureValid && injectionResult.injected > 0) {
+          console.log(`[${request_id}][IMAGES] Content updated successfully: ${injectionResult.injected} injected`);
+          
+          // Update content with injected images
+          const { error: contentError } = await supabase
+            .from('articles')
+            .update({ content: injectionResult.content })
+            .eq('id', article_id);
+          
+          if (contentError) {
+            console.error(`[${request_id}][IMAGES] Content update failed:`, contentError);
+          } else {
+            contentUpdated = true;
+          }
+        } else {
+          console.log(`[${request_id}][IMAGES] No structural overwrite allowed`);
+        }
+      }
+    }
+
     // Final update: Mark as complete
     const featuredUrl = image_prompts[0]?.url || null;
     const allCompleted = completedImages === totalImages;
 
-    // V4.3: Final update - NUNCA alterar generation_stage (artigo principal é dono do estado)
+    // V4.7: Final update - use content_images (NOT image_prompts)
     const { error: finalError } = await supabase
       .from('articles')
       .update({
-        image_prompts: image_prompts,
+        content_images: finalContentImages, // V4.7: Coluna correta
         featured_image_url: featuredUrl,
         images_pending: completedImages < totalImages, // V4.3: Pendente apenas se incompleto
         images_completed: completedImages,
@@ -190,6 +247,7 @@ serve(async (req) => {
     }
 
     const duration = Date.now() - startTime;
+    console.log(`[${request_id}][PIPELINE][DONE] stage=completed progress=100`);
     console.log(`[${request_id}][ImageJob] ✅ Article ${article_id} images updated in ${duration}ms (${completedImages}/${totalImages})`);
 
     // Log to ai_usage_logs
@@ -205,6 +263,7 @@ serve(async (req) => {
           request_id,
           images_total: totalImages,
           images_completed: completedImages,
+          content_injected: contentUpdated,
           duration_ms: duration,
           all_succeeded: allCompleted
         }
@@ -217,6 +276,7 @@ serve(async (req) => {
       success: true, 
       images_total: totalImages,
       images_completed: completedImages,
+      content_injected: contentUpdated,
       all_succeeded: allCompleted,
       duration_ms: duration
     }), { 
