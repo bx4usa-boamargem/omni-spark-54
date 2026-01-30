@@ -257,101 +257,50 @@ export default function ClientArticleEditor() {
     setGenerationStage('analyzing');
     setGenerationProgress(10);
 
-    // C) Garantir limpeza com try/finally
     const progressInterval = setInterval(() => {
       setGenerationProgress((prev) => Math.min(prev + 8, 85));
     }, 2000);
 
-    try {
-      // B) Enviar request_id no body do invoke
-      const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
-        body: { 
-          opportunityId: oppId, 
-          blogId,
-          request_id: requestId
-        },
-      });
+    const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
+      body: { 
+        opportunityId: oppId, 
+        blogId,
+        request_id: requestId
+      },
+    });
 
-      // D) Tratamento explícito de erro
-      if (error) {
-        console.error(`[${requestId}][ConvertOpportunity] Edge function error:`, error);
-        const errorMessage = error.message || 'Erro desconhecido';
-        
-        // Tratamento específico para LIMIT_REACHED
-        if (errorMessage.includes('LIMIT_REACHED')) {
-          toast.error('Limite de artigos atingido', {
-            description: 'Faça upgrade do seu plano para continuar.',
-          });
-          setPhase('form');
-          setGenerationProgress(0);
-          setGenerationStage(null);
-          return;
-        }
-        
-        if (errorMessage.includes('insufficient_sections') || errorMessage.includes('QUALITY_GATE')) {
-          toast.error('Estrutura do artigo insuficiente. Tente com outro tema.');
-        } else if (errorMessage.includes('insufficient_faq')) {
-          toast.error('FAQ insuficiente. Tente novamente.');
-        } else if (errorMessage.includes('missing_introduction')) {
-          toast.error('Introdução muito curta. Tente novamente.');
-        } else {
-          toast.error(`Erro ao gerar: ${errorMessage}`);
-        }
-        
-        setPhase('form');
-        setGenerationProgress(0);
-        setGenerationStage(null);
-        return;
-      }
+    // 🔴 SEMPRE limpar o timer antes de qualquer return
+    clearInterval(progressInterval);
 
-      // D) Verificar success e ler error_type/reason_code
-      if (!data?.success) {
-        console.error(`[${requestId}][ConvertOpportunity] Conversion failed:`, data);
-        
-        const errorType = data?.error_type || '';
-        const reasonCode = data?.reason_code || '';
-        const failReason = data?.message || data?.details || data?.error || 'Erro na conversão';
-        
-        // Tratamento específico para LIMIT_REACHED
-        if (errorType === 'LIMIT_REACHED') {
-          toast.error('Limite de artigos atingido', {
-            description: failReason || 'Faça upgrade do seu plano para continuar.',
-          });
-          setPhase('form');
-          setGenerationProgress(0);
-          setGenerationStage(null);
-          return;
-        }
-        
-        if (errorType === 'QUALITY_GATE_FAILED' || reasonCode.includes('insufficient')) {
-          toast.error(`Validação falhou: ${failReason}`);
-        } else {
-          toast.error(failReason);
-        }
-        
-        setPhase('form');
-        setGenerationProgress(0);
-        setGenerationStage(null);
-        return;
-      }
-
-      // ✅ SUCESSO - NÃO incrementar usage (backend já fez)
-      setGenerationProgress(100);
-      toast.success('Artigo criado com sucesso!');
-      console.log(`[${requestId}][ConvertOpportunity] Success, redirecting to article:`, data.article_id);
-      smartNavigate(navigate, getClientArticleEditPath(data.article_id));
-      
-    } catch (err) {
-      console.error(`[${requestId}][ConvertOpportunity] Unexpected error:`, err);
-      const errorMsg = err instanceof Error ? err.message : 'Erro inesperado';
-      toast.error(`Erro ao criar artigo: ${errorMsg}`);
+    // ❌ ERRO DE EDGE FUNCTION
+    if (error) {
+      console.error(`[${requestId}] Edge error`, error);
+      setGenerationStage(null);
       setPhase('form');
       setGenerationProgress(0);
-      setGenerationStage(null);
-    } finally {
-      // C) clearInterval SEMPRE no finally
-      clearInterval(progressInterval);
+      toast.error('Erro ao gerar artigo', {
+        description: error.message || 'Falha inesperada',
+      });
+      return;
     }
+
+    // ❌ BACKEND RESPONDEU COM success=false
+    if (!data?.success) {
+      console.error(`[${requestId}] Backend failure`, data);
+      setGenerationStage(null);
+      setPhase('form');
+      setGenerationProgress(0);
+      toast.error('Falha na geração do artigo', {
+        description: data?.message || 'Erro de validação',
+      });
+      return;
+    }
+
+    // ✅ SUCESSO REAL
+    setGenerationStage('finalizing');
+    setGenerationProgress(100);
+    toast.success('Artigo criado com sucesso');
+    smartNavigate(navigate, getClientArticleEditPath(data.article_id));
   };
 
   // Persist view mode
