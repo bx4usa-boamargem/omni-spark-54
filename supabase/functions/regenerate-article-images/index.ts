@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { injectImagesIntoContent, validateContentStructure } from '../_shared/imageInjector.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -261,12 +262,35 @@ NÃO inclua: texto, logotipos, marcas d'água, elementos caricatos.
       }
     }
 
+    // V4.7: Injetar imagens no content existente (SEM REWRITE)
+    let updatedContent = article.content;
+    let structureValid = true;
+
+    if (article.content && contentImages.length > 0) {
+      structureValid = validateContentStructure(article.content);
+      
+      if (structureValid) {
+        console.log('[IMAGES] Injecting images into content');
+        const result = injectImagesIntoContent(article.content, contentImages);
+        
+        if (result.structureValid && result.injected > 0) {
+          updatedContent = result.content;
+          console.log(`[IMAGES] Content updated successfully: ${result.injected} injected, ${result.skipped} skipped`);
+        } else {
+          console.log('[IMAGES] No structural overwrite allowed - content preserved');
+        }
+      } else {
+        console.warn('[IMAGES][STRUCTURE_GUARD_BLOCKED] content not overwritten');
+      }
+    }
+
     // Update article with new images
     const { error: updateError } = await supabase
       .from('articles')
       .update({
         featured_image_url: featuredImageUrl,
         content_images: contentImages.length > 0 ? contentImages : null,
+        content: structureValid ? updatedContent : article.content, // V4.7: Só atualiza se estrutura válida
         updated_at: new Date().toISOString()
       })
       .eq('id', article_id);

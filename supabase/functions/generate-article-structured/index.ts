@@ -1660,42 +1660,33 @@ serve(async (req) => {
     let articleEngineTemplate: TemplateSelectionResult | null = null;
     let articleEngineOutline: OutlineStructure | null = null;
     
-    try {
-      // 1. Select template (with override or auto-selection)
-      if (templateOverride) {
-        console.log(`[Article Engine] Template override: ${templateOverride}`);
-        const intent = classifyIntent(primaryKeyword);
-        articleEngineTemplate = {
-          template: templateOverride as TemplateType,
-          variant: 'chronological',
-          intent,
-          reason: 'Template selecionado manualmente pelo usuário',
-          antiPatternApplied: false
-        };
-      } else if (blog_id) {
-        console.log(`[Article Engine] Auto-selecting template for: "${primaryKeyword}"`);
-        articleEngineTemplate = await selectTemplate(supabase, primaryKeyword, blog_id, niche);
-      }
+    // V4.7: Template fixo síncrono - NUNCA travar em seleção de template
+    console.log(`[${requestId}][PIPELINE] V4.7: Using fixed template (no async selection)`);
+    const intent = classifyIntent(primaryKeyword);
+    articleEngineTemplate = {
+      template: 'complete_guide' as TemplateType,
+      variant: 'chronological' as import('../_shared/pipelineStages.ts').TemplateVariant,
+      intent,
+      reason: 'V4.7: Template fixo para evitar travamento',
+      antiPatternApplied: false
+    };
+    console.log(`[${requestId}][STAGE] writing`);
 
-      if (articleEngineTemplate) {
-        console.log(`[Article Engine] Template selected: ${articleEngineTemplate.template} (variant: ${articleEngineTemplate.variant})`);
-        
-        // 2. Generate structured outline
-        const territoryName = territoryData?.official_name || 'Brasil';
-        articleEngineOutline = buildOutlineStructure(
-          articleEngineTemplate.template,
-          articleEngineTemplate.variant,
-          mode,
-          primaryKeyword,
-          territoryName,
-          businessName || editorial_template?.company_name || undefined
-        );
-        
-        console.log(`[Article Engine] Outline generated: ${articleEngineOutline.h2Count} H2s, ${articleEngineOutline.totalTargetWords} target words`);
-      }
-    } catch (engineError) {
-      console.error(`[Article Engine] Error in selection (using fallback):`, engineError);
-      // Continue without Article Engine - fallback to original behavior
+    // Generate structured outline with fixed template
+    try {
+      const territoryName = territoryData?.official_name || 'Brasil';
+      articleEngineOutline = buildOutlineStructure(
+        articleEngineTemplate.template,
+        articleEngineTemplate.variant,
+        mode,
+        primaryKeyword,
+        territoryName,
+        businessName || editorial_template?.company_name || undefined
+      );
+      
+      console.log(`[Article Engine] Outline generated: ${articleEngineOutline.h2Count} H2s, ${articleEngineOutline.totalTargetWords} target words`);
+    } catch (outlineError) {
+      console.warn(`[Article Engine] Outline generation failed, continuing:`, outlineError);
     }
 
     // ============================================================================
@@ -2592,14 +2583,16 @@ Reestruture e retorne via tool optimize_article.`;
         const totalImages = articleWithImages.image_prompts.length;
         console.log(`[${requestId}][STAGE] images - Dispatching background job for ${totalImages} images`);
         
-        // V4.3: CRÍTICO - Atualizar image_prompts ANTES do dispatch
+        // V4.7: Atualizar flags de imagem ANTES do dispatch
+        // NOTA: image_prompts removido - coluna não existe, content_images será atualizado pelo background job
         const { error: preDispatchError } = await supabase
           .from('articles')
           .update({ 
             images_pending: true,
             images_total: totalImages,
-            images_completed: 0,
-            image_prompts: articleWithImages.image_prompts // Salvar prompts antes do dispatch
+            images_completed: 0
+            // V4.7: REMOVIDO image_prompts - coluna não existe
+            // content_images será atualizado pelo background job
           })
           .eq('id', persistedArticle.id);
         
