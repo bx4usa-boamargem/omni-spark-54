@@ -1,122 +1,104 @@
 
+# Remover Completamente o Stage "Validando Brief"
 
-# Simplificação do Error Handling: handleConvertOpportunity
+## Diagnóstico
 
-## Objetivo
+O problema identificado é que existe um stage "Validando brief..." na UI que:
+1. Não corresponde a nenhuma etapa real do backend
+2. É mapeado a partir do stage local `'analyzing'` para `'validating'`
+3. Causa confusão visual e travamento na UI
 
-Implementar o padrão simplificado de tratamento de erros conforme especificação, garantindo:
-1. `clearInterval` imediatamente após o invoke (antes de qualquer return)
-2. Estado `setGenerationStage('failed')` em erros
-3. Estado `setGenerationStage('completed')` em sucesso
-4. Mensagens de erro simplificadas e consistentes
+### Arquivos Afetados
+
+| Arquivo | Problema |
+|---------|----------|
+| `src/pages/client/ClientArticleEditor.tsx` | Define `setGenerationStage('analyzing')` em 2 lugares e mapeia para `'validating'` |
+| `src/components/client/ArticleGenerationProgress.tsx` | Contém o label `'Validando brief...'` como primeiro stage |
+| `src/utils/streamArticle.ts` | Define o tipo `GenerationStage` com `'analyzing'` |
 
 ---
 
-## Alterações
+## Alterações Necessárias
 
-**Arquivo:** `src/pages/client/ClientArticleEditor.tsx`
-**Linhas:** 265-354
+### 1. `src/components/client/ArticleGenerationProgress.tsx`
 
-### Código Atual vs Novo
-
-O código atual usa `try/finally` com `clearInterval` no finally, e tem múltiplos blocos de tratamento de erro com mensagens específicas.
-
-O novo padrão:
-- Move `clearInterval` para logo após o invoke
-- Remove o `try/finally` (não mais necessário)
-- Adiciona `setGenerationStage('failed')` em todos os caminhos de erro
-- Adiciona `setGenerationStage('completed')` no sucesso
-- Simplifica mensagens de erro
-
-### Nova Implementação
+**Linha 33-41 — Remover stage "validating" e atualizar lista:**
 
 ```typescript
-const handleConvertOpportunity = async (oppId: string, blogId: string) => {
-  const requestId = crypto.randomUUID();
-  console.log(`[${requestId}][ConvertOpportunity] Starting conversion for opportunity:`, oppId);
-  
-  // 🔒 VERIFICAÇÃO DE LIMITE (UX - evitar tentativa inútil)
-  const limitCheck = await checkLimit('articles');
-  if (!limitCheck.canCreate) {
-    console.log(`[${requestId}][ConvertOpportunity] BLOCKED: Article limit reached`);
-    toast.error('Limite de artigos atingido', {
-      description: `Você usou ${limitCheck.used}/${limitCheck.limit} artigos este mês. Faça upgrade para continuar.`,
-    });
-    return;
-  }
-  
-  console.log(`[${requestId}][ConvertOpportunity] Limit OK: ${limitCheck.remaining} articles remaining`);
-  
-  setPhase('generating');
-  setGenerationStage('analyzing');
-  setGenerationProgress(10);
+const GENERATION_STAGES: GenerationStage[] = [
+  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 10 },
+  { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 20 },
+  { key: 'researching', label: 'Pesquisando na web...', icon: Search, progress: 40 },
+  { key: 'outlining', label: 'Gerando estrutura...', icon: ListTree, progress: 55 },
+  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 75 },
+  { key: 'optimizing', label: 'Otimizando SEO...', icon: Target, progress: 90 },
+];
+```
 
-  const progressInterval = setInterval(() => {
-    setGenerationProgress((prev) => Math.min(prev + 8, 85));
-  }, 2000);
+**Resultado:**
+- Remove `{ key: 'validating', label: 'Validando brief...', ... }` 
+- Inicia com `'classifying'` como primeiro stage visível
 
-  const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
-    body: { 
-      opportunityId: oppId, 
-      blogId,
-      request_id: requestId
-    },
-  });
+---
 
-  // 🔴 SEMPRE limpar o timer antes de qualquer return
-  clearInterval(progressInterval);
+### 2. `src/pages/client/ClientArticleEditor.tsx`
 
-  // ❌ ERRO DE EDGE FUNCTION
-  if (error) {
-    console.error(`[${requestId}] Edge error`, error);
-    setGenerationStage('failed');
-    setPhase('form');
-    setGenerationProgress(0);
-    toast.error('Erro ao gerar artigo', {
-      description: error.message || 'Falha inesperada',
-    });
-    return;
-  }
+#### A) Linha 133-143 — Atualizar mapeamento de stages
 
-  // ❌ BACKEND RESPONDEU COM success=false
-  if (!data?.success) {
-    console.error(`[${requestId}] Backend failure`, data);
-    setGenerationStage('failed');
-    setPhase('form');
-    setGenerationProgress(0);
-    toast.error('Falha na geração do artigo', {
-      description: data?.message || 'Erro de validação',
-    });
-    return;
-  }
+Remover o mapeamento de `'analyzing'` para `'validating'`:
 
-  // ✅ SUCESSO REAL
-  setGenerationStage('completed');
-  setGenerationProgress(100);
-  toast.success('Artigo criado com sucesso');
-  smartNavigate(navigate, getClientArticleEditPath(data.article_id));
+```typescript
+const mapStageToArticleEngine = (stage: GenerationStage): string | null => {
+  if (!stage) return null;
+  const mapping: Record<string, string> = {
+    'analyzing': 'classifying', // Mapeia para primeiro stage real
+    'structuring': 'researching',
+    'generating': 'writing',
+    'finalizing': 'optimizing'
+  };
+  return mapping[stage] || stage;
 };
 ```
 
+**Resultado:** O stage local `'analyzing'` agora mapeia para `'classifying'` (primeiro stage real do backend)
+
+#### B) Linha 257 — Em `handleConvertOpportunity`
+
+**Opcional:** Manter `setGenerationStage('analyzing')` pois o mapeamento agora leva para `'classifying'`
+
+Ou alternativamente, mudar diretamente para `'generating'` se preferir simplificar:
+
+```typescript
+setPhase('generating');
+setGenerationStage('generating'); // Alternativa mais direta
+setGenerationProgress(10);
+```
+
+#### C) Linha 404 — Em `loadExistingArticle`
+
+Mesma lógica - o mapeamento corrigido resolverá o problema.
+
 ---
 
-## Benefícios
+### 3. `src/utils/streamArticle.ts` (Opcional)
 
-| Antes | Depois |
-|-------|--------|
-| `try/finally` com `clearInterval` no finally | `clearInterval` imediatamente após invoke |
-| Múltiplas mensagens de erro específicas | 2 mensagens genéricas e claras |
-| Sem estado `failed` | `setGenerationStage('failed')` explícito |
-| Sucesso sem estado `completed` | `setGenerationStage('completed')` explícito |
-| ~90 linhas | ~60 linhas |
+O tipo `GenerationStage` pode ser mantido como está, já que `'analyzing'` é um stage local válido que será mapeado corretamente pelo frontend.
+
+---
+
+## Resumo das Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `ArticleGenerationProgress.tsx` | Remover item `'validating'/'Validando brief...'` da lista `GENERATION_STAGES` |
+| `ClientArticleEditor.tsx` | Atualizar `mapStageToArticleEngine` para mapear `'analyzing'` → `'classifying'` |
 
 ---
 
 ## Resultado Esperado
 
-1. Timer sempre limpo antes de qualquer return
-2. UI reflete estado `failed` corretamente
-3. UI reflete estado `completed` corretamente
-4. Código mais simples e manutenível
-5. Mensagens de erro consistentes para o usuário
-
+1. Nenhuma referência a "brief" na UI
+2. Nenhum stage fake que não corresponde ao backend
+3. Primeiro stage visível: "Classificando intenção..."
+4. Progressão visual alinhada com o que realmente acontece no backend
+5. Sem travamento em 85% ou em estágios inexistentes
