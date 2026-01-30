@@ -1,267 +1,306 @@
 
-# V4.7 — IMPLEMENTADO ✅
 
-Status: **Concluído e Deployado**
-Data: 2026-01-30
+# V4.7.1 — Remoção Definitiva do Template Stage no Frontend
 
-## Resumo das Alterações
+## Diagnóstico Confirmado
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/_shared/imageInjector.ts` | **CRIAR** | Image Injection Engine com Structure Guard |
-| `supabase/functions/generate-article-structured/index.ts` | Modificar | Remover selectTemplate async, corrigir image_prompts → content_images |
-| `supabase/functions/generate-images-background/index.ts` | Modificar | Usar content_images, injetar no content HTML |
-| `supabase/functions/regenerate-article-images/index.ts` | Modificar | Adicionar injeção controlada + Structure Guard |
+O backend V4.7 já utiliza template fixo síncrono e não executa mais `selectTemplate` async. No entanto, o frontend ainda possui referências ao estágio "selecting/structuring/template" em **6 arquivos**, causando travamento visual em ~15-25%.
 
----
+### Pontos Identificados
 
-## 1. Criar `_shared/imageInjector.ts`
-
-Novo módulo com duas funções principais:
-
-### `validateContentStructure(content: string): boolean`
-- Conta H2 em HTML (`<h2>`) e Markdown (`##`)
-- Retorna `true` se >= 5 H2
-- Retorna `false` e loga `[IMAGES][STRUCTURE_GUARD]` se < 5 H2
-
-### `injectImagesIntoContent(content, contentImages): InjectionResult`
-- Valida estrutura antes de modificar
-- Encontra posições de todos os H2 no HTML
-- Para cada imagem ordenada por `after_section`:
-  - Verifica se já existe `<figure>` ou `<img>` próximo
-  - Se não, injeta bloco `<figure class="article-image">...</figure>`
-  - Se sim, incrementa `skipped`
-- Retorna `{ content, injected, skipped, structureValid }`
-- Logs obrigatórios:
-  - `[IMAGES][INJECT] injected=X skipped=Y`
-  - `[IMAGES][STRUCTURE_GUARD_BLOCKED] content not overwritten`
+| Arquivo | Problema |
+|---------|----------|
+| `src/hooks/useGenerationPolling.ts` | Type inclui `'selecting'` como estágio válido |
+| `src/components/client/ArticleGenerationProgress.tsx` | Stage `'selecting'` com label "Selecionando template..." e progress 25% |
+| `src/pages/client/ArticleGenerator.tsx` | Sequência de progresso inclui `{ stage: 'selecting', delay: 1500, progress: 25 }` |
+| `src/pages/client/ClientArticleEditor.tsx` | Mapping `'structuring': 'selecting'` |
+| `src/utils/streamArticle.ts` | Type `GenerationStage` inclui `'structuring'` e chama `onStage?.('structuring')` |
+| `src/components/client/GenerationStepList.tsx` | Step `'structuring'` com label "Definindo estrutura ideal" |
 
 ---
 
-## 2. Modificar `generate-article-structured/index.ts`
+## Alterações Necessárias
 
-### 2A. Remover Template Async (linhas 1663-1699)
+### 1. `src/hooks/useGenerationPolling.ts`
 
-**ANTES:**
+**Linha 11-21:** Remover `'selecting'` do type
+
+**Antes:**
 ```typescript
-if (templateOverride) {
-  // override logic
-} else if (blog_id) {
-  articleEngineTemplate = await selectTemplate(supabase, primaryKeyword, blog_id, niche);
-}
+export type GenerationStageType = 
+  | 'classifying' 
+  | 'selecting' 
+  | 'researching' 
+  | 'writing' 
+  | 'seo'
+  | 'qa'
+  | 'images' 
+  | 'finalizing' 
+  | 'completed' 
+  | 'failed';
 ```
 
-**DEPOIS:**
+**Depois:**
 ```typescript
-// V4.7: Template fixo síncrono - NUNCA travar em seleção
-console.log(`[${requestId}][PIPELINE] V4.7: Using fixed template (no async selection)`);
-const intent = classifyIntent(primaryKeyword);
-articleEngineTemplate = {
-  template: 'complete_guide' as TemplateType,
-  variant: 'chronological' as TemplateVariant,
-  intent,
-  reason: 'V4.7: Template fixo para evitar travamento',
-  antiPatternApplied: false
+export type GenerationStageType = 
+  | 'classifying' 
+  | 'researching' 
+  | 'writing' 
+  | 'seo'
+  | 'qa'
+  | 'images' 
+  | 'finalizing' 
+  | 'completed' 
+  | 'failed';
+```
+
+---
+
+### 2. `src/components/client/ArticleGenerationProgress.tsx`
+
+**Linhas 40-47:** Remover estágio `'selecting'` e recalibrar progresso
+
+**Antes:**
+```typescript
+const GENERATION_STAGES: GenerationStage[] = [
+  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 15 },
+  { key: 'selecting', label: 'Selecionando template...', icon: LayoutTemplate, progress: 25 },
+  { key: 'researching', label: 'Pesquisando referências...', icon: Search, progress: 40 },
+  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 70 },
+  { key: 'images', label: 'Gerando imagens...', icon: Image, progress: 85 },
+  { key: 'finalizing', label: 'Finalizando artigo...', icon: Target, progress: 95 },
+];
+```
+
+**Depois (V4.7.1 - sem template stage, progresso recalibrado):**
+```typescript
+const GENERATION_STAGES: GenerationStage[] = [
+  { key: 'classifying', label: 'Classificando intenção...', icon: Brain, progress: 10 },
+  { key: 'researching', label: 'Pesquisando referências...', icon: Search, progress: 30 },
+  { key: 'writing', label: 'Escrevendo conteúdo...', icon: FileText, progress: 60 },
+  { key: 'seo', label: 'Otimizando SEO...', icon: Target, progress: 75 },
+  { key: 'images', label: 'Gerando imagens...', icon: Image, progress: 88 },
+  { key: 'finalizing', label: 'Finalizando artigo...', icon: CheckCircle2, progress: 98 },
+];
+```
+
+Também remover import de `LayoutTemplate` se não usado em outro lugar.
+
+---
+
+### 3. `src/pages/client/ArticleGenerator.tsx`
+
+**Linhas 54-62:** Remover `'selecting'` da sequência de progresso simulada
+
+**Antes:**
+```typescript
+const PROGRESS_SEQUENCE = [
+  { stage: 'validating', delay: 500, progress: 5 },
+  { stage: 'classifying', delay: 1000, progress: 15 },
+  { stage: 'selecting', delay: 1500, progress: 25 },
+  { stage: 'researching', delay: 15000, progress: 45 },
+  { stage: 'outlining', delay: 3000, progress: 55 },
+  { stage: 'writing', delay: 25000, progress: 75 },
+  { stage: 'optimizing', delay: 5000, progress: 90 }
+];
+```
+
+**Depois (V4.7.1 - fluxo alinhado ao backend):**
+```typescript
+const PROGRESS_SEQUENCE = [
+  { stage: 'validating', delay: 500, progress: 5 },
+  { stage: 'classifying', delay: 1000, progress: 10 },
+  { stage: 'researching', delay: 15000, progress: 35 },
+  { stage: 'writing', delay: 25000, progress: 65 },
+  { stage: 'seo', delay: 5000, progress: 80 },
+  { stage: 'images', delay: 5000, progress: 92 }
+];
+```
+
+---
+
+### 4. `src/pages/client/ClientArticleEditor.tsx`
+
+**Linhas 139-146:** Remover mapping de `'structuring'` para `'selecting'`
+
+**Antes:**
+```typescript
+const mapping: Record<string, string> = {
+  'analyzing': 'classifying',
+  'structuring': 'selecting',
+  'generating': 'writing',
+  'images': 'images',
+  'finalizing': 'finalizing'
 };
-console.log(`[${requestId}][STAGE] writing`);
 ```
 
-### 2B. Corrigir `image_prompts` → `content_images`
-
-**Linha 2602:** Remover tentativa de salvar em `image_prompts` (coluna inexistente)
-
-**ANTES:**
+**Depois (V4.7.1 - analyzing vai direto para researching/writing):**
 ```typescript
-.update({ 
-  images_pending: true,
-  images_total: totalImages,
-  images_completed: 0,
-  image_prompts: articleWithImages.image_prompts // COLUNA NÃO EXISTE!
-})
-```
-
-**DEPOIS:**
-```typescript
-.update({ 
-  images_pending: true,
-  images_total: totalImages,
-  images_completed: 0
-  // V4.7: REMOVIDO image_prompts - coluna não existe
-  // content_images será atualizado pelo background job
-})
-```
-
-### 2C. Adicionar Log de Pipeline Start (início do handler)
-
-```typescript
-console.log(`[${requestId}][PIPELINE][START] Article generation initiated`);
+const mapping: Record<string, string> = {
+  'analyzing': 'classifying',
+  'generating': 'writing',
+  'images': 'images',
+  'finalizing': 'finalizing'
+};
 ```
 
 ---
 
-## 3. Modificar `generate-images-background/index.ts`
+### 5. `src/utils/streamArticle.ts`
 
-### 3A. Adicionar Import do ImageInjector
+**Linha 47:** Remover `'structuring'` do type
+**Linhas 158-160:** Remover chamada `onStage?.('structuring')`
 
+**Antes (linha 47):**
 ```typescript
-import { injectImagesIntoContent, validateContentStructure } from '../_shared/imageInjector.ts';
+export type GenerationStage = 'analyzing' | 'structuring' | 'generating' | 'finalizing' | null;
 ```
 
-### 3B. Converter `image_prompts` para `content_images` (linhas 141-149)
-
-**ANTES:**
+**Depois:**
 ```typescript
-.update({
-  image_prompts: image_prompts, // COLUNA NÃO EXISTE!
-  images_completed: completedImages,
-  ...
-})
+export type GenerationStage = 'analyzing' | 'generating' | 'finalizing' | null;
 ```
 
-**DEPOIS:**
+**Antes (linhas 158-160):**
 ```typescript
-// V4.7: Converter para formato content_images
-const contentImagesForDb = image_prompts
-  .filter((p: ImagePrompt) => p.url)
-  .map((p: ImagePrompt, idx: number) => ({
-    context: p.context,
-    url: p.url,
-    alt: p.alt || p.context,
-    after_section: p.after_section || (idx + 1)
-  }));
-
-console.log(`[${request_id}][IMAGES][SAVE] content_images count=${contentImagesForDb.length}`);
-
-.update({
-  content_images: contentImagesForDb, // V4.7: Coluna correta
-  images_completed: completedImages,
-  ...
-})
+// Stage 2: Structuring
+onStage?.('structuring');
+onProgress?.(15);
 ```
 
-### 3C. Final Update (linhas 172-182)
-
-Substituir `image_prompts: image_prompts` por `content_images: contentImagesForDb`
-
-### 3D. Adicionar Injeção no Content (após o loop, antes do return)
-
+**Depois (remover completamente ou ajustar):**
 ```typescript
-// V4.7: Injetar imagens no content HTML
-if (contentImagesForDb.length > 0) {
-  const { data: articleData } = await supabase
-    .from('articles')
-    .select('content')
-    .eq('id', article_id)
-    .single();
-  
-  if (articleData?.content) {
-    console.log(`[${request_id}][IMAGES] Injecting images into content`);
-    const result = injectImagesIntoContent(articleData.content, contentImagesForDb);
-    
-    if (result.structureValid && result.injected > 0) {
-      console.log(`[${request_id}][IMAGES] Content updated successfully: ${result.injected} injected`);
-      await supabase
-        .from('articles')
-        .update({ content: result.content })
-        .eq('id', article_id);
-    } else {
-      console.log(`[${request_id}][IMAGES] No structural overwrite allowed`);
-    }
-  }
-}
-
-console.log(`[${request_id}][PIPELINE][DONE] stage=completed progress=100`);
+// V4.7.1: Template stage removido - progresso ajustado
+onProgress?.(15);
 ```
 
 ---
 
-## 4. Modificar `regenerate-article-images/index.ts`
+### 6. `src/components/client/GenerationStepList.tsx`
 
-### 4A. Adicionar Import do ImageInjector
+**Linhas 4-12:** Remover `'structuring'` do type
+**Linhas 19-27:** Remover step `'structuring'`
+**Linha 29:** Remover do STEP_ORDER
 
+**Antes (type):**
 ```typescript
-import { injectImagesIntoContent, validateContentStructure } from '../_shared/imageInjector.ts';
+export type GenerationStep = 
+  | 'analyzing' 
+  | 'structuring' 
+  | 'generating' 
+  | 'seo' 
+  | 'rhythm' 
+  | 'images' 
+  | 'publishing' 
+  | 'complete';
 ```
 
-### 4B. Adicionar Injeção + Structure Guard (antes do update final, linha ~264)
-
-**ANTES:**
+**Depois:**
 ```typescript
-const { error: updateError } = await supabase
-  .from('articles')
-  .update({
-    featured_image_url: featuredImageUrl,
-    content_images: contentImages.length > 0 ? contentImages : null,
-    updated_at: new Date().toISOString()
-  })
-  .eq('id', article_id);
+export type GenerationStep = 
+  | 'analyzing' 
+  | 'generating' 
+  | 'seo' 
+  | 'rhythm' 
+  | 'images' 
+  | 'publishing' 
+  | 'complete';
 ```
 
-**DEPOIS:**
+**Antes (STEPS):**
 ```typescript
-// V4.7: Injetar imagens no content existente (SEM REWRITE)
-let updatedContent = article.content;
-let structureValid = true;
+const STEPS = [
+  { id: 'analyzing' as const, label: 'Analisando seu nicho', icon: Brain },
+  { id: 'structuring' as const, label: 'Definindo estrutura ideal', icon: LayoutTemplate },
+  { id: 'generating' as const, label: 'Gerando conteúdo principal', icon: FileText },
+  // ...
+];
+```
 
-if (article.content && contentImages.length > 0) {
-  structureValid = validateContentStructure(article.content);
-  
-  if (structureValid) {
-    console.log('[IMAGES] Injecting images into content');
-    const result = injectImagesIntoContent(article.content, contentImages);
-    
-    if (result.structureValid && result.injected > 0) {
-      updatedContent = result.content;
-      console.log(`[IMAGES] Content updated successfully: ${result.injected} injected, ${result.skipped} skipped`);
-    } else {
-      console.log('[IMAGES] No structural overwrite allowed - content preserved');
-    }
-  } else {
-    console.warn('[IMAGES][STRUCTURE_GUARD_BLOCKED] content not overwritten');
-  }
-}
+**Depois:**
+```typescript
+const STEPS = [
+  { id: 'analyzing' as const, label: 'Analisando intenção e nicho', icon: Brain },
+  { id: 'generating' as const, label: 'Gerando conteúdo principal', icon: FileText },
+  // ...
+];
+```
 
-const { error: updateError } = await supabase
-  .from('articles')
-  .update({
-    featured_image_url: featuredImageUrl,
-    content_images: contentImages.length > 0 ? contentImages : null,
-    content: structureValid ? updatedContent : article.content, // Só atualiza se estrutura válida
-    updated_at: new Date().toISOString()
-  })
-  .eq('id', article_id);
+**Antes (STEP_ORDER):**
+```typescript
+const STEP_ORDER: GenerationStep[] = ['analyzing', 'structuring', 'generating', 'seo', 'rhythm', 'images', 'publishing', 'complete'];
+```
+
+**Depois:**
+```typescript
+const STEP_ORDER: GenerationStep[] = ['analyzing', 'generating', 'seo', 'rhythm', 'images', 'publishing', 'complete'];
 ```
 
 ---
 
-## Logs Obrigatórios (Resumo)
+## Fluxo V4.7.1 Final
 
-| Ponto | Log |
-|-------|-----|
-| Pipeline Start | `[PIPELINE][START] Article generation initiated` |
-| Template V4.7 | `[PIPELINE] V4.7: Using fixed template (no async selection)` |
-| Stage writing | `[STAGE] writing` |
-| Salvamento content_images | `[IMAGES][SAVE] content_images count=X` |
-| Injeção | `[IMAGES][INJECT] injected=X skipped=Y` |
-| Structure Guard | `[IMAGES][STRUCTURE_GUARD_BLOCKED] content not overwritten` |
-| Pipeline Done | `[PIPELINE][DONE] stage=completed progress=100` |
+```text
+Frontend Progress Flow:
+┌─────────────────────────────────────────────────────────┐
+│   analyzing (10%) → researching (30%) → writing (60%)  │
+│        ↓                                               │
+│   seo (75%) → images (88%) → finalizing (98%)         │
+│        ↓                                               │
+│   completed (100%)                                     │
+└─────────────────────────────────────────────────────────┘
+
+Backend FSM:
+classifying → researching → writing → seo → qa → images → finalizing → completed
+```
 
 ---
 
-## Deploy Necessário
+## Arquivos a Modificar
 
-1. `generate-article-structured`
-2. `generate-images-background`
-3. `regenerate-article-images`
+| Arquivo | Tipo de Alteração |
+|---------|-------------------|
+| `src/hooks/useGenerationPolling.ts` | Remover `'selecting'` do type |
+| `src/components/client/ArticleGenerationProgress.tsx` | Remover stage selecting, recalibrar % |
+| `src/pages/client/ArticleGenerator.tsx` | Remover selecting do PROGRESS_SEQUENCE |
+| `src/pages/client/ClientArticleEditor.tsx` | Remover mapping structuring→selecting |
+| `src/utils/streamArticle.ts` | Remover structuring do type e chamada |
+| `src/components/client/GenerationStepList.tsx` | Remover structuring do type, STEPS e STEP_ORDER |
 
 ---
 
 ## Critérios de Aceite
 
-| # | Critério | Verificação |
-|---|----------|-------------|
-| 1 | Nenhuma geração trava em "Selecionando template..." | Template fixo síncrono |
-| 2 | Artigos têm `content_images` preenchido (>=4) | Coluna correta usada |
-| 3 | "Corrigir imagens" preserva texto e H2/H3 | Structure Guard + injeção apenas |
-| 4 | Capa + imagens internas funcionando | `featured_image_url` + injeção no content |
-| 5 | Nenhum update em `image_prompts` | Coluna banida do código |
+| # | Critério |
+|---|----------|
+| 1 | Nenhum log ou stage referenciando "template" ou "selecting" ou "structuring" no código |
+| 2 | Progresso não trava mais em 15-25% |
+| 3 | Fluxo visual: analyzing → writing → seo → images → completed |
+| 4 | Cálculo percentual recalibrado sem considerar template stage |
+| 5 | Build sem erros TypeScript |
+
+---
+
+## Seção Técnica
+
+### Mapeamento de Progresso V4.7.1
+
+| Estágio | Progresso Anterior | Progresso V4.7.1 |
+|---------|-------------------|------------------|
+| classifying/analyzing | 15% | 10% |
+| selecting | 25% | **REMOVIDO** |
+| researching | 40% | 30% |
+| writing | 70% | 60% |
+| seo | - | 75% |
+| images | 85% | 88% |
+| finalizing | 95% | 98% |
+| completed | 100% | 100% |
+
+### Validação Pós-Implementação
+
+Executar busca global por:
+- `selecting` (deve retornar apenas uso não relacionado a generation stage)
+- `structuring` (deve retornar zero em contexto de generation)
+- `template.*stage` (deve retornar zero)
+- `Selecionando template` (deve retornar zero)
+
