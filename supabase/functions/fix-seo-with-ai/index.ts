@@ -7,6 +7,12 @@ import {
   stripHtml,
   type SEOResult 
 } from "../_shared/seoScoring.ts";
+import {
+  extractImageBlocks,
+  reinjectImageBlocks,
+  validateImagePreservation,
+  IMAGE_PROTECTION_PROMPT
+} from "../_shared/imageProtection.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -139,7 +145,7 @@ Responda APENAS com a meta description, sem aspas ou explicações.`;
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa." },
+            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
             { role: "user", content: titlePrompt }
           ],
           max_tokens: 100,
@@ -155,7 +161,7 @@ Responda APENAS com a meta description, sem aspas ou explicações.`;
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa." },
+            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
             { role: "user", content: metaPrompt }
           ],
           max_tokens: 200,
@@ -180,12 +186,17 @@ Responda APENAS com a meta description, sem aspas ou explicações.`;
     if (wordCountBefore < target_word_count_min) {
       const expansionNeeded = target_word_count_min - wordCountBefore;
       
+      // Extract images before sending to AI
+      const { cleanContent: contentWithoutImages, imageBlocks } = extractImageBlocks(article.content || '');
+      console.log(`[FIX-SEO] Extracted ${imageBlocks.length} image blocks for protection`);
+
       const contentPrompt = `Expanda este artigo mantendo a estrutura HTML:
 
 CONTEÚDO ATUAL:
-${article.content}
+${contentWithoutImages}
 
 PALAVRAS-CHAVE para usar naturalmente: ${allKeywords}
+${IMAGE_PROTECTION_PROMPT}
 
 REGRAS OBRIGATÓRIAS:
 1. Adicione ${expansionNeeded + 200} palavras
@@ -207,7 +218,7 @@ Responda APENAS com o HTML expandido, sem explicações.`;
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: "Você é um redator SEO especialista. Expanda o conteúdo mantendo a qualidade e estrutura HTML." },
+            { role: "system", content: "Você é um redator SEO especialista. Expanda o conteúdo mantendo a qualidade e estrutura HTML. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições." },
             { role: "user", content: contentPrompt }
           ],
           max_tokens: 4000,
@@ -216,9 +227,15 @@ Responda APENAS com o HTML expandido, sem explicações.`;
       });
 
       const contentData = await contentResponse.json();
-      const expandedContent = contentData.choices?.[0]?.message?.content?.trim();
+      let expandedContent = contentData.choices?.[0]?.message?.content?.trim();
       
       if (expandedContent && expandedContent.length > (article.content?.length || 0)) {
+        // Re-inject images
+        if (imageBlocks.length > 0) {
+          expandedContent = reinjectImageBlocks(expandedContent, imageBlocks);
+          const validation = validateImagePreservation(article.content || '', expandedContent);
+          console.log(`[FIX-SEO] Image validation: ${validation.preserved ? '✅' : '⚠️'} ${validation.beforeCount} before, ${validation.afterCount} after`);
+        }
         newContent = expandedContent;
       }
     }

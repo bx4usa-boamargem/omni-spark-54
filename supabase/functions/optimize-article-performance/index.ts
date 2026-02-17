@@ -188,7 +188,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: 'Você é um especialista em reescrita de conteúdo para performance. Retorne APENAS JSON válido, sem markdown ou explicações. O campo optimized_content deve conter o artigo completo em Markdown.'
+              content: 'Você é um especialista em reescrita de conteúdo para performance. Retorne APENAS JSON válido, sem markdown ou explicações. O campo optimized_content deve conter o artigo completo em Markdown. REGRA CRÍTICA: Mantenha TODA a estrutura HTML/Markdown original. NÃO remova tags <figure>, <img> ou blocos de imagem. Preserve headings, listas e formatação.'
             },
             { role: 'user', content: rewritePrompt }
           ],
