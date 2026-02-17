@@ -155,41 +155,63 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
       }
     }
 
-    // V4.7.1: Template stage removido - progresso ajustado
-    onProgress?.(15);
-
     // Get current user for cost tracking
     const { data: { user } } = await supabase.auth.getUser();
+
+    // V4.7.2: Timer de progresso gradual durante espera do invoke (10% → 28%)
+    let progressTimer: ReturnType<typeof setInterval> | null = null;
+    let currentProgress = 10;
+    onProgress?.(10);
+
+    progressTimer = setInterval(() => {
+      if (currentProgress < 28) {
+        currentProgress += 2;
+        onProgress?.(currentProgress);
+      }
+    }, 2000);
 
     // Use structured endpoint via supabase.functions.invoke (sends user JWT automatically)
     console.log("[streamArticle] Calling generate-article-structured via invoke...", { theme, blogId });
     
-    const { data, error: invokeError } = await supabase.functions.invoke('generate-article-structured', {
-      body: { 
-        theme, 
-        keywords, 
-        tone, 
-        category,
-        editorial_template: editorialTemplate,
-        image_count: imageCount ?? 3,
-        word_count: wordCount,
-        section_count: sectionCount,
-        include_faq: includeFaq,
-        include_conclusion: includeConclusion,
-        include_visual_blocks: includeVisualBlocks,
-        optimize_for_ai: optimizeForAI,
-        source: source || 'form',
-        blog_id: blogId,
-        user_id: user?.id, // ✅ CRITICAL: Pass user_id for cost logging
-        funnel_mode: funnelMode || 'middle',
-        article_goal: articleGoal || null,
-        editorial_model: editorialModel || 'traditional',
-        generation_mode: resolvedGenerationMode, // NUNCA undefined - fast ou deep
-        auto_publish: options.autoPublish !== false // Default true
-      },
-    });
+    let data: any;
+    let invokeError: any;
+    
+    try {
+      const result = await supabase.functions.invoke('generate-article-structured', {
+        body: { 
+          theme, 
+          keywords, 
+          tone, 
+          category,
+          editorial_template: editorialTemplate,
+          image_count: imageCount ?? 3,
+          word_count: wordCount,
+          section_count: sectionCount,
+          include_faq: includeFaq,
+          include_conclusion: includeConclusion,
+          include_visual_blocks: includeVisualBlocks,
+          optimize_for_ai: optimizeForAI,
+          source: source || 'form',
+          blog_id: blogId,
+          user_id: user?.id,
+          funnel_mode: funnelMode || 'middle',
+          article_goal: articleGoal || null,
+          editorial_model: editorialModel || 'traditional',
+          generation_mode: resolvedGenerationMode,
+          auto_publish: options.autoPublish !== false
+        },
+      });
+      data = result.data;
+      invokeError = result.error;
+    } finally {
+      // V4.7.2: SEMPRE cancelar timer, sucesso ou erro
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+    }
 
-    // Stage 3: Generating (response received, processing)
+    // V4.7.2: Emitir generating imediatamente após resposta
     onStage?.('generating');
     onProgress?.(30);
 
@@ -237,8 +259,8 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
       displayed += (i > 0 ? ' ' : '') + words[i];
       onDelta(words[i] + (i < totalWords - 1 ? ' ' : ''));
       
-      // Update progress during generation (30% to 90%)
-      const generationProgress = 30 + ((i / totalWords) * 60);
+      // Update progress during generation (30% to 85%)
+      const generationProgress = 30 + ((i / totalWords) * 55);
       onProgress?.(Math.round(generationProgress));
       
       // Small delay for streaming effect
@@ -254,11 +276,9 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
     await new Promise(resolve => setTimeout(resolve, 300));
     
     onProgress?.(100);
-    onStage?.(null);
     onDone(article);
   } catch (error) {
     console.error('Article generation error:', error);
-    onStage?.(null);
     onError(error instanceof Error ? error.message : 'Erro de conexão');
   }
 }
