@@ -156,15 +156,6 @@ export function ArticleGenerationScreen({
       onProgress: (percent) => {
         if (!isMountedRef.current) return;
         setProgress(percent);
-        
-        // Update visual steps based on progress
-        if (percent > 50 && percent <= 65) {
-          setCurrentStep('seo');
-        } else if (percent > 65 && percent <= 80) {
-          setCurrentStep('rhythm');
-        } else if (percent > 80 && percent <= 95) {
-          setCurrentStep('images');
-        }
       },
 
       onDone: async (article: ArticleData | null) => {
