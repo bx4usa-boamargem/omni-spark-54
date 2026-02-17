@@ -32,6 +32,12 @@ import {
   logBlockedAttempt,
   updateLastScoreChangeReason 
 } from "../_shared/nicheGuard.ts";
+import {
+  extractImageBlocks,
+  reinjectImageBlocks,
+  validateImagePreservation,
+  IMAGE_PROTECTION_PROMPT
+} from "../_shared/imageProtection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -287,6 +293,12 @@ serve(async (req) => {
     const nicheInstructions = getNichePromptInstructions(nicheProfile);
 
     // =========================================================================
+    // IMAGE PROTECTION: Extrair imagens antes de enviar para IA
+    // =========================================================================
+    const { cleanContent: contentWithoutImages, imageBlocks } = extractImageBlocks(content);
+    console.log(`[BOOST-SCORE] Extracted ${imageBlocks.length} image blocks for protection`);
+
+    // =========================================================================
     // PROMPT INCREMENTAL: Micro-ajustes em vez de reescrita completa
     // REGRA: Máximo 10% do texto pode ser alterado
     // =========================================================================
@@ -300,6 +312,7 @@ Você NÃO PODE reescrever o artigo. Você APENAS:
 4. MELHORA o CTA existente SE necessário
 
 LIMITE MÁXIMO: 10% do texto pode ser alterado. 90% DEVE permanecer IDÊNTICO.
+${IMAGE_PROTECTION_PROMPT}
 
 ## ${nicheInstructions}
 
@@ -309,7 +322,7 @@ Palavras: ${currentMetrics.wordCount}
 H2s: ${currentMetrics.h2Count}
 Score atual: ${currentScore.total}/100
 
-${content}
+${contentWithoutImages}
 
 ## MÉTRICAS DO MERCADO (SERP)
 - Média de palavras: ${serpMatrix.averages.avgWords}
@@ -354,7 +367,7 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
             messages: [
               {
                 role: "system",
-                content: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários."
+                content: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários. REGRA CRÍTICA: Mantenha TODA a estrutura HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>). NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições."
               },
               { role: "user", content: optimizePrompt }
             ],
@@ -399,6 +412,15 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
 
     const aiData = await aiResponse.json();
     let optimizedContent = aiData.choices?.[0]?.message?.content || content;
+
+    // =========================================================================
+    // IMAGE RE-INJECTION: Restaurar imagens após IA
+    // =========================================================================
+    if (imageBlocks.length > 0) {
+      optimizedContent = reinjectImageBlocks(optimizedContent, imageBlocks);
+      const validation = validateImagePreservation(content, optimizedContent);
+      console.log(`[BOOST-SCORE] Image validation: ${validation.preserved ? '✅' : '⚠️'} ${validation.beforeCount} before, ${validation.afterCount} after, ${validation.lostCount} lost`);
+    }
 
     // =========================================================================
     // NICHE GUARD: Validar e sanitizar conteúdo otimizado
