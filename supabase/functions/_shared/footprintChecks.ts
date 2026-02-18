@@ -1,8 +1,11 @@
 /**
- * FOOTPRINT CHECKS V2.0
+ * FOOTPRINT CHECKS V2.1
  * Anti-commodity validation for article generation.
  * Detects structural repetition, generic headings, and similarity patterns.
  * Integrates with Quality Gate V2 for auto-mutation.
+ * 
+ * V2.1: Added h2_pattern_hash, markdown sanitization before H2 extraction,
+ * 3-hash system (structure_hash + blocks_hash + h2_pattern_hash).
  */
 
 // deno-lint-ignore-file no-explicit-any
@@ -19,7 +22,7 @@ export interface FootprintResult {
 }
 
 export interface FootprintIssue {
-  type: 'generic_heading' | 'repeated_structure' | 'repeated_blocks' | 'high_term_repetition' | 'similar_h2_pattern';
+  type: 'generic_heading' | 'repeated_structure' | 'repeated_blocks' | 'repeated_h2_pattern' | 'high_term_repetition' | 'similar_h2_pattern';
   severity: 'low' | 'medium' | 'high';
   details: string;
   affected_sections?: number[]; // H2 indices
@@ -69,6 +72,24 @@ const PROTECTED_HEADINGS = [
 ];
 
 // ============================================================================
+// MARKDOWN SANITIZATION
+// ============================================================================
+
+/**
+ * Sanitize markdown content before H2 extraction.
+ * Removes code fences and inline code to prevent false positives.
+ */
+function sanitizeMarkdownForExtraction(content: string): string {
+  if (!content) return '';
+  let sanitized = content;
+  // Remove fenced code blocks (```...```)
+  sanitized = sanitized.replace(/```[\s\S]*?```/g, '');
+  // Remove inline code (`...`)
+  sanitized = sanitized.replace(/`[^`\n]+`/g, '');
+  return sanitized;
+}
+
+// ============================================================================
 // HASH HELPERS
 // ============================================================================
 
@@ -83,9 +104,10 @@ function simpleHash(input: string): string {
 }
 
 /**
- * Generate structure hash from H2 headings order
+ * Generate h2_pattern_hash from actual article content H2 headings.
+ * This is content-derived (unlike structure_hash which is conceptual).
  */
-export function generateStructureHash(content: string): string {
+export function generateH2PatternHash(content: string): string {
   const h2s = extractH2Headings(content);
   const normalized = h2s.map(h => 
     h.toLowerCase()
@@ -101,11 +123,19 @@ export function generateStructureHash(content: string): string {
 }
 
 /**
- * Extract H2 headings from markdown content
+ * @deprecated Use generateH2PatternHash instead. Kept for backward compat.
+ */
+export function generateStructureHash(content: string): string {
+  return generateH2PatternHash(content);
+}
+
+/**
+ * Extract H2 headings from markdown content (with sanitization)
  */
 function extractH2Headings(content: string): string[] {
   if (!content) return [];
-  const matches = content.match(/^##\s+(.+)$/gm);
+  const sanitized = sanitizeMarkdownForExtraction(content);
+  const matches = sanitized.match(/^##\s+(.+)$/gm);
   return (matches || []).map(m => m.replace(/^##\s+/, '').trim());
 }
 
@@ -114,14 +144,17 @@ function extractH2Headings(content: string): string[] {
 // ============================================================================
 
 /**
- * Run footprint checks on article content against history
+ * Run footprint checks on article content against history.
+ * Uses 3-hash system: structure_hash (conceptual) + blocks_hash + h2_pattern_hash (content-derived).
  */
 export function runFootprintChecks(params: {
   content: string;
-  structureHash: string;
-  blocksHash: string;
+  structureHash: string;       // Conceptual: structureType|variant|angle
+  blocksHash: string;          // Combination of block keys
+  h2PatternHash: string;       // Content-derived from H2 headings
   historyStructureHashes: string[];
   historyBlocksHashes: string[];
+  historyH2PatternHashes: string[];
   historyH2Patterns: string[][]; // H2 headings from last N articles
   threshold?: number;
 }): FootprintResult {
@@ -129,8 +162,10 @@ export function runFootprintChecks(params: {
     content,
     structureHash,
     blocksHash,
+    h2PatternHash,
     historyStructureHashes,
     historyBlocksHashes,
+    historyH2PatternHashes,
     historyH2Patterns,
     threshold = 70,
   } = params;
@@ -164,7 +199,7 @@ export function runFootprintChecks(params: {
     totalScore += genericHeadings.length * 12;
   }
 
-  // 2. Check structure hash repetition
+  // 2. Check structure hash repetition (conceptual)
   const structureRepeatCount = historyStructureHashes.filter(h => h === structureHash).length;
   if (structureRepeatCount > 0) {
     issues.push({
@@ -186,7 +221,18 @@ export function runFootprintChecks(params: {
     totalScore += blocksRepeatCount * 10;
   }
 
-  // 4. Check H2 pattern similarity with history
+  // 4. Check h2_pattern_hash repetition (content-derived)
+  const h2PatternRepeatCount = historyH2PatternHashes.filter(h => h === h2PatternHash).length;
+  if (h2PatternRepeatCount > 0) {
+    issues.push({
+      type: 'repeated_h2_pattern',
+      severity: h2PatternRepeatCount >= 2 ? 'high' : 'medium',
+      details: `H2 pattern hash "${h2PatternHash}" repeated ${h2PatternRepeatCount}x in window`,
+    });
+    totalScore += h2PatternRepeatCount * 12;
+  }
+
+  // 5. Check H2 pattern similarity with history (Jaccard)
   if (h2s.length > 0 && historyH2Patterns.length > 0) {
     for (const historyH2s of historyH2Patterns) {
       const similarity = calculateH2Similarity(h2s, historyH2s);
@@ -202,7 +248,7 @@ export function runFootprintChecks(params: {
     }
   }
 
-  // 5. Check high term repetition in content
+  // 6. Check high term repetition in content
   const repeatedTerms = findRepeatedTerms(content);
   if (repeatedTerms.length > 0) {
     issues.push({
@@ -251,7 +297,8 @@ function calculateH2Similarity(h2sA: string[], h2sB: string[]): number {
 function findRepeatedTerms(content: string, threshold: number = 10): string[] {
   if (!content) return [];
   
-  const words = content.toLowerCase()
+  const sanitized = sanitizeMarkdownForExtraction(content);
+  const words = sanitized.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
@@ -298,6 +345,7 @@ function buildMutationInstructions(issues: FootprintIssue[]): MutationInstructio
           reason: `Combinação de blocos repetida: ${issue.details}`,
         });
         break;
+      case 'repeated_h2_pattern':
       case 'similar_h2_pattern':
         instructions.push({
           action: 'change_angle',
@@ -318,24 +366,34 @@ export function buildAutoFixPrompt(
   content: string
 ): string {
   const headingIssues = mutationInstructions.filter(m => m.action === 'rewrite_headings');
+  const angleIssues = mutationInstructions.filter(m => m.action === 'change_angle');
   
-  if (headingIssues.length === 0) return '';
+  if (headingIssues.length === 0 && angleIssues.length === 0) return '';
 
   const h2s = extractH2Headings(content);
-  const affectedIndices = headingIssues
-    .flatMap(h => (h.target || '').split(',').map(Number))
-    .filter(n => !isNaN(n));
-
-  let prompt = '\n\n## AUTO-FIX OBRIGATÓRIO: Reescrever headings genéricos\n\n';
-  prompt += 'Os seguintes headings são GENÉRICOS e devem ser reescritos para serem ESPECÍFICOS à intenção do leitor:\n\n';
   
-  for (const idx of affectedIndices) {
-    if (h2s[idx]) {
-      prompt += `- ❌ "${h2s[idx]}" → Reescrever com intenção específica\n`;
+  let prompt = '\n\n## AUTO-FIX OBRIGATÓRIO: Reescrever seções problemáticas\n\n';
+  
+  if (headingIssues.length > 0) {
+    const affectedIndices = headingIssues
+      .flatMap(h => (h.target || '').split(',').map(Number))
+      .filter(n => !isNaN(n));
+
+    prompt += 'Os seguintes headings são GENÉRICOS e devem ser reescritos para serem ESPECÍFICOS à intenção do leitor:\n\n';
+    
+    for (const idx of affectedIndices) {
+      if (h2s[idx]) {
+        prompt += `- ❌ "${h2s[idx]}" → Reescrever com intenção específica\n`;
+      }
     }
   }
   
+  if (angleIssues.length > 0) {
+    prompt += '\nOs headings H2 estão muito similares a artigos recentes. Reescreva TODOS os H2 com abordagem diferente, mantendo o mesmo significado mas com palavras e estrutura distintas.\n';
+  }
+  
   prompt += '\nCada heading reescrito deve conter termos específicos do serviço, localidade ou situação do leitor.\n';
+  prompt += 'Mantenha o conteúdo dos parágrafos o mais fiel possível ao original.\n';
   
   return prompt;
 }
