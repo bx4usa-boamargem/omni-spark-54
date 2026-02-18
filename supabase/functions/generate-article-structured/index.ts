@@ -806,7 +806,7 @@ async function persistArticleToDb(
       published_at: autoPublish ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
       // V2.1: Article Engine metadata
-      article_structure_type: articleStructureType || null,
+      article_structure_type: articleStructureType || 'complete_guide',
       source_payload: sourcePayload || null,
       // V2.2: Content images (from image_prompts)
       content_images: contentImages.length > 0 ? contentImages : null,
@@ -891,7 +891,7 @@ async function persistArticleToDb(
     niche_locked: true,   // Always lock niche on generation
     score_locked: true,   // Protect score from automatic changes
     // V2.1: Article Engine metadata
-    article_structure_type: articleStructureType || null,
+    article_structure_type: articleStructureType || 'complete_guide',
     source_payload: sourcePayload || null,
     // V2.2: Content images (from image_prompts)
     content_images: contentImagesForInsert.length > 0 ? contentImagesForInsert : null,
@@ -3172,7 +3172,7 @@ Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicaçõe
           niche_locked: true,
           score_locked: true,
           // V6.0: Save structure_type from Elite Engine (official taxonomy only)
-          article_structure_type: eliteEngineDecision?.structure_type || articleEngineTemplate?.template || null,
+          article_structure_type: eliteEngineDecision?.structure_type || articleEngineTemplate?.template || 'complete_guide',
           // SAFE_MODE V1.1: Always use fixed payload — never depend on eliteEngineDecision
           source_payload: SAFE_MODE ? {
             eliteEngine: {
