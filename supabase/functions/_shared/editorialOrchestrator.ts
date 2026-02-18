@@ -157,7 +157,7 @@ function buildBlocksHash(blocks: string[]): string {
 // NICHE NORMALIZATION
 // ============================================================================
 
-function normalizeNiche(niche: string | undefined): string {
+export function normalizeNiche(niche: string | undefined): string {
   if (!niche) return 'default';
   const n = niche.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   
@@ -200,42 +200,46 @@ async function fetchArticleHistory(
   niche: string | undefined,
   windowSize: number
 ): Promise<{ history: ArticleHistory[]; scope: 'city_niche' | 'blog_fallback' }> {
-  // Try city+niche scoped first (via source_payload JSONB)
-  if (city && city !== 'Brasil' && niche) {
-    const normalizedNiche = normalizeNiche(niche);
-    const { data, error } = await supabase
-      .from('articles')
-      .select('article_structure_type, source_payload, created_at')
-      .eq('blog_id', blogId)
-      .not('article_structure_type', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(windowSize);
-    
-    if (!error && data && data.length >= 3) {
-      // Filter by city+niche from source_payload
-      const filtered = data.filter((a: any) => {
-        const payload = a.source_payload;
-        if (!payload?.eliteEngine) return false;
-        // Match if same niche scope  
-        return true; // For now, all articles from same blog count
-      });
-      
-      if (filtered.length >= 3) {
-        return { history: filtered.slice(0, windowSize), scope: 'city_niche' };
-      }
-    }
-  }
-
-  // Fallback: blog-level history
+  // Always fetch a larger pool to filter from
+  const fetchLimit = Math.min(windowSize * 3, 100);
+  
   const { data, error } = await supabase
     .from('articles')
     .select('article_structure_type, source_payload, created_at')
     .eq('blog_id', blogId)
     .not('article_structure_type', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(windowSize);
+    .limit(fetchLimit);
 
-  return { history: data || [], scope: 'blog_fallback' };
+  if (error || !data) {
+    return { history: [], scope: 'blog_fallback' };
+  }
+
+  // Try city+niche scoped first
+  if (city && city !== 'Brasil' && niche) {
+    const normalizedNiche = normalizeNiche(niche);
+    const normalizedCity = city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    
+    const filtered = data.filter((a: any) => {
+      const ee = a.source_payload?.eliteEngine;
+      if (!ee) return false;
+      // Match niche
+      const articleNiche = ee.niche_normalized || '';
+      if (articleNiche && articleNiche !== normalizedNiche) return false;
+      // Match city
+      const articleCity = (ee.city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      if (articleCity && articleCity !== normalizedCity) return false;
+      return true;
+    });
+    
+    if (filtered.length >= 3) {
+      console.log(`[EditorialOrchestrator] City+niche scoped history: ${filtered.length} articles (city=${city}, niche=${normalizedNiche})`);
+      return { history: filtered.slice(0, windowSize), scope: 'city_niche' };
+    }
+  }
+
+  // Fallback: blog-level history
+  return { history: (data || []).slice(0, windowSize), scope: 'blog_fallback' };
 }
 
 // ============================================================================

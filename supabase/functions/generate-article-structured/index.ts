@@ -53,9 +53,10 @@ import {
 } from '../_shared/editorialOrchestrator.ts';
 import { 
   runFootprintChecks, 
-  generateStructureHash,
+  generateH2PatternHash,
   buildAutoFixPrompt
 } from '../_shared/footprintChecks.ts';
+import { normalizeNiche } from '../_shared/editorialOrchestrator.ts';
 
 import { 
   validateBrief, 
@@ -2549,6 +2550,193 @@ Reestruture e retorne via tool optimize_article.`;
     
     console.log(`[${requestId}][QualityGate] Metrics:`, gateResult.metrics);
 
+    // ============================================================================
+    // V6.1: FOOTPRINT CHECKS - Anti-Commodity Validation + Inline Auto-Mutation
+    // ============================================================================
+    const footprintStartMs = Date.now();
+    let footprintSimilarityScore = 0;
+    let highSimilarityWarning = false;
+    let mutationSkippedDueTimeout = false;
+    let h2PatternHash = '';
+
+    if (eliteEngineDecision && articleWithImages.content) {
+      try {
+        console.log(`[${requestId}][FootprintChecks] Running anti-commodity validation...`);
+        
+        // Fetch history for footprint comparison (city+niche scoped)
+        const fpWindowSize = eliteEngineDecision.anti_collision_metadata.window_size;
+        const fpNicheNormalized = normalizeNiche(effectiveNiche);
+        const fpCityNormalized = (city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        
+        // Single query, filter in-memory for city+niche scope
+        const { data: fpHistoryRaw } = await supabase
+          .from('articles')
+          .select('content, source_payload')
+          .eq('blog_id', blog_id!)
+          .not('article_structure_type', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(fpWindowSize * 3);
+
+        let fpHistory = fpHistoryRaw || [];
+        
+        // City+niche scoped filtering (when available)
+        if (fpCityNormalized && fpCityNormalized !== 'brasil' && fpNicheNormalized !== 'default') {
+          const scoped = fpHistory.filter((a: any) => {
+            const ee = a.source_payload?.eliteEngine;
+            if (!ee) return false;
+            const aNiche = ee.niche_normalized || '';
+            const aCity = (ee.city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            if (aNiche && aNiche !== fpNicheNormalized) return false;
+            if (aCity && aCity !== fpCityNormalized) return false;
+            return true;
+          });
+          if (scoped.length >= 3) {
+            fpHistory = scoped.slice(0, fpWindowSize);
+            console.log(`[${requestId}][FootprintChecks] Using city+niche scoped history: ${fpHistory.length} articles`);
+          } else {
+            fpHistory = fpHistory.slice(0, fpWindowSize);
+            console.log(`[${requestId}][FootprintChecks] Fallback to blog-level history: ${fpHistory.length} articles`);
+          }
+        } else {
+          fpHistory = fpHistory.slice(0, fpWindowSize);
+        }
+        
+        // Extract hashes from history
+        const historyStructureHashes: string[] = fpHistory
+          .map((a: any) => a.source_payload?.eliteEngine?.structure_hash)
+          .filter(Boolean);
+        const historyBlocksHashes: string[] = fpHistory
+          .map((a: any) => a.source_payload?.eliteEngine?.blocks_hash)
+          .filter(Boolean);
+        const historyH2PatternHashes: string[] = fpHistory
+          .map((a: any) => a.source_payload?.eliteEngine?.h2_pattern_hash)
+          .filter(Boolean);
+        const historyH2Patterns: string[][] = fpHistory
+          .map((a: any) => {
+            const content = a.content || '';
+            const matches = content.match(/^##\s+(.+)$/gm);
+            return (matches || []).map((m: string) => m.replace(/^##\s+/, '').trim());
+          })
+          .filter((h: string[]) => h.length > 0);
+        
+        // Generate hashes for current content
+        h2PatternHash = generateH2PatternHash(articleWithImages.content);
+        const currentStructureHash = eliteEngineDecision.anti_collision_metadata.structure_hash;
+        const currentBlocksHash = eliteEngineDecision.anti_collision_metadata.blocks_hash;
+        
+        // Run footprint checks
+        const fpResult = runFootprintChecks({
+          content: articleWithImages.content,
+          structureHash: currentStructureHash,
+          blocksHash: currentBlocksHash,
+          h2PatternHash,
+          historyStructureHashes,
+          historyBlocksHashes,
+          historyH2PatternHashes,
+          historyH2Patterns,
+          threshold: 70,
+        });
+
+        footprintSimilarityScore = fpResult.similarity_score;
+        console.log(`[${requestId}][FootprintChecks] similarity_score=${fpResult.similarity_score}, should_mutate=${fpResult.should_mutate}, issues=${fpResult.issues.length}`);
+
+        // Auto-mutation if needed
+        if (fpResult.should_mutate && fpResult.mutation_instructions) {
+          // Timeout guardrail: check if we have enough time remaining
+          // Edge functions have ~120s max. Reserve 20s for persistence + background jobs.
+          const elapsedMs = Date.now() - footprintStartMs;
+          const totalElapsedMs = Date.now() - (footprintStartMs - elapsedMs); // approximate
+          const estimatedTimeRemainingMs = 120000 - totalElapsedMs;
+          
+          if (estimatedTimeRemainingMs < 20000) {
+            console.warn(`[${requestId}][FootprintChecks] ⚠️ Skipping mutation: only ${Math.round(estimatedTimeRemainingMs/1000)}s remaining`);
+            mutationSkippedDueTimeout = true;
+            highSimilarityWarning = true;
+          } else {
+            console.log(`[${requestId}][FootprintChecks] Running inline auto-mutation (${fpResult.mutation_instructions.length} instructions)...`);
+            
+            const autoFixPrompt = buildAutoFixPrompt(fpResult.mutation_instructions, articleWithImages.content);
+            
+            if (autoFixPrompt) {
+              try {
+                const SUPABASE_URL_FP = Deno.env.get('SUPABASE_URL')!;
+                const SERVICE_KEY_FP = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                
+                const mutationPrompt = `Você é um editor profissional. Reescreva APENAS as seções indicadas abaixo, mantendo o restante do artigo INTACTO.
+${autoFixPrompt}
+
+ARTIGO COMPLETO:
+${articleWithImages.content}
+
+Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicações.`;
+
+                const mutationResponse = await fetch(`${SUPABASE_URL_FP}/functions/v1/ai-gateway`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${SERVICE_KEY_FP}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model: 'google/gemini-2.5-flash',
+                    messages: [{ role: 'user', content: mutationPrompt }],
+                    temperature: 0.3,
+                    max_tokens: 8000,
+                  }),
+                });
+                
+                if (mutationResponse.ok) {
+                  const mutationResult = await mutationResponse.json();
+                  const mutatedContent = mutationResult.choices?.[0]?.message?.content;
+                  
+                  if (mutatedContent) {
+                    // Validate mutation didn't destroy content (max 15% reduction)
+                    const originalWords = articleWithImages.content.split(/\s+/).length;
+                    const mutatedWords = mutatedContent.split(/\s+/).length;
+                    const reduction = (originalWords - mutatedWords) / originalWords;
+                    
+                    if (reduction <= 0.15) {
+                      articleWithImages.content = mutatedContent;
+                      h2PatternHash = generateH2PatternHash(mutatedContent);
+                      
+                      // Re-run footprint checks on mutated content
+                      const fpResult2 = runFootprintChecks({
+                        content: mutatedContent,
+                        structureHash: currentStructureHash,
+                        blocksHash: currentBlocksHash,
+                        h2PatternHash,
+                        historyStructureHashes,
+                        historyBlocksHashes,
+                        historyH2PatternHashes,
+                        historyH2Patterns,
+                        threshold: 70,
+                      });
+
+                      footprintSimilarityScore = fpResult2.similarity_score;
+                      highSimilarityWarning = fpResult2.should_mutate;
+                      console.log(`[${requestId}][FootprintChecks] Post-mutation: similarity_score=${fpResult2.similarity_score}, still_high=${fpResult2.should_mutate}`);
+                    } else {
+                      console.warn(`[${requestId}][FootprintChecks] Mutation rejected: ${(reduction*100).toFixed(1)}% content reduction`);
+                      highSimilarityWarning = true;
+                    }
+                  }
+                } else {
+                  console.error(`[${requestId}][FootprintChecks] AI Gateway error: ${mutationResponse.status}`);
+                  highSimilarityWarning = true;
+                }
+              } catch (mutErr) {
+                console.error(`[${requestId}][FootprintChecks] Mutation error:`, mutErr);
+                highSimilarityWarning = true;
+              }
+            }
+          }
+        }
+        
+        console.log(`[${requestId}][FootprintChecks] Done in ${Date.now() - footprintStartMs}ms. h2_pattern_hash=${h2PatternHash}, similarity=${footprintSimilarityScore}`);
+      } catch (fpErr) {
+        console.error(`[${requestId}][FootprintChecks] Error (non-blocking):`, fpErr);
+      }
+    }
+
     // Build final article object for persistence
     const article = {
       title: articleWithImages.title,
@@ -2663,7 +2851,7 @@ Reestruture e retorne via tool optimize_article.`;
           source_payload: eliteEngineDecision ? {
             ...(articleEnginePayload || {}),
             eliteEngine: {
-              version: '2.0',
+              version: '2.1',
               structure_type: eliteEngineDecision.structure_type,
               variant: eliteEngineDecision.variant,
               angle: eliteEngineDecision.angle,
@@ -2674,7 +2862,13 @@ Reestruture e retorne via tool optimize_article.`;
               article_goal: eliteEngineDecision.article_goal,
               structure_hash: eliteEngineDecision.anti_collision_metadata.structure_hash,
               blocks_hash: eliteEngineDecision.anti_collision_metadata.blocks_hash,
+              h2_pattern_hash: h2PatternHash || null,
               anti_collision: eliteEngineDecision.anti_collision_metadata,
+              similarity_score: footprintSimilarityScore,
+              high_similarity_warning: highSimilarityWarning,
+              mutation_skipped_due_timeout: mutationSkippedDueTimeout || undefined,
+              city: city || null,
+              niche_normalized: normalizeNiche(effectiveNiche),
             }
           } : (articleEnginePayload || null),
           content_images: filteredContentImages.length > 0 ? filteredContentImages : null,
@@ -2717,7 +2911,7 @@ Reestruture e retorne via tool optimize_article.`;
           eliteEngineDecision ? {
             ...(articleEnginePayload || {}),
             eliteEngine: {
-              version: '2.0',
+              version: '2.1',
               structure_type: eliteEngineDecision.structure_type,
               variant: eliteEngineDecision.variant,
               angle: eliteEngineDecision.angle,
@@ -2728,7 +2922,13 @@ Reestruture e retorne via tool optimize_article.`;
               article_goal: eliteEngineDecision.article_goal,
               structure_hash: eliteEngineDecision.anti_collision_metadata.structure_hash,
               blocks_hash: eliteEngineDecision.anti_collision_metadata.blocks_hash,
+              h2_pattern_hash: h2PatternHash || null,
               anti_collision: eliteEngineDecision.anti_collision_metadata,
+              similarity_score: footprintSimilarityScore,
+              high_similarity_warning: highSimilarityWarning,
+              mutation_skipped_due_timeout: mutationSkippedDueTimeout || undefined,
+              city: city || null,
+              niche_normalized: normalizeNiche(effectiveNiche),
             }
           } : articleEnginePayload,
           // V4.2: CTA
