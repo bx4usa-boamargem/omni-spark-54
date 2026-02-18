@@ -250,9 +250,24 @@ export default function ArticleGenerator() {
       
       console.log('[V5.0] Invoking edge function...');
       
+      // CORE_V1: Select engine — use 'core' for clean pipeline
+      const useCore = formData.mode === 'authority'; // Authority mode uses core engine
+      const functionName = useCore ? 'generate-article-core' : 'generate-article-structured';
+      const finalPayload = useCore
+        ? {
+            blog_id: blog.id,
+            keyword: formData.keyword.trim(),
+            city: formData.city.trim(),
+            niche: formData.niche,
+            language: 'pt-BR',
+            targetImages: 3,
+            article_id: articleId,
+          }
+        : payload;
+
       // V5.0: Fire-and-forget — polling handles completion/failure
-      supabase.functions.invoke('generate-article-structured', {
-        body: payload
+      supabase.functions.invoke(functionName, {
+        body: finalPayload
       }).then(({ data, error }) => {
         if (error) {
           const errorMsg = error.message || '';
