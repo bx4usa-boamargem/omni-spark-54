@@ -1,123 +1,125 @@
 
-# Correcao: SEO Elimina Formatacao e Imagens
 
-## Problema Identificado
+# Correcao: Artigos Publicados sem Imagens, sem CTA e com Formatacao Quebrada
 
-Ao clicar em "Aumentar Score", "Otimizar para SERP", "Corrigir automaticamente" ou "Levar a 100", o conteudo retornado pela IA perde:
-- Todas as tags `<figure>` e `<img>` (imagens internas)
-- Formatacao HTML (headings viram texto corrido)
-- O conteudo volta como texto plano ou markdown simples
+## Problemas Identificados
 
-## Causa Raiz
+### Problema 1: Imagens internas nao aparecem no artigo publicado
+A API publica (`content-api`) nao retorna o campo `content_images` da tabela `articles`. O campo esta ausente da lista `ARTICLE_PUBLIC_FIELDS`. Alem disso, na pagina `PublicArticle.tsx`, o array `contentImages` esta fixo como vazio (`[]`) — nunca e preenchido com os dados do artigo.
 
-Duas falhas complementares:
+### Problema 2: CTA (Chamada para Acao) ausente no rodape do artigo
+O campo `cta` (JSONB com dados da subconta: empresa, WhatsApp, telefone) nao e retornado pela API publica. O componente `ArticleCTARenderer` existe no projeto mas nunca e importado ou renderizado nas paginas publicas (`PublicArticle.tsx` e `CustomDomainArticle.tsx`).
 
-### 1. Prompt nao protege imagens
-O prompt do `boost-content-score` (linha 293-334) envia o HTML completo para a IA mas NAO instrui explicitamente a preservar blocos `<figure>`, `<img>`, `<figcaption>`. A IA interpreta "micro-ajustes" como licenca para simplificar a estrutura, removendo imagens.
-
-O mesmo ocorre no `fix-seo-with-ai` (linha 183-199).
-
-### 2. Nao ha re-injecao de imagens apos otimizacao
-O frontend aplica o conteudo otimizado diretamente (`onContentUpdate(optimizedContent)`) sem verificar se as imagens originais foram preservadas. Nao ha nenhum mecanismo de "restauracao" das imagens apos a IA retornar o conteudo.
+### Problema 3: Formatacao quebrada (markdown cru visivel)
+Os screenshots mostram `**bold**` sendo exibido como texto bruto em vez de negrito. Isso indica que o conteudo contem uma mistura de HTML e Markdown, e o renderizador nao esta processando HTML embutido corretamente (tags `<figure>`, `<img>`, `<strong>` dentro de conteudo Markdown).
 
 ## Solucao
 
-### Estrategia: Protecao de Imagens em 3 Camadas
+### 1. Adicionar campos `content_images` e `cta` na API publica
 
-**Camada 1 — Prompt Guard**: Adicionar instrucoes explicitas nos prompts da IA para NUNCA remover blocos de imagem.
+**Arquivo**: `supabase/functions/content-api/index.ts`
 
-**Camada 2 — Extracao + Re-injecao**: Antes de enviar para a IA, extrair todos os blocos `<figure>` e substituir por placeholders. Apos receber a resposta, re-injetar os blocos originais.
+Adicionar `"content_images"` e `"cta"` ao array `ARTICLE_PUBLIC_FIELDS` (linha 46-50):
 
-**Camada 3 — Validacao pos-otimizacao**: Comparar contagem de imagens antes/depois e alertar ou restaurar se houve perda.
+```
+const ARTICLE_PUBLIC_FIELDS = [
+  "id", "title", "slug", "excerpt", "content", "featured_image_url", "featured_image_alt",
+  "meta_description", "keywords", "category", "tags", "reading_time", "view_count",
+  "published_at", "updated_at", "faq", "highlights", "content_images", "cta"
+] as const;
+```
 
-## Arquivos a Modificar
+### 2. Atualizar o tipo `ArticleFull` no frontend
+
+**Arquivo**: `src/hooks/useContentApi.ts`
+
+Adicionar os campos `content_images` e `cta` a interface `ArticleFull`:
+
+```
+export interface ArticleFull extends ArticleSummary {
+  content: string | null;
+  meta_description: string | null;
+  keywords: string[] | null;
+  view_count: number | null;
+  updated_at: string | null;
+  faq: { question: string; answer: string }[] | null;
+  highlights: unknown | null;
+  content_images: { context: string; url: string; after_section: number }[] | null;
+  cta: {
+    company_name?: string;
+    phone?: string;
+    whatsapp?: string;
+    booking_url?: string;
+    site?: string;
+    email?: string;
+  } | null;
+}
+```
+
+### 3. Conectar `content_images` e renderizar CTA no PublicArticle
+
+**Arquivo**: `src/pages/PublicArticle.tsx`
+
+- Importar `ArticleCTARenderer`
+- Substituir `const contentImages: ContentImage[] = [];` por parsing real dos dados do artigo
+- Adicionar renderizacao do `ArticleCTARenderer` antes da secao de FAQ ou apos o conteudo
+
+```
+// Linha 210 — substituir array vazio pelo parsing real:
+const contentImages: ContentImage[] = Array.isArray(article.content_images)
+  ? (article.content_images as ContentImage[])
+  : [];
+
+// Apos a secao de conteudo (linha ~375), adicionar CTA:
+{article.cta && (
+  <section className="px-4 pb-12">
+    <div className="max-w-3xl mx-auto lg:mr-80 lg:ml-auto">
+      <ArticleCTARenderer cta={article.cta} />
+    </div>
+  </section>
+)}
+```
+
+### 4. Fazer o mesmo no CustomDomainArticle
+
+**Arquivo**: `src/pages/CustomDomainArticle.tsx`
+
+- Substituir `contentImages={null}` por parsing real
+- Adicionar renderizacao do CTA
+
+### 5. Melhorar renderizacao de conteudo misto HTML+Markdown
+
+**Arquivo**: `src/components/public/ArticleContent.tsx`
+
+Adicionar deteccao de conteudo HTML. Se o conteudo contem tags HTML (`<h2>`, `<p>`, `<figure>`), renderizar via `dangerouslySetInnerHTML` com sanitizacao, em vez de tentar processar como Markdown puro. Isso resolve o problema de `**bold**` aparecendo como texto e de tags `<figure>` sendo ignoradas.
+
+Logica:
+```
+const isHtmlContent = /<(h[1-6]|p|div|figure|ul|ol|table)\b/i.test(content);
+
+if (isHtmlContent) {
+  // Renderizar como HTML direto (com processamento de WhatsApp CTAs)
+  return <article dangerouslySetInnerHTML={{ __html: processedHtml }} />;
+} else {
+  // Renderizar como Markdown (fluxo atual)
+  return <article>{formatContent(content)}</article>;
+}
+```
+
+## Resumo das Mudancas
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/_shared/imageProtection.ts` | NOVO: Funcoes para extrair, substituir e re-injetar imagens |
-| `supabase/functions/boost-content-score/index.ts` | Integrar protecao de imagens no fluxo de otimizacao |
-| `supabase/functions/fix-seo-with-ai/index.ts` | Integrar protecao de imagens na expansao de conteudo |
-
-## Detalhes Tecnicos
-
-### 1. Novo modulo: `_shared/imageProtection.ts`
-
-Funcoes:
-- `extractImageBlocks(html)`: Localiza todos os `<figure>...</figure>` e `<img .../>` no HTML. Substitui cada um por um placeholder unico `<!--IMG_PLACEHOLDER_0-->`, `<!--IMG_PLACEHOLDER_1-->`, etc. Retorna o HTML limpo + array de blocos extraidos.
-- `reinjectImageBlocks(html, blocks)`: Substitui cada placeholder pelo bloco original correspondente.
-- `validateImagePreservation(before, after)`: Conta imagens antes/depois e retorna se houve perda.
-
-### 2. `boost-content-score/index.ts`
-
-Antes de montar o prompt (linha ~306):
-
-```text
-1. Extrair imagens: { cleanContent, imageBlocks } = extractImageBlocks(content)
-2. Enviar cleanContent no prompt (sem imagens)
-3. Adicionar ao prompt: "Os marcadores <!--IMG_PLACEHOLDER_N--> indicam posicoes de imagens. NAO os remova."
-4. Apos receber resposta: optimizedContent = reinjectImageBlocks(aiResponse, imageBlocks)
-5. Validar: se imagens foram perdidas, tentar re-inserir nas posicoes originais
-```
-
-Instrucao adicional no prompt:
-
-```text
-## IMAGENS - REGRA ABSOLUTA
-- Os marcadores <!--IMG_PLACEHOLDER_N--> representam imagens do artigo
-- NUNCA remova esses marcadores
-- Mantenha-os nas mesmas posicoes ou mova para apos o H2 mais proximo
-```
-
-### 3. `fix-seo-with-ai/index.ts`
-
-Mesma logica aplicada ao prompt de expansao de conteudo (linha 183):
-- Extrair imagens antes de enviar
-- Re-injetar apos receber resposta expandida
-- Se a expansao adicionou novas secoes H2, as imagens permanecem nas secoes originais
-
-### 4. Preservacao de formatacao HTML
-
-Adicionar ao system prompt de ambas as funcoes:
-
-```text
-REGRA CRITICA DE FORMATACAO:
-- Mantenha TODA a estrutura HTML: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>
-- NAO converta HTML para Markdown
-- NAO converta Markdown para texto plano
-- Se o input e HTML, o output DEVE ser HTML
-- Se o input e Markdown, o output DEVE ser Markdown
-```
-
-### Fluxo Revisado
-
-```text
-Conteudo Original (com imagens)
-  |
-  v
-extractImageBlocks() → conteudo limpo + array de imagens
-  |
-  v
-Enviar para IA (sem imagens, com placeholders)
-  |
-  v
-IA retorna conteudo otimizado (com placeholders preservados)
-  |
-  v
-reinjectImageBlocks() → conteudo otimizado COM imagens
-  |
-  v
-validateImagePreservation() → confirmar que nenhuma imagem foi perdida
-  |
-  v
-Se imagens perdidas: forcar re-insercao nas posicoes originais
-  |
-  v
-Retornar conteudo final
-```
+| `supabase/functions/content-api/index.ts` | Adicionar `content_images` e `cta` aos campos publicos |
+| `src/hooks/useContentApi.ts` | Adicionar campos ao tipo `ArticleFull` |
+| `src/pages/PublicArticle.tsx` | Conectar imagens reais + renderizar CTA |
+| `src/pages/CustomDomainArticle.tsx` | Conectar imagens reais + renderizar CTA |
+| `src/components/public/ArticleContent.tsx` | Suporte a conteudo HTML (nao apenas Markdown) |
 
 ## Resultado Esperado
 
-- Imagens NUNCA sao removidas por otimizacao SEO
-- Formatacao HTML preservada (headings, listas, paragrafos)
-- Conteudo nao vira "texto corrido" apos otimizar
-- Sistema funciona para todos os botoes: Aumentar Score, Otimizar SERP, Corrigir, Levar a 100
+- Imagens internas aparecem no artigo publicado nas posicoes corretas
+- Bloco de CTA com nome da empresa e WhatsApp aparece no rodape do artigo
+- Conteudo renderizado corretamente independente de ser HTML ou Markdown
+- Negrito, italico e listas funcionam em ambos os formatos
+
