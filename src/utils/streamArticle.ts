@@ -72,6 +72,9 @@ export interface StreamArticleOptions {
   generationMode?: GenerationMode; // fast = 400-1000 palavras, deep = 1500-3000 palavras
   autoPublish?: boolean; // Default true - auto-publicar o artigo
   articleId?: string; // V4.7.3: ID do placeholder para fallback
+  generationEngine?: 'core' | 'elite'; // CORE_V1: toggle between engines
+  city?: string; // CORE_V1: city for core engine
+  niche?: string; // CORE_V1: niche for core engine
   onDelta: (text: string) => void;
   onDone: (article: ArticleData | null) => void;
   onError: (error: string) => void;
@@ -173,35 +176,50 @@ export async function streamArticle(options: StreamArticleOptions): Promise<void
     }, 2000);
 
     // Use structured endpoint via supabase.functions.invoke (sends user JWT automatically)
-    console.log('[V4.7.2] invoking backend', { theme, blogId });
+    // CORE_V1: Select engine based on toggle
+    const useCore = options.generationEngine === 'core';
+    const functionName = useCore ? 'generate-article-core' : 'generate-article-structured';
+    console.log(`[V4.7.2] invoking ${functionName}`, { theme, blogId, engine: useCore ? 'core' : 'elite' });
     
     let data: any;
     let invokeError: any;
     
     try {
-      const result = await supabase.functions.invoke('generate-article-structured', {
-        body: { 
-          theme, 
-          keywords, 
-          tone, 
-          category,
-          editorial_template: editorialTemplate,
-          image_count: imageCount ?? 3,
-          word_count: wordCount,
-          section_count: sectionCount,
-          include_faq: includeFaq,
-          include_conclusion: includeConclusion,
-          include_visual_blocks: includeVisualBlocks,
-          optimize_for_ai: optimizeForAI,
-          source: source || 'form',
-          blog_id: blogId,
-          user_id: user?.id,
-          funnel_mode: funnelMode || 'middle',
-          article_goal: articleGoal || null,
-          editorial_model: editorialModel || 'traditional',
-          generation_mode: resolvedGenerationMode,
-          auto_publish: options.autoPublish !== false
-        },
+      const bodyPayload = useCore
+        ? {
+            blog_id: blogId,
+            keyword: theme,
+            city: options.city,
+            niche: options.niche,
+            language: 'pt-BR',
+            targetImages: imageCount ?? 3,
+            incomingArticleId: options.articleId,
+          }
+        : { 
+            theme, 
+            keywords, 
+            tone, 
+            category,
+            editorial_template: editorialTemplate,
+            image_count: imageCount ?? 3,
+            word_count: wordCount,
+            section_count: sectionCount,
+            include_faq: includeFaq,
+            include_conclusion: includeConclusion,
+            include_visual_blocks: includeVisualBlocks,
+            optimize_for_ai: optimizeForAI,
+            source: source || 'form',
+            blog_id: blogId,
+            user_id: user?.id,
+            funnel_mode: funnelMode || 'middle',
+            article_goal: articleGoal || null,
+            editorial_model: editorialModel || 'traditional',
+            generation_mode: resolvedGenerationMode,
+            auto_publish: options.autoPublish !== false
+          };
+
+      const result = await supabase.functions.invoke(functionName, {
+        body: bodyPayload,
       });
       data = result.data;
       invokeError = result.error;
