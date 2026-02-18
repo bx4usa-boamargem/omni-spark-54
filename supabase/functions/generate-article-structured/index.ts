@@ -1233,9 +1233,10 @@ Ex: "Olha só, o negócio é o seguinte..."`
 };
 
 // MASTER PROMPT - MANDATORY EDITORIAL FRAMEWORK (AUTOMARTICLES STYLE)
-function buildMasterPrompt(template: EditorialTemplate | null, theme: string, keywords: string[], tone: string = 'friendly'): string {
+function buildMasterPrompt(template: EditorialTemplate | null, theme: string, keywords: string[], tone: string = 'friendly', city?: string, niche?: string): string {
   const companyName = template?.company_name || 'a empresa';
   const keywordsText = keywords.length > 0 ? keywords.join(', ') : theme;
+  const cityName = city && city !== 'Brasil' ? city : '';
   
   // Build structure if mandatory_structure exists
   let structureText = '';
@@ -1245,210 +1246,166 @@ function buildMasterPrompt(template: EditorialTemplate | null, theme: string, ke
     ).join('\n');
   }
 
-  return `# 🎯 FRAMEWORK EDITORIAL OMNISEEN (OBRIGATÓRIO)
+  // Niche-specific context for realistic writing
+  const nicheContext: Record<string, string> = {
+    pest_control: 'controle de pragas, dedetização, desratização, manejo integrado',
+    plumbing: 'desentupimento, hidrojateamento, limpeza de fossa, encanamento',
+    roofing: 'telhados, coberturas, impermeabilização, calhas',
+    dental: 'odontologia, implantes, clareamento, ortodontia',
+    legal: 'advocacia, direito, consultoria jurídica',
+    accounting: 'contabilidade, fiscal, departamento pessoal',
+    real_estate: 'imobiliária, venda, locação, avaliação de imóveis',
+    automotive: 'mecânica, funilaria, elétrica automotiva',
+    construction: 'construção, reforma, obra, projeto',
+    beauty: 'estética, harmonização, depilação',
+    education: 'educação, cursos, treinamentos',
+    technology: 'tecnologia, software, sistemas, TI',
+    image_consulting: 'consultoria de imagem, personal stylist, coloração pessoal',
+  };
 
-📌 EMPRESA: ${companyName}
-📌 TEMA: ${theme}
-📌 KEYWORDS SEO: ${keywordsText}
+  const nicheTerms = nicheContext[niche || ''] || 'serviços profissionais';
 
-## 👤 PÚBLICO-ALVO (ÚNICO E OBRIGATÓRIO)
+  return `# FRAMEWORK EDITORIAL — AUTORIDADE LOCAL
 
-O leitor é EXCLUSIVAMENTE:
-- Dono de pequeno negócio (1 a 15 funcionários)
-- Faturamento R$ 30k–R$ 300k/mês
-- Trabalha DENTRO da operação (não tem tempo)
-- Lida com clientes no WhatsApp pessoal
-- Frustrado com vendas perdidas por não conseguir atender
-- Quer crescer, mas não sabe como delegar ou automatizar
+EMPRESA: ${companyName}
+TEMA: ${theme}
+KEYWORDS SEO: ${keywordsText}
+NICHO: ${nicheTerms}
+${cityName ? `CIDADE: ${cityName}` : ''}
 
-⛔ NÃO É público deste artigo:
-- Profissionais de marketing
-- Gestores de equipes grandes
-- Desenvolvedores ou técnicos
-- Consumidores finais
+## MODELO EDITORIAL: PROBLEMA LOCAL → SOLUÇÃO PROFISSIONAL
 
-## 📝 REGRAS ABSOLUTAS DE ESCRITA
+Este artigo deve parecer escrito por um profissional local real, com experiência no mercado da cidade.
+NÃO é um artigo de SaaS, marketing digital ou automação. É um artigo de SERVIÇO LOCAL.
 
-✍️ ESTILO OBRIGATÓRIO:
-- Parágrafos de 1-3 linhas APENAS (NUNCA mais de 3 linhas)
-- Frases curtas (máximo 2 linhas)
-- Linguagem de WhatsApp entre empreendedores
-- Cenários REAIS: telefone tocando, cliente esperando, dono ocupado
-- Blocos visuais 💡⚠️📌 (mínimo 3, máximo 5)
+## REGRAS DE ESCRITA
 
-🚨 PROIBIDO (CAUSA REJEIÇÃO IMEDIATA):
-❌ Linguagem corporativa ("maximizar", "otimizar processos", "omnichannel", "estratégico")
-❌ Jargões técnicos ("URA", "CRM", "API", "machine learning", "automação inteligente")
-❌ Parágrafos com mais de 3 linhas
-❌ Frases com mais de 2 linhas
-❌ Conceitos abstratos sem exemplos reais do dia a dia
-❌ Estatísticas genéricas ("empresas que usam X aumentam Y%")
-❌ Tom acadêmico, de whitepaper ou de marketing corporativo
-❌ Promessas milagrosas ou exageradas
-❌ "Nossa plataforma", "nossa solução", "esta ferramenta"
+ESTILO:
+- Parágrafos de 2 a 4 linhas (máximo 120 palavras por parágrafo)
+- Frases diretas e claras
+- Tom profissional de quem trabalha na área
+- Exemplos práticos do cotidiano do serviço
+- Linguagem acessível sem ser informal demais
 
-✅ OBRIGATÓRIO EM CADA PARÁGRAFO:
-- Frases CURTAS (máximo 2 linhas)
-- Parágrafos CURTOS (máximo 3 linhas)
-- Linguagem de conversa WhatsApp entre empresários
-- Cenários REAIS: telefone tocando, cliente esperando, dono trabalhando
-- Sempre "você", "seu negócio", "seu cliente"
-- Conexão emocional com a rotina real do dono
-- Tom de parceiro de negócio, não de empresa de tecnologia
+PROIBIDO:
+- Linguagem de SaaS ("otimizar", "maximizar", "omnichannel", "estratégico", "pipeline")
+- Jargões de marketing digital ("funil", "lead", "engajamento", "automação")
+- Headings em inglês ("Core Components", "Key Takeaways", "Why X is Essential")
+- Ano fixo no título ("2024", "2025", "2026")
+- Emojis em headings
+- Parágrafos com mais de 4 linhas
+- Termos como "Nossa plataforma", "esta ferramenta", "teste grátis"
+- Promessas exageradas ou milagrosas
+- Estatísticas genéricas inventadas
 
-🎨 BLOCOS VISUAIS (uso moderado e variado):
-Você PODE usar ATÉ 1 dos seguintes blocos visuais no artigo, APENAS se fizer sentido para o contexto:
-- 💡 "Insight" → Observação relevante baseada em dados ou experiência real
-- ⚠️ "Alerta" → Erro comum que o leitor deve evitar
-- 📌 "Dica Prática" → Ação imediata aplicável
-REGRAS: máximo 1 bloco visual por artigo. NÃO use em todos os artigos. Se nenhum callout fizer sentido, NÃO inclua nenhum.
+## ESTRUTURA OBRIGATÓRIA DO ARTIGO
 
-🧱 ESTRUTURA OBRIGATÓRIA DO ARTIGO (7-9 H2s - ESTILO AUTOMARTICLES):
+H1: Palavra-chave principal + ${cityName || 'cidade'}
+→ Título claro, informativo, sem ano fixo, sem emoji.
 
-1️⃣ ABERTURA (H2 #1) — Choque de Realidade
-- Começar com cena REAL do dia a dia do dono
-- Exemplos: telefone tocando, cliente esperando, dono ocupado
-- O leitor deve se reconhecer em até 3 linhas
-- NUNCA começar com definição ou conceito
+INTRODUÇÃO (máx 2 parágrafos, até 90 palavras cada):
+→ Contextualizar o problema para quem mora/trabalha em ${cityName || 'a cidade'}.
+→ Texto puro, sem headings.
 
-2️⃣ A DOR (H2 #2) — Sem Culpa
-- Explicar o problema deixando claro:
-  • NÃO é falta de esforço
-  • É falta de estrutura
-  • O dono NÃO está errado
-- Mostrar consequências REAIS: perda de clientes, dinheiro jogado fora, estresse, reputação
-- INCLUIR pelo menos 1 bloco 💡 ou ⚠️
+H2 #1 — Problema específico enfrentado em ${cityName || 'a cidade'}
+→ Contextualizar com realidade local: clima, urbanização, sazonalidade, infraestrutura.
+→ O leitor deve se reconhecer na situação.
 
-3️⃣ O ERRO COMUM (H2 #3)
-- Mostrar o erro que quase todo dono comete
-- Exemplos: tentar fazer tudo sozinho, depender só de atendimento humano, achar que "depois resolve"
-- INCLUIR 1 bloco ⚠️ destacando o erro
+H2 #2 — Por que isso acontece em ${cityName || 'a cidade'}?
+→ Fator urbano, ambiental ou cultural que agrava o problema.
+→ Trazer perspectiva de quem conhece a região.
 
-4️⃣ CONTEXTO/CENÁRIO (H2 #4) — Aprofundamento
-- Expandir o contexto do problema
-- Mostrar como o mercado mudou
-- Usar BLOCKQUOTE para insight importante
+H2 #3 — Como resolver: orientação prática
+→ Passos concretos e realistas que o profissional recomenda.
+→ Pode incluir lista numerada se fizer sentido.
 
-5️⃣ A SOLUÇÃO (H2 #5) — Como Alívio, NUNCA como Tecnologia
-- A solução deve parecer: simples, prática, acessível, possível AGORA
-- NUNCA explicar tecnologia
-- NUNCA usar termos técnicos
-- A solução existe para: atender o cliente enquanto o dono trabalha
-- INCLUIR 1-2 blocos 📌 com dicas práticas
+H2 #4 — Quando chamar um especialista em ${cityName || 'a cidade'}
+→ Sinais de que o problema precisa de atendimento profissional.
+→ CTA natural integrado ao contexto.
 
-6️⃣ PASSO A PASSO (H2 #6) — Implementação Prática
-- Lista numerada de ações concretas
-- Cada passo simples e executável
-- Sem complexidade técnica
+H2s ADICIONAIS (opcionais, conforme profundidade do tema):
+→ Custos e fatores que influenciam o preço
+→ Erros comuns que as pessoas cometem
+→ Diferenças entre métodos ou abordagens
+→ Regulamentações locais relevantes
 
-7️⃣ A MARCA ${companyName} (H2 #7)
-- ${companyName} aparece como: criada para essa dor, pensada para rotina real
-- Sem exagero, sem promessa milagrosa, sem discurso de marketing
-- Foco em resultado prático
-- INCLUIR BLOCKQUOTE com depoimento ou insight
+FAQ LOCAL (3 perguntas):
+→ Perguntas reais que moradores de ${cityName || 'a cidade'} fariam.
+→ Respostas curtas (máximo 4 linhas), práticas e diretas.
+→ Pelo menos 1 pergunta sobre custo ou prazo.
 
-8️⃣ RESULTADOS ESPERADOS (H2 #8) — O Que Muda
-- Pintar o cenário após implementar a solução
-- Benefícios concretos e tangíveis
-- Sem promessas irreais
-
-9️⃣ RESUMO (H2 #9) — Checklist Visual dos Pontos Principais
-- Título OBRIGATÓRIO: "Resumo: [número] passos/dicas para [objetivo do artigo]"
-- Lista em bullets com CADA ponto principal discutido no artigo
-- Uma linha por ponto, máximo 10 palavras cada
-- O leitor deve poder escanear e lembrar de tudo rapidamente
-- Formato de checklist visual que funciona como "cola" do artigo
-- EXEMPLO:
-  ## Resumo: 7 dicas para nunca perder cliente
-  - Responda em menos de 5 minutos
-  - Tenha atendimento fora do horário comercial
-  - Personalize cada mensagem com o nome do cliente
-  - Acompanhe o histórico de conversas
-  - Automatize perguntas frequentes
-  - Peça feedback após cada atendimento
-  - Analise dados para melhorar continuamente
-
-🔟 DIRETO AO PONTO (H2 #10) — CTA Natural e Humanizado
-- Título que convida: "Direto ao ponto: Por onde começar?" ou "Seu próximo passo"
-- NUNCA use: "Conclusão", "Considerações Finais", "Saiba Mais", "Entre em Contato"
-- Primeiro parágrafo: reconheça a jornada do leitor ("Você agora sabe...")
-- Segundo parágrafo: convide naturalmente para testar a solução
-- INCLUA blockquote inspirador (frase impactante relacionada ao tema):
-  > "Quem atende bem, vende sempre."
-- Último parágrafo: CTA em **NEGRITO** com ação específica
-${template?.cta_template ? `- CTA OBRIGATÓRIO: **${template.cta_template}**` : '- Ex: **Teste grátis por 7 dias e veja quantos clientes você consegue recuperar.**'}
-- EXEMPLO COMPLETO:
-  ## Direto ao ponto: Seu próximo passo
-  
-  Você agora sabe o que está perdendo por não ter atendimento 24h.
-  
-  A boa notícia? Resolver isso é mais simples do que parece.
-  
-  > "Cliente que espera, é cliente que vai embora."
-  
-  **Teste ${companyName} grátis por 7 dias e veja quantos clientes você consegue recuperar.**
-
-${structureText ? `📐 ESTRUTURA H2 PERSONALIZADA (usar se definida):
+${structureText ? `ESTRUTURA H2 PERSONALIZADA (complementar ao modelo acima):
 ${structureText}
 ` : ''}
 
-❓ FAQ (3-5 perguntas):
-- Perguntas que um DONO faria de verdade
-- Respostas CURTAS (máximo 4 linhas)
-- Linguagem tranquilizadora
-- Orientada à ação, não à explicação
+## BLOCOS VISUAIS
+Máximo 1 bloco visual (callout) por artigo. Uso OPCIONAL — apenas se o contexto justificar.
+Sem rótulo padronizado, sem emoji obrigatório. Se nenhum callout fizer sentido, NÃO inclua.
 
-📊 SEO:
+## SEO
 - Palavra-chave principal: ${template?.seo_settings?.main_keyword || theme}
 - Palavras secundárias: ${template?.seo_settings?.secondary_keywords?.join(', ') || keywordsText}
 - Formatação: Markdown (## H2, ### H3, **negrito**, listas, > blockquotes)
+- Densidade de keyword: 1-2%, distribuída naturalmente
 
-${template?.tone_rules ? `🎙️ TOM ADICIONAL: ${template.tone_rules}` : ''}
-${template?.title_guidelines ? `📰 TÍTULO: ${template.title_guidelines}` : ''}
+${template?.tone_rules ? `TOM ADICIONAL: ${template.tone_rules}` : ''}
+${template?.title_guidelines ? `TÍTULO: ${template.title_guidelines}` : ''}
 
-🛑 VALIDAÇÃO FINAL:
-Antes de finalizar, pergunte-se:
-"Esse conteúdo parece escrito especificamente para esse dono de negócio?"
-"O dono vai pensar: isso acontece comigo?"
-"Tem 7-9 H2s, parágrafos curtos, e blocos visuais?"
-Se NÃO → REFAZER.`;
+VALIDAÇÃO:
+- O artigo parece escrito por um profissional local de ${nicheTerms}?
+- Tem contexto real de ${cityName || 'a cidade'}?
+- Os parágrafos são curtos e escaneáveis?
+- Não há linguagem de SaaS ou marketing digital?`;
 }
 
 // Build realistic image prompts focused on real business scenarios
-function buildImagePrompts(theme: string, niche: string, count: number = 3): Array<{context: string; prompt: string; after_section: number}> {
-  const nicheDescription = niche || 'service business';
+function buildImagePrompts(theme: string, niche: string, count: number = 3, city?: string): Array<{context: string; prompt: string; after_section: number}> {
+  const cityLabel = city && city !== 'Brasil' ? ` in ${city}` : '';
   
-  const allPrompts = [
-    { 
-      context: 'problem', 
-      prompt: `Realistic photo style: A stressed small ${nicheDescription} owner unable to answer ringing phone while working. Real workshop or job site environment, natural warm lighting, genuine frustrated expression. Authentic workplace, NOT corporate stock photo. Medium shot, warm tones. Worker clothes, real tools visible. Photo that a business owner would relate to.`,
-      after_section: 1 
-    },
-    { 
-      context: 'solution', 
-      prompt: `Realistic photo style: A calm ${nicheDescription} business owner working peacefully while phone shows notification that customer is being attended automatically. Real work environment (van, workshop, site), relief expression on face, natural lighting. Subtle smartphone notification visible. NOT corporate office, NOT suit. Authentic working person.`,
-      after_section: 3 
-    },
-    { 
-      context: 'result', 
-      prompt: `Realistic photo style: Happy ${nicheDescription} business owner checking smartphone showing new appointments and satisfied customer messages. Real small business environment, genuine smile, natural lighting. Signs of business growth visible. NOT corporate celebration, NOT stock photo pose. Authentic success moment.`,
-      after_section: 5 
-    },
-    { 
-      context: 'insight', 
-      prompt: `Realistic photo style: ${nicheDescription} business owner having a productive moment, reviewing documents or phone with focused expression. Clean workspace in authentic environment, natural daylight. Shows professionalism without corporate feel. Real person, real work.`,
-      after_section: 2 
-    },
-    { 
-      context: 'cta', 
-      prompt: `Realistic photo style: Confident ${nicheDescription} business owner ready to take action, standing in their workplace with positive body language. Inviting expression, natural setting. Represents success and approachability. Authentic small business atmosphere.`,
-      after_section: 6 
-    }
+  // Niche-specific image descriptions
+  const nicheImageMap: Record<string, Array<{context: string; prompt: string; after_section: number}>> = {
+    pest_control: [
+      { context: 'inspection', prompt: `Professional pest control technician inspecting a residential property${cityLabel}. Wearing protective uniform and using inspection tools. Real residential environment, natural lighting. NOT stock photo.`, after_section: 1 },
+      { context: 'treatment', prompt: `Pest control professional applying treatment in a home${cityLabel}. Professional equipment visible, protective gear, focused work. Authentic work environment.`, after_section: 3 },
+      { context: 'result', prompt: `Clean, pest-free home interior after professional treatment${cityLabel}. Family-friendly environment, natural daylight, sense of relief and cleanliness.`, after_section: 5 },
+      { context: 'equipment', prompt: `Professional pest control equipment and products arranged neatly. Modern sprayers, safety gear, inspection tools. Clean background, professional presentation.`, after_section: 2 },
+      { context: 'consultation', prompt: `Pest control expert discussing treatment plan with homeowner${cityLabel}. Professional clipboard, friendly interaction, residential doorstep. Natural lighting.`, after_section: 4 },
+    ],
+    plumbing: [
+      { context: 'diagnosis', prompt: `Professional plumber diagnosing a pipe issue in a residential bathroom${cityLabel}. Tools visible, focused expression, real home environment. NOT stock photo.`, after_section: 1 },
+      { context: 'repair', prompt: `Plumber performing repair work under a kitchen sink${cityLabel}. Professional tools, work light, authentic work environment.`, after_section: 3 },
+      { context: 'result', prompt: `Clean, functioning plumbing system after professional repair${cityLabel}. Modern fixtures, clean pipes, professional finish.`, after_section: 5 },
+      { context: 'equipment', prompt: `Professional plumbing tools and equipment. Pipe wrenches, hydro-jet nozzles, inspection camera. Clean arrangement, professional presentation.`, after_section: 2 },
+      { context: 'consultation', prompt: `Plumber explaining issue to homeowner${cityLabel}. Professional uniform, clipboard, friendly interaction at front door.`, after_section: 4 },
+    ],
+    dental: [
+      { context: 'clinic', prompt: `Modern dental clinic interior${cityLabel}. Professional equipment, clean environment, welcoming atmosphere. Natural lighting, dental chair visible.`, after_section: 1 },
+      { context: 'procedure', prompt: `Dentist performing procedure with assistant${cityLabel}. Professional attire, modern equipment, patient comfort. Clean clinical environment.`, after_section: 3 },
+      { context: 'smile', prompt: `Patient with confident smile after dental treatment${cityLabel}. Natural portrait, genuine happiness, professional dental result.`, after_section: 5 },
+      { context: 'technology', prompt: `Modern dental technology and equipment. Digital X-ray, intraoral scanner, sterilization area. Clean, professional presentation.`, after_section: 2 },
+      { context: 'consultation', prompt: `Dentist consulting with patient, showing X-ray or treatment plan${cityLabel}. Professional interaction, modern clinic environment.`, after_section: 4 },
+    ],
+    legal: [
+      { context: 'office', prompt: `Professional law office${cityLabel}. Bookshelves with legal volumes, organized desk, professional atmosphere. Warm lighting, NOT corporate stock.`, after_section: 1 },
+      { context: 'consultation', prompt: `Lawyer consulting with client in office${cityLabel}. Professional attire, documents on desk, focused discussion. Authentic professional setting.`, after_section: 3 },
+      { context: 'documents', prompt: `Legal documents, contracts, and law books on professional desk. Pen, reading glasses, organized workspace. Warm tones, professional presentation.`, after_section: 5 },
+      { context: 'courthouse', prompt: `Exterior of courthouse or legal building${cityLabel}. Architectural detail, scales of justice symbol, professional atmosphere.`, after_section: 2 },
+      { context: 'team', prompt: `Legal team in professional meeting${cityLabel}. Conference room, documents, collaborative discussion. Professional attire, authentic setting.`, after_section: 4 },
+    ],
+  };
+
+  // Default prompts for niches without specific images
+  const defaultPrompts = [
+    { context: 'professional', prompt: `Professional ${niche || 'service'} worker in their authentic work environment${cityLabel}. Real workplace, natural lighting, focused on task. NOT corporate stock photo.`, after_section: 1 },
+    { context: 'service', prompt: `${niche || 'Service'} professional performing their work${cityLabel}. Professional tools and equipment visible, authentic environment, natural lighting.`, after_section: 3 },
+    { context: 'result', prompt: `Completed professional ${niche || 'service'} work showing quality results${cityLabel}. Clean finish, satisfied atmosphere, professional standard.`, after_section: 5 },
+    { context: 'equipment', prompt: `Professional ${niche || 'service'} tools and equipment arranged neatly. Quality materials, clean presentation, professional standard.`, after_section: 2 },
+    { context: 'consultation', prompt: `${niche || 'Service'} professional consulting with client${cityLabel}. Professional interaction, friendly demeanor, authentic setting.`, after_section: 4 },
   ];
-  
-  // Return only the requested number of prompts (1-5)
+
+  const prompts = nicheImageMap[niche || ''] || defaultPrompts;
   const safeCount = Math.min(Math.max(count, 1), 5);
-  return allPrompts.slice(0, safeCount);
+  return prompts.slice(0, safeCount);
 }
 
 // Generate a normalized hash for cache lookup
@@ -1740,6 +1697,54 @@ serve(async (req) => {
       console.log(`[${requestId}][EliteEngine] Decision: structure=${eliteEngineDecision.structure_type}, variant=${eliteEngineDecision.variant}, angle=${eliteEngineDecision.angle}, style=${eliteEngineDecision.style_mode}, blocks=${eliteEngineDecision.blocks.length}`);
     } catch (orchErr) {
       console.error(`[${requestId}][EliteEngine] Orchestrator failed, falling back to intent classification:`, orchErr);
+      // V2.2.1: Never fail silently — persist fallback version
+      eliteEngineDecision = {
+        version: '2.2.1-fallback',
+        structure_type: 'complete_guide',
+        variant: 'chronological',
+        angle: 'practical',
+        style_mode: 'authority',
+        blocks: [],
+        rhythm_profile: '',
+        funnel_mode: funnel_mode || 'middle',
+        article_goal: article_goal || 'educar',
+        local_intelligence: null,
+        anti_collision_metadata: {
+          structure_hash: '',
+          blocks_hash: '',
+          collision_avoided: false,
+          window_size: 10,
+        },
+        error: orchErr instanceof Error ? orchErr.message : 'unknown',
+        fallback: true,
+      } as any;
+      console.warn(`[${requestId}][EliteEngine] Using fallback decision with version 2.2.1-fallback`);
+    }
+
+    // V2.2.1: Anti-Template Detector — check recent structure_hash repetition
+    let forceOutlineVariation = false;
+    if (blog_id && eliteEngineDecision?.anti_collision_metadata?.structure_hash) {
+      try {
+        const { data: recentStructures } = await supabase
+          .from('articles')
+          .select('source_payload')
+          .eq('blog_id', blog_id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (recentStructures && recentStructures.length >= 3) {
+          const hashes = recentStructures
+            .map((a: any) => a.source_payload?.eliteEngine?.structure_hash)
+            .filter(Boolean);
+          const allSame = hashes.length >= 3 && hashes.every((h: string) => h === hashes[0]);
+          if (allSame) {
+            forceOutlineVariation = true;
+            console.warn(`[${requestId}][AntiTemplate] 3+ identical structure_hash detected — forcing variation`);
+          }
+        }
+      } catch (atErr) {
+        console.warn(`[${requestId}][AntiTemplate] Check failed (non-blocking):`, atErr);
+      }
     }
 
     // Use orchestrator decision or fallback to classifyIntent
@@ -2025,7 +2030,7 @@ A cidade principal deste artigo é: ${city}
 
 ${HIERARCHY_RULES}
 
-${buildMasterPrompt(editorial_template || null, theme, keywords, tone)}
+${buildMasterPrompt(editorial_template || null, theme, keywords, tone, city, effectiveNiche)}
 
 Prazo de entrega: Data de referência é Janeiro de 2026. Todos os dados, tendências e referências devem ser contextualizados para esta data.`;
 
@@ -2396,6 +2401,94 @@ Reestruture e retorne via tool optimize_article.`;
     console.log(`[Merge V3.3] Final content length: ${finalContent.length}, intro: ${cleanIntroduction.length}, body: ${contentWithEat.length}`);
 
     // ============================================================================
+    // V2.2.1: POST-GENERATION VALIDATION & ENFORCEMENT
+    // ============================================================================
+    let validatedTitle = (seoOut.title || writerOut.title || articleEngineOutline?.h1 || theme).toString().trim();
+    let validatedContent = finalContent;
+
+    // 1. City enforcement in H1
+    if (city && city !== 'Brasil') {
+      const cityLower = city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const titleLower = validatedTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      if (!titleLower.includes(cityLower)) {
+        // Remove "Brasil" if used as primary location
+        validatedTitle = validatedTitle.replace(/\s+(?:no|em|do)\s+Brasil\b/gi, '');
+        validatedTitle = validatedTitle.replace(/\s*[-–—]\s*Brasil\b/gi, '');
+        // Append city
+        if (validatedTitle.length + city.length + 4 <= 65) {
+          validatedTitle = `${validatedTitle} em ${city}`;
+        }
+        console.log(`[PostValidation] City injected into H1: "${validatedTitle}"`);
+      }
+      
+      // 2. City enforcement in H2s (at least 2)
+      const h2Matches = validatedContent.match(/^##\s+(.+)$/gm) || [];
+      const h2sWithCity = h2Matches.filter((h2: string) => {
+        const h2Lower = h2.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return h2Lower.includes(cityLower);
+      });
+      
+      if (h2sWithCity.length < 2) {
+        let injectedCount = h2sWithCity.length;
+        const h2Lines = validatedContent.match(/^##\s+(.+)$/gm) || [];
+        
+        for (let i = 0; i < h2Lines.length && injectedCount < 2; i++) {
+          const h2 = h2Lines[i];
+          const h2Lower = h2.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          if (h2Lower.includes(cityLower)) continue;
+          if (/próximo passo|faq|perguntas/i.test(h2)) continue;
+          
+          const originalH2Text = h2.replace(/^##\s+/, '');
+          const newH2 = `## ${originalH2Text} em ${city}`;
+          validatedContent = validatedContent.replace(h2, newH2);
+          injectedCount++;
+          console.log(`[PostValidation] City injected into H2: "${newH2}"`);
+        }
+      }
+      
+      // 3. Remove "Brasil" as primary location in headings
+      validatedContent = validatedContent.replace(/^(##\s+.+)\s+(?:no|em|do)\s+Brasil\s*$/gm, (_match, heading) => heading);
+    }
+
+    // 4. Language sanitization — remove English headings
+    validatedContent = validatedContent.replace(/^##\s+(Core Components?|Key Takeaways?|Why .+ is Essential|How .+ Transforms?|Best Practices?|Top \d+|Getting Started|Final Thoughts|In Conclusion)\b.*$/gm, (match) => {
+      console.warn(`[PostValidation] Removed English heading: "${match.trim()}"`);
+      return '';
+    });
+    
+    // Remove fixed year from title
+    validatedTitle = validatedTitle.replace(/\s*\(?\b(202[3-9]|203\d)\b\)?/g, '');
+
+    // 5. Callout limit check — max 1
+    let calloutCount = 0;
+    validatedContent = validatedContent.replace(/^(>\s*[💡⚠️📌🔔❗✅🚨].*(?:\n>.*)*)/gm, (match) => {
+      calloutCount++;
+      if (calloutCount > 1) {
+        console.warn(`[PostValidation] Removed excess callout #${calloutCount}`);
+        return match.replace(/^>\s*/gm, '');
+      }
+      return match;
+    });
+
+    // 6. Paragraph size enforcement
+    validatedContent = validatedContent.split('\n\n').map(block => {
+      if (/^#{1,6}\s|^[-*]\s|^>\s|^!\[|^##\s*Próximo passo|^\d+\.\s/m.test(block)) return block;
+      if (block.length <= 700) return block;
+      const mid = Math.floor(block.length / 2);
+      const lastPeriod = block.lastIndexOf('. ', mid);
+      if (lastPeriod > 80) {
+        return block.slice(0, lastPeriod + 1) + '\n\n' + block.slice(lastPeriod + 2);
+      }
+      return block;
+    }).join('\n\n');
+
+    // Clean empty lines
+    validatedContent = validatedContent.replace(/\n{3,}/g, '\n\n').trim();
+
+    console.log(`[PostValidation] ✅ Done. Title: "${validatedTitle.substring(0, 60)}", H2s with city: ${city ? (validatedContent.match(/^##\s+(.+)$/gm) || []).filter((h: string) => h.toLowerCase().includes(city.toLowerCase())).length : 'N/A'}`);
+
+    // ============================================================================
     // V2.1: ARTICLE ENGINE - Contextual Image ALT Generation
     // ============================================================================
 
@@ -2461,10 +2554,10 @@ Reestruture e retorne via tool optimize_article.`;
     console.log(`[QualityGate V3.3] ================================================`);
 
     let articleWithImages = {
-      title: (seoOut.title || writerOut.title || articleEngineOutline?.h1 || theme).toString().trim(),
+      title: validatedTitle,
       meta_description: (seoOut.meta_description || writerOut.meta_description || articleEngineOutline?.metaDescription || '').toString().trim().substring(0, 160),
       excerpt: (seoOut.excerpt || writerOut.excerpt || seoOut.meta_description || '').toString().trim(),
-      content: finalContent,  // V3.3: Usando finalContent (intro + body merged)
+      content: validatedContent,  // V2.2.1: Using post-validated content
       // V3.3: Introduction vem DIRETAMENTE do campo Writer, não de parsing
       introduction: (() => {
         // Prioridade 1: Campo explícito do Writer (FONTE DA VERDADE)
@@ -2990,7 +3083,7 @@ Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicaçõe
           source_payload: eliteEngineDecision ? {
             ...(articleEnginePayload || {}),
             eliteEngine: {
-              version: '2.2',
+              version: '2.2.1',
               structure_type: eliteEngineDecision.structure_type,
               variant: eliteEngineDecision.variant,
               angle: eliteEngineDecision.angle,
@@ -3002,7 +3095,7 @@ Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicaçõe
               structure_hash: eliteEngineDecision.anti_collision_metadata.structure_hash,
               blocks_hash: eliteEngineDecision.anti_collision_metadata.blocks_hash,
               h2_pattern_hash: h2PatternHash || null,
-              anti_collision: eliteEngineDecision.anti_collision_metadata,
+              anti_collision: { ...eliteEngineDecision.anti_collision_metadata, forced_variation: forceOutlineVariation },
               similarity_score: footprintSimilarityScore,
               high_similarity_warning: highSimilarityWarning,
               mutation_skipped_due_timeout: mutationSkippedDueTimeout || undefined,
@@ -3055,7 +3148,7 @@ Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicaçõe
           eliteEngineDecision ? {
             ...(articleEnginePayload || {}),
             eliteEngine: {
-              version: '2.2',
+              version: '2.2.1',
               structure_type: eliteEngineDecision.structure_type,
               variant: eliteEngineDecision.variant,
               angle: eliteEngineDecision.angle,
@@ -3067,7 +3160,7 @@ Retorne APENAS o artigo completo corrigido em Markdown. NÃO inclua explicaçõe
               structure_hash: eliteEngineDecision.anti_collision_metadata.structure_hash,
               blocks_hash: eliteEngineDecision.anti_collision_metadata.blocks_hash,
               h2_pattern_hash: h2PatternHash || null,
-              anti_collision: eliteEngineDecision.anti_collision_metadata,
+              anti_collision: { ...eliteEngineDecision.anti_collision_metadata, forced_variation: forceOutlineVariation },
               similarity_score: footprintSimilarityScore,
               high_similarity_warning: highSimilarityWarning,
               mutation_skipped_due_timeout: mutationSkippedDueTimeout || undefined,
