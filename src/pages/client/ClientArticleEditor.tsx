@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBlog } from '@/hooks/useBlog';
 import { smartNavigate, getClientArticlesListPath, getClientArticleEditPath } from '@/utils/platformUrls';
@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { useGenerationPolling } from '@/hooks/useGenerationPolling';
 
 type EditorPhase = 'form' | 'generating' | 'editing';
 type ViewMode = 'editor' | 'preview' | 'split';
@@ -134,16 +135,59 @@ export default function ClientArticleEditor() {
    * V4.0: Updated stage mapping - aligned with new fast generation flow
    * Removed 'outlining' and 'optimizing' from sync flow (now background)
    */
-  const mapStageToArticleEngine = (stage: GenerationStage): string | null => {
+  const mapStageToArticleEngine = (stage: GenerationStage | string | null): string | null => {
     if (!stage) return null;
     const mapping: Record<string, string> = {
       'analyzing': 'classifying',
+      'classifying': 'classifying',
+      'researching': 'researching',
       'generating': 'writing',
+      'writing': 'writing',
+      'seo': 'seo',
+      'qa': 'seo',
       'images': 'images',
-      'finalizing': 'finalizing'
+      'finalizing': 'finalizing',
+      'completed': 'finalizing',
     };
     return mapping[stage] || stage;
   };
+
+  // V5.0: Polling state for opportunity conversion
+  const [pollingArticleId, setPollingArticleId] = useState<string | null>(null);
+
+  const handlePollingComplete = useCallback(() => {
+    console.log('[V5.0] Polling detected completion, redirecting...');
+    if (pollingArticleId) {
+      toast.success('Artigo criado com sucesso');
+      smartNavigate(navigate, getClientArticleEditPath(pollingArticleId));
+    }
+  }, [pollingArticleId, navigate]);
+
+  const handlePollingError = useCallback((error: string) => {
+    console.error('[V5.0] Polling detected failure:', error);
+    setPollingArticleId(null);
+    setPhase('form');
+    setGenerationStage(null);
+    setGenerationProgress(0);
+    toast.error(error);
+  }, []);
+
+  const polling = useGenerationPolling({
+    articleId: pollingArticleId,
+    enabled: !!pollingArticleId,
+    onComplete: handlePollingComplete,
+    onError: handlePollingError,
+  });
+
+  // V5.0: Sync polling data to generation UI state
+  useEffect(() => {
+    if (!pollingArticleId || !polling.isPolling) return;
+    const mappedStage = mapStageToArticleEngine(polling.stage);
+    if (mappedStage) {
+      setGenerationStage(mappedStage as GenerationStage);
+    }
+    setGenerationProgress(polling.progress);
+  }, [pollingArticleId, polling.isPolling, polling.stage, polling.progress]);
 
   // Handle cancel generation
   const handleCancelGeneration = () => {
@@ -154,6 +198,7 @@ export default function ClientArticleEditor() {
     setGenerationProgress(0);
     setShowTimeoutWarning(false);
     setStreamingText('');
+    setPollingArticleId(null);
     if (timeoutWarningRef.current) {
       clearTimeout(timeoutWarningRef.current);
     }
@@ -267,12 +312,9 @@ export default function ClientArticleEditor() {
     
     setPhase('generating');
     setGenerationStage('analyzing');
-    setGenerationProgress(10);
+    setGenerationProgress(5);
 
-    const progressInterval = setInterval(() => {
-      setGenerationProgress((prev) => Math.min(prev + 8, 85));
-    }, 2000);
-
+    // V5.0: Fire-and-forget — invoke edge function, then poll DB for real progress
     const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
       body: { 
         opportunityId: oppId, 
@@ -280,9 +322,6 @@ export default function ClientArticleEditor() {
         request_id: requestId
       },
     });
-
-    // 🔴 SEMPRE limpar o timer antes de qualquer return
-    clearInterval(progressInterval);
 
     // ❌ ERRO DE EDGE FUNCTION
     if (error) {
@@ -308,11 +347,9 @@ export default function ClientArticleEditor() {
       return;
     }
 
-    // ✅ SUCESSO REAL
-    setGenerationStage('finalizing');
-    setGenerationProgress(100);
-    toast.success('Artigo criado com sucesso');
-    smartNavigate(navigate, getClientArticleEditPath(data.article_id));
+    // ✅ Edge function retornou article_id — ativar polling real
+    console.log(`[${requestId}] Edge function success, activating polling for article:`, data.article_id);
+    setPollingArticleId(data.article_id);
   };
 
   // Persist view mode
@@ -1437,6 +1474,8 @@ export default function ClientArticleEditor() {
                   showTimeoutWarning={showTimeoutWarning}
                   keyword={title || themeParam || 'Artigo'}
                   onCancel={handleCancelGeneration}
+                  isStuck={polling.isStuck}
+                  stuckDuration={polling.stuckCounter}
                 />
               </div>
             </div>
