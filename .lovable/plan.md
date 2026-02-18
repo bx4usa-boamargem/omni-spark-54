@@ -1,71 +1,72 @@
 
-# Correcao: Imagens Quebradas, Texto Corrido e CTA Ausente
+# Progresso Real por Fases na Geracao de Artigos
 
-## Problemas Encontrados
+## Problema
+O componente `ClientArticleEditor.tsx` usa um **timer simulado** (`setInterval` incrementando +8% a cada 2s) em vez de polling real do banco de dados. Isso faz com que o indicador de progresso fique travado em "Classificando intencao..." mesmo quando o backend ja avancou para outras etapas. Alem disso, o `mapStageToArticleEngine` so mapeia 4 dos 6 estagios (falta `researching` e `seo`).
 
-### 1. Imagem de Capa Quebrada (source.unsplash.com)
-O servico `source.unsplash.com` foi descontinuado e nao retorna mais imagens. O fallback de imagens em `supabase/functions/_shared/geminiImageGenerator.ts` (linha 121) gera URLs neste formato morto:
-```
-https://source.unsplash.com/1024x576/?pest%20control...
-```
-Isso afeta tanto a `featured_image_url` quanto a primeira imagem em `content_images`. No banco, o artigo publicado tem exatamente este URL quebrado como capa.
-
-### 2. Conteudo com Formatacao Incorreta (Texto Corrido)
-O conteudo no banco esta em formato Markdown valido (com `## ` headings e quebras de linha). O componente `ArticleContent.tsx` possui um parser Markdown que deveria renderizar corretamente. Porem:
-- A **introducao** do artigo nao possui um heading H2, formando um bloco de texto longo sem separacao visual antes do primeiro `## `
-- A deteccao HTML vs Markdown esta funcionando (o conteudo e corretamente identificado como Markdown)
-- O problema visual e que a introducao longa aparece como um unico paragrafo gigante sem quebra, pois o parser agrupa linhas de texto consecutivas em um unico `<p>`
-
-### 3. Imagens Internas (content_images)
-O banco possui 6 entradas em `content_images`. Porem:
-- A primeira imagem usa URL do Unsplash (quebrado)
-- As demais usam base64 (`data:image/png;base64,...`) — funcionam mas sao enormes (megabytes cada)
-- O componente `ArticleContent.tsx` injeta imagens apos os H2 usando o campo `after_section`, o que esta correto
-
-### 4. CTA no Rodape
-O campo `cta` existe no banco com dados corretos: `{company_name: "Ana Bione Consultoria de Imagem", whatsapp: "14079284458", city: "Brasil..."}`. O `PublicArticle.tsx` ja renderiza o `ArticleCTARenderer` (linhas 381-387). O componente deve estar funcionando, mas pode nao ser visivel se o usuario nao rolar ate o final da pagina. No **editor**, o `ArticlePreview.tsx` (simulacao) NAO renderiza o CTA — apenas mostra o conteudo e FAQ.
+O `ArticleGenerator.tsx` ja faz isso corretamente com `useGenerationPolling` -- a correcao e replicar esse padrao no editor.
 
 ## Plano de Correcao
 
-### Correcao 1: Substituir Unsplash Fallback por Placeholder Funcional
-**Arquivo**: `supabase/functions/_shared/geminiImageGenerator.ts`
+### 1. Atualizar `mapStageToArticleEngine` no ClientArticleEditor
 
-Substituir o fallback `source.unsplash.com` por um servico funcional. Opcoes:
-- Usar `picsum.photos` (funcional, generico)
-- Ou gerar imagens via Gemini como ja e tentado antes do fallback
+**Arquivo**: `src/pages/client/ClientArticleEditor.tsx` (linhas 137-146)
 
-Mudar a funcao `generateUnsplashFallback` para usar `https://picsum.photos/1024/576` ou outro servico ativo.
+Adicionar os estagios faltantes para mapear todos os 6 estados do backend:
 
-### Correcao 2: Corrigir Artigo Existente no Banco
-A `featured_image_url` do artigo publicado precisa ser atualizada para uma URL funcional. Podemos adicionar logica no `content-api` para detectar e substituir URLs do `source.unsplash.com` por um placeholder, ou corrigir diretamente no banco.
+```typescript
+const mapStageToArticleEngine = (stage: GenerationStage | string | null): string | null => {
+  if (!stage) return null;
+  const mapping: Record<string, string> = {
+    'analyzing': 'classifying',
+    'classifying': 'classifying',
+    'researching': 'researching',
+    'generating': 'writing',
+    'writing': 'writing',
+    'seo': 'seo',
+    'qa': 'seo',
+    'images': 'images',
+    'finalizing': 'finalizing',
+    'completed': 'finalizing',
+  };
+  return mapping[stage] || stage;
+};
+```
 
-### Correcao 3: Melhorar Renderizacao de Introducao no ArticleContent
-**Arquivo**: `src/components/public/ArticleContent.tsx`
+### 2. Usar `useGenerationPolling` no fluxo de conversao de oportunidade
 
-O parser Markdown precisa tratar a introducao (texto antes do primeiro `## `) com melhor separacao visual. Adicionar quebra de paragrafo quando houver linhas vazias (`\n\n`) entre blocos de texto na introducao, e garantir que cada `\n\n` gere um novo `<p>`.
+**Arquivo**: `src/pages/client/ClientArticleEditor.tsx`
 
-### Correcao 4: Adicionar CTA ao Editor Preview
-**Arquivo**: `src/components/ArticlePreview.tsx`
+No `handleConvertOpportunity` (linhas 251-316):
+- **Remover** o `progressInterval` (timer simulado)
+- Apos receber o `article_id` do edge function, ativar o `useGenerationPolling` com esse ID
+- Derivar `generationStage` e `generationProgress` do polling real
+- Manter o redirect para o editor quando o estagio atingir `completed`
 
-Importar e renderizar o `ArticleCTARenderer` na simulacao do editor, apos o conteudo do artigo, para que o usuario veja o CTA durante a edicao.
+Mudancas:
+1. Importar `useGenerationPolling` 
+2. Criar estado `pollingArticleId` para ativar o polling
+3. Na funcao `handleConvertOpportunity`, ao invocar o edge function, guardar o `article_id` retornado e ativar o polling
+4. Usar `useEffect` para sincronizar os dados do polling com `generationStage` e `generationProgress`
 
-### Correcao 5: Atualizar aiConfig.ts
-**Arquivo**: `supabase/functions/_shared/aiConfig.ts`
+### 3. Resultado Visual Esperado
 
-Atualizar a referencia a `source.unsplash.com` na configuracao de fallback para o novo servico.
+As fases avancam conforme o backend processa:
 
-## Resumo das Mudancas
+| Estagio BD | Label no UI | Progresso |
+|-----------|-------------|-----------|
+| classifying | Classificando intencao... | 10% |
+| researching | Pesquisando referencias... | 30% |
+| writing | Escrevendo conteudo... | 60% |
+| seo | Otimizando SEO... | 75% |
+| images | Gerando imagens... | 88% |
+| finalizing | Finalizando artigo... | 98% |
+| completed | (redirect automatico) | 100% |
+
+## Arquivos Modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/_shared/geminiImageGenerator.ts` | Substituir `source.unsplash.com` por servico funcional |
-| `supabase/functions/_shared/aiConfig.ts` | Atualizar URL de fallback |
-| `src/components/public/ArticleContent.tsx` | Melhorar separacao visual da introducao |
-| `src/components/ArticlePreview.tsx` | Adicionar renderizacao do CTA na simulacao |
+| `src/pages/client/ClientArticleEditor.tsx` | Atualizar mapeamento de estagios + substituir timer simulado por `useGenerationPolling` |
 
-## Resultado Esperado
-
-- Imagens de capa e internas funcionais (sem URLs quebrados)
-- Texto com formatacao adequada (headings, paragrafos separados)
-- CTA visivel tanto no editor quanto no artigo publicado
-- Novos artigos gerados usarao fallback funcional
+Nenhum outro arquivo precisa ser alterado -- o `ArticleGenerationProgress.tsx` ja suporta todos os 6 estagios corretamente.
