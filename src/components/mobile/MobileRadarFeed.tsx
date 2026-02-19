@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -97,10 +98,23 @@ export function MobileRadarFeed({ blogId }: MobileRadarFeedProps) {
   };
 
   const handleGenerateArticle = async (opportunity: Opportunity) => {
+    if (generatingId) return; // Execution lock
     setGeneratingId(opportunity.id);
     
-    // Navigate to creation page with quick mode
-    navigate(`/client/articles/engine/new?quick=true&fromOpportunity=${opportunity.id}`);
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: opportunity.id,
+          suggested_title: opportunity.suggested_title,
+          suggested_keywords: opportunity.suggested_keywords,
+          territory: opportunity.territory,
+        },
+        blogId,
+        navigate
+      );
+    } finally {
+      setGeneratingId(null);
+    }
   };
 
   const getOpportunityLevel = (score: number | null) => {

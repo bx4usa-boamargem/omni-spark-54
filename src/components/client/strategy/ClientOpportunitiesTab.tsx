@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -162,18 +163,26 @@ export function ClientOpportunitiesTab({ blogId }: ClientOpportunitiesTabProps) 
     }
   };
 
-  // IMMEDIATE REDIRECT - No waiting for edge function
-  const handleCreateArticle = (opportunity: Opportunity) => {
-    // Navigate immediately to editor with auto-run params
-    const params = new URLSearchParams({
-      quick: 'true',
-      fromOpportunity: opportunity.id,
-      theme: opportunity.suggested_title,
-      mode: 'fast',
-      images: '1'
-    });
+  const [creatingId, setCreatingId] = useState<string | null>(null);
+
+  const handleCreateArticle = async (opportunity: Opportunity) => {
+    if (creatingId) return;
+    setCreatingId(opportunity.id);
     
-    navigate(`/client/articles/engine/new?${params.toString()}`);
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: opportunity.id,
+          suggested_title: opportunity.suggested_title,
+          suggested_keywords: opportunity.suggested_keywords,
+          goal: opportunity.goal,
+        },
+        blogId,
+        navigate
+      );
+    } finally {
+      setCreatingId(null);
+    }
   };
 
   const getSourceBadge = (opportunity: Opportunity) => {
@@ -501,7 +510,9 @@ export function ClientOpportunitiesTab({ blogId }: ClientOpportunitiesTabProps) 
                       <Button 
                         size="sm"
                         onClick={() => handleCreateArticle(opportunity)}
+                        disabled={creatingId === opportunity.id}
                       >
+                        {creatingId === opportunity.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                         Criar Artigo
                       </Button>
                     </div>
@@ -536,7 +547,9 @@ export function ClientOpportunitiesTab({ blogId }: ClientOpportunitiesTabProps) 
                     <Button 
                       size="sm"
                       onClick={() => handleCreateArticle(opportunity)}
+                      disabled={creatingId === opportunity.id}
                     >
+                      {creatingId === opportunity.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                       Criar Artigo
                     </Button>
                   </div>

@@ -709,6 +709,7 @@ export type Database = {
           converted_at: string | null
           created_at: string | null
           funnel_stage: string | null
+          generation_job_id: string | null
           goal: string | null
           high_score_alert_sent: boolean | null
           id: string
@@ -736,6 +737,7 @@ export type Database = {
           converted_at?: string | null
           created_at?: string | null
           funnel_stage?: string | null
+          generation_job_id?: string | null
           goal?: string | null
           high_score_alert_sent?: boolean | null
           id?: string
@@ -763,6 +765,7 @@ export type Database = {
           converted_at?: string | null
           created_at?: string | null
           funnel_stage?: string | null
+          generation_job_id?: string | null
           goal?: string | null
           high_score_alert_sent?: boolean | null
           id?: string
@@ -810,6 +813,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "elite_engine_analytics"
             referencedColumns: ["article_id"]
+          },
+          {
+            foreignKeyName: "article_opportunities_generation_job_id_fkey"
+            columns: ["generation_job_id"]
+            isOneToOne: false
+            referencedRelation: "generation_jobs"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "article_opportunities_intel_week_id_fkey"

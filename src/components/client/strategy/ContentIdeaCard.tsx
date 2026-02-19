@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 import { 
   Lightbulb, BookOpen, MapPin, Award, Target, Users, Zap,
   ExternalLink, ArrowRight, Clock, Loader2
@@ -134,24 +135,23 @@ export function ContentIdeaCard({
     'awareness': 'topo'
   };
   
-  // IMMEDIATE REDIRECT - No waiting for edge function
-  const handleCreateArticle = () => {
+  const handleCreateArticle = async () => {
     if (creating) return;
+    setCreating(true);
     
-    // Navigate immediately to editor with auto-run params
-    const params = new URLSearchParams({
-      quick: 'true',
-      theme: title,
-      mode: 'fast',
-      images: '1'
-    });
-    
-    // If we have opportunityId, include it for backend conversion
-    if (opportunityId) {
-      params.set('fromOpportunity', opportunityId);
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: opportunityId || '',
+          suggested_title: title,
+          suggested_keywords: keywords,
+        },
+        blogId,
+        navigate
+      );
+    } finally {
+      setCreating(false);
     }
-    
-    navigate(`/client/articles/engine/new?${params.toString()}`);
   };
   
   return (
