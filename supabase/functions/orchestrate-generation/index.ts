@@ -109,13 +109,19 @@ const STEP_TIMEOUTS: Record<StepName, number> = {
   INPUT_VALIDATION: 5_000,
   SERP_ANALYSIS:    120_000,
   NLP_KEYWORDS:     90_000,   // OpenAI GPT-5-mini can be slow
-  TITLE_GEN:        90_000,   // OpenAI GPT-5 needs ~60s
+  TITLE_GEN:        180_000,  // HARD KILL: 180s (GPT-5 can take 60-120s)
   OUTLINE_GEN:      120_000,  // OpenAI GPT-5 structural output
   CONTENT_GEN:      240_000,  // OpenAI GPT-5 long content
   IMAGE_GEN:        15_000,
   SEO_SCORE:        90_000,
-  META_GEN:         60_000,   // OpenAI GPT-5-mini
+  META_GEN:         90_000,   // OpenAI GPT-5-mini (increased margin)
   OUTPUT:           30_000,
+};
+
+// Soft timeout: warn but don't kill — heartbeat keeps lock alive
+const SOFT_TIMEOUT_THRESHOLDS: Partial<Record<StepName, number>> = {
+  TITLE_GEN: 90_000,   // Warn at 90s, hard kill at 180s
+  META_GEN:  60_000,   // Warn at 60s, hard kill at 90s
 };
 
 const REAL_AI_STEPS: StepName[] = ['SERP_ANALYSIS', 'NLP_KEYWORDS', 'TITLE_GEN', 'OUTLINE_GEN', 'CONTENT_GEN', 'SEO_SCORE', 'META_GEN'];
@@ -228,6 +234,19 @@ async function callAiRouterAndPersist(
 // ============================================================
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  const softMs = SOFT_TIMEOUT_THRESHOLDS[label as StepName];
+  if (softMs) {
+    // Soft timeout: log warning at softMs, hard kill at ms
+    const softTimer = setTimeout(() => {
+      console.warn(`[SOFT_TIMEOUT] ⚠️ ${label} exceeded ${softMs}ms — still running (hard kill at ${ms}ms)`);
+    }, softMs);
+    return Promise.race([
+      promise.finally(() => clearTimeout(softTimer)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`STEP_TIMEOUT: ${label} exceeded ${ms}ms (hard kill)`)), ms)
+      ),
+    ]);
+  }
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
@@ -430,7 +449,45 @@ RULES: All titles must contain keyword. ${city ? `At least 4 must include "${cit
   });
 
   if (!aiResult.success) throw new Error(`TITLE_GEN_FAILED: ${aiResult.error}`);
-  return { output: parseAIJson(aiResult.content, 'TITLE_GEN'), aiResult };
+  
+  // Title parse with fallback: if JSON fails, extract title from raw content
+  try {
+    return { output: parseAIJson(aiResult.content, 'TITLE_GEN'), aiResult };
+  } catch (parseErr) {
+    console.warn(`[TITLE_GEN] JSON parse failed, attempting raw title extraction...`);
+    // Fallback: extract any quoted title or first meaningful line
+    const rawContent = aiResult.content || '';
+    let fallbackTitle = '';
+    
+    // Try extracting from "selected_title": "..." pattern
+    const titleMatch = rawContent.match(/selected_title['":\s]+['"]([^'"]{10,80})['"]/i);
+    if (titleMatch) {
+      fallbackTitle = titleMatch[1];
+    } else {
+      // Try first line that looks like a title (10-80 chars, no JSON syntax)
+      const lines = rawContent.split('\n').map(l => l.trim()).filter(l => l.length >= 10 && l.length <= 80 && !l.startsWith('{') && !l.startsWith('['));
+      if (lines.length > 0) fallbackTitle = lines[0].replace(/^["']+|["']+$/g, '');
+    }
+    
+    if (fallbackTitle) {
+      console.log(`[TITLE_GEN] ✅ Fallback title extracted: "${fallbackTitle}"`);
+      return {
+        output: {
+          title_pack: {
+            candidates: [{ title: fallbackTitle, type: 'fallback', score: 70, reasoning: 'Extracted from raw LLM response (JSON parse failed)' }],
+            selected_index: 0,
+            selected_title: fallbackTitle,
+            selection_reason: 'Fallback extraction from raw response',
+            parse_fallback: true,
+          },
+        },
+        aiResult,
+      };
+    }
+    
+    // Re-throw if no fallback possible
+    throw parseErr;
+  }
 }
 
 async function executeOutlineGen(
