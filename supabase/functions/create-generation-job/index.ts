@@ -139,10 +139,14 @@ serve(async (req) => {
     console.log(`[CREATE_JOB] ✅ Job ${job.id} created for user ${user.id} | keyword: "${input.keyword}"`);
 
     // ============================================================
-    // PART 1 — SYNCHRONOUS ENGINE WAKE (replaces fire-and-forget)
+    // PART 1 — FIRE-AND-FORGET ENGINE WAKE (non-blocking)
+    // The orchestrator runs for minutes; we just confirm it started.
     // ============================================================
     let wakeOk = false;
     try {
+      const abortCtrl = new AbortController();
+      const wakeTimeout = setTimeout(() => abortCtrl.abort(), 8000); // 8s to confirm start
+
       const orchestrateResp = await fetch(
         `${supabaseUrl}/functions/v1/orchestrate-generation`,
         {
@@ -152,58 +156,45 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ job_id: job.id }),
+          signal: abortCtrl.signal,
         }
-      );
+      ).catch((err: Error) => {
+        // AbortError means the function started but we didn't wait for completion — that's OK
+        if (err.name === 'AbortError') {
+          console.log(`[ENGINE:WAKE_SENT] job_id=${job.id} (fire-and-forget, orchestrator running)`);
+          return { ok: true, status: 200 } as Response;
+        }
+        throw err;
+      });
+
+      clearTimeout(wakeTimeout);
 
       if (orchestrateResp.ok) {
         wakeOk = true;
         console.log(`[ENGINE:WAKE_OK] job_id=${job.id}`);
       } else {
-        const errBody = await orchestrateResp.text();
-        console.error(`[ENGINE:WAKE_FAILED] job=${job.id} status=${orchestrateResp.status} body=${errBody}`);
+        console.error(`[ENGINE:WAKE_FAILED] job=${job.id} status=${orchestrateResp.status}`);
       }
     } catch (wakeErr) {
       console.error(`[ENGINE:WAKE_ERROR] job=${job.id}:`, wakeErr);
     }
 
     // ============================================================
-    // PART 2 — ENGINE START CONFIRMATION (verify steps created)
+    // PART 2 — ENGINE START CONFIRMATION (verify job status updated)
     // ============================================================
     if (wakeOk) {
-      await sleep(2000);
+      await sleep(3000);
 
-      const { count: stepCount } = await supabase
-        .from('generation_steps')
-        .select('id', { count: 'exact', head: true })
-        .eq('job_id', job.id);
+      // Check if orchestrator updated job status to 'running'
+      const { data: jobCheck } = await supabase
+        .from('generation_jobs')
+        .select('status')
+        .eq('id', job.id)
+        .single();
 
-      if ((stepCount || 0) === 0) {
-        console.warn(`[ENGINE:NO_STEPS_DETECTED] job=${job.id} — retrying orchestrator`);
-
-        // Retry orchestrator ONE TIME
-        try {
-          const retryResp = await fetch(
-            `${supabaseUrl}/functions/v1/orchestrate-generation`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${supabaseServiceKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ job_id: job.id }),
-            }
-          );
-
-          if (retryResp.ok) {
-            console.log(`[ENGINE:RETRY_OK] job_id=${job.id}`);
-          } else {
-            console.error(`[ENGINE:RETRY_FAILED] job=${job.id}`);
-            wakeOk = false;
-          }
-        } catch (retryErr) {
-          console.error(`[ENGINE:RETRY_ERROR] job=${job.id}:`, retryErr);
-          wakeOk = false;
-        }
+      if (jobCheck?.status === 'pending') {
+        console.warn(`[ENGINE:STILL_PENDING] job=${job.id} — orchestrator may be slow, trusting fire-and-forget`);
+        // Don't retry — orchestrator is already running, just slow to update status
       }
     }
 

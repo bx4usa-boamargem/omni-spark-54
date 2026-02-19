@@ -108,13 +108,13 @@ type StepName = typeof PIPELINE_STEPS[number];
 const STEP_TIMEOUTS: Record<StepName, number> = {
   INPUT_VALIDATION: 5_000,
   SERP_ANALYSIS:    120_000,
-  NLP_KEYWORDS:     45_000,
-  TITLE_GEN:        45_000,
-  OUTLINE_GEN:      60_000,
-  CONTENT_GEN:      180_000,
+  NLP_KEYWORDS:     90_000,   // OpenAI GPT-5-mini can be slow
+  TITLE_GEN:        90_000,   // OpenAI GPT-5 needs ~60s
+  OUTLINE_GEN:      120_000,  // OpenAI GPT-5 structural output
+  CONTENT_GEN:      240_000,  // OpenAI GPT-5 long content
   IMAGE_GEN:        15_000,
-  SEO_SCORE:        90_000,  // RULE 3: 90s timeout
-  META_GEN:         30_000,
+  SEO_SCORE:        90_000,
+  META_GEN:         60_000,   // OpenAI GPT-5-mini
   OUTPUT:           30_000,
 };
 
