@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenantContext } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ import { ArrowLeft, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 export default function GenerationNew() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentBlog } = useTenant();
+  const { currentTenant } = useTenantContext();
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -30,13 +30,13 @@ export default function GenerationNew() {
     if (!form.keyword || form.keyword.trim().length < 2) { toast.error('Palavra-chave é obrigatória (min 2 chars)'); return; }
     if (!form.city.trim()) { toast.error('Cidade é obrigatória'); return; }
     if (!form.niche.trim()) { toast.error('Nicho é obrigatório'); return; }
-    if (!currentBlog?.id) { toast.error('Blog não encontrado'); return; }
+    if (!currentTenant?.id) { toast.error('Blog não encontrado'); return; }
 
     setLoading(true);
     try {
       const payload: Record<string, unknown> = {
         keyword: form.keyword.trim(),
-        blog_id: currentBlog.id,
+        blog_id: currentTenant.id,
         city: form.city.trim(),
         state: form.state.trim() || undefined,
         country: 'BR',
