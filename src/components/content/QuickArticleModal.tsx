@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Sparkles, ChevronDown, Loader2 } from "lucide-react";
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 
 interface QuickArticleModalProps {
   open: boolean;
@@ -27,18 +28,24 @@ export function QuickArticleModal({ open, onOpenChange, blogId, isClientContext 
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
-    if (!theme.trim()) return;
+    if (!theme.trim() || loading) return;
     
     setLoading(true);
-    
-    // Navigate to article creation with pre-filled theme
-    // The generation will use intelligent defaults automatically
     onOpenChange(false);
-    const basePath = isClient ? '/client/articles/engine/new' : '/articles/new';
-    navigate(`${basePath}?theme=${encodeURIComponent(theme.trim())}&quick=true`);
     
-    setLoading(false);
-    setTheme("");
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: '',
+          suggested_title: theme.trim(),
+        },
+        blogId,
+        navigate
+      );
+    } finally {
+      setLoading(false);
+      setTheme("");
+    }
   };
 
   const handleCustomize = () => {

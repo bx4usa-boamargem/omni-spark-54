@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Compass, Sparkles, ArrowRight, Clock, TrendingUp, Loader2 } from 'lucide-react';
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Autoplay from 'embla-carousel-autoplay';
@@ -43,10 +44,10 @@ export function OpportunitiesCarouselBanner({ blogId, className }: Opportunities
   );
 
   const handleCreateArticle = useCallback(async (opportunity: RadarOpportunity) => {
+    if (isCreating) return;
     setIsCreating(opportunity.id);
 
     try {
-      // Check article limits
       const limitResult = await checkLimit('articles');
       
       if (!limitResult.canCreate) {
@@ -60,22 +61,22 @@ export function OpportunitiesCarouselBanner({ blogId, className }: Opportunities
         return;
       }
 
-      // Navigate to quick creation
-      const params = new URLSearchParams({
-        quick: 'true',
-        fromOpportunity: opportunity.id,
-        theme: opportunity.suggested_title,
-        mode: 'fast'
-      });
-
-      navigate(`/client/articles/engine/new?${params.toString()}`);
+      await createArticleFromOpportunity(
+        {
+          id: opportunity.id,
+          suggested_title: opportunity.suggested_title,
+          suggested_keywords: opportunity.suggested_keywords,
+        },
+        blogId,
+        navigate
+      );
     } catch (error) {
-      console.error('Error checking limits:', error);
-      toast.error('Erro ao verificar limites');
+      console.error('Error creating article:', error);
+      toast.error('Erro ao criar artigo');
     } finally {
       setIsCreating(null);
     }
-  }, [checkLimit, navigate]);
+  }, [checkLimit, navigate, isCreating, blogId]);
 
   const handleViewRadar = useCallback(() => {
     navigate('/client/radar');

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreStars } from './ScoreStars';
-import { FileText, ExternalLink } from 'lucide-react';
+import { FileText, ExternalLink, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 
 interface Opportunity {
   id: string;
@@ -26,6 +28,7 @@ export function TopOpportunitiesTable({
   blogId 
 }: TopOpportunitiesTableProps) {
   const navigate = useNavigate();
+  const [creatingId, setCreatingId] = useState<string | null>(null);
 
   // Filter unconverted, sort by score, take top N
   const topOpportunities = opportunities
@@ -33,24 +36,28 @@ export function TopOpportunitiesTable({
     .sort((a, b) => (b.relevance_score || 0) - (a.relevance_score || 0))
     .slice(0, maxItems);
 
-  // IMMEDIATE REDIRECT - No waiting for edge function
-  const handleCreateArticle = (opportunity: Opportunity) => {
+  const handleCreateArticle = async (opportunity: Opportunity) => {
+    if (creatingId) return;
     const effectiveBlogId = blogId || opportunity.blog_id;
     if (!effectiveBlogId) {
       toast.error('Blog não identificado. Tente novamente.');
       return;
     }
+    setCreatingId(opportunity.id);
     
-    // Navigate immediately to editor with auto-run params
-    const params = new URLSearchParams({
-      quick: 'true',
-      fromOpportunity: opportunity.id,
-      theme: opportunity.suggested_title,
-      mode: 'fast',
-      images: '1'
-    });
-    
-    navigate(`/client/articles/engine/new?${params.toString()}`);
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: opportunity.id,
+          suggested_title: opportunity.suggested_title,
+          suggested_keywords: opportunity.suggested_keywords,
+        },
+        effectiveBlogId,
+        navigate
+      );
+    } finally {
+      setCreatingId(null);
+    }
   };
 
   if (topOpportunities.length === 0) {
@@ -111,8 +118,13 @@ export function TopOpportunitiesTable({
                 size="sm" 
                 className="shrink-0 gap-2"
                 onClick={() => handleCreateArticle(opportunity)}
+                disabled={creatingId === opportunity.id}
               >
-                <ExternalLink className="h-4 w-4" />
+                {creatingId === opportunity.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-4 w-4" />
+                )}
                 Criar Artigo
               </Button>
             </div>

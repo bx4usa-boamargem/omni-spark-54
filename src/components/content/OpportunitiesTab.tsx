@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { createArticleFromOpportunity } from '@/lib/createArticleFromOpportunity';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -313,18 +314,25 @@ export function OpportunitiesTab({ blogId, isClientContext = false }: Opportunit
     setProcessing(false);
   };
 
-  // IMMEDIATE REDIRECT - Auto-run mode
-  const handleCreateArticle = (opportunity: Opportunity) => {
-    const params = new URLSearchParams({
-      quick: 'true',
-      fromOpportunity: opportunity.id,
-      theme: opportunity.suggested_title,
-      mode: 'fast',
-      images: '1'
-    });
+  const [creatingId, setCreatingId] = useState<string | null>(null);
+
+  const handleCreateArticle = async (opportunity: Opportunity) => {
+    if (creatingId) return;
+    setCreatingId(opportunity.id);
     
-    const basePath = isClient ? '/client/articles/engine/new' : '/app/articles/new';
-    navigate(`${basePath}?${params.toString()}`);
+    try {
+      await createArticleFromOpportunity(
+        {
+          id: opportunity.id,
+          suggested_title: opportunity.suggested_title,
+          suggested_keywords: opportunity.suggested_keywords,
+        },
+        blogId,
+        navigate
+      );
+    } finally {
+      setCreatingId(null);
+    }
   };
 
   const handleGenerateOpportunities = async (mode: "standard" | "trends" | "competitor_gaps" = "standard", count = 5) => {
