@@ -124,11 +124,13 @@ async function callGateway(params: AICallParams): Promise<AICallResult> {
   const temperature = params.temperature ?? routing.temperature;
   const maxTokens = params.maxTokens ?? routing.maxTokens;
 
+  // OpenAI models require max_completion_tokens and may not support custom temperature
+  const isOpenAI = model.startsWith('openai/');
   const body: Record<string, unknown> = {
     model,
     messages: params.messages,
-    temperature,
-    max_tokens: maxTokens,
+    ...(isOpenAI ? {} : { temperature }),
+    ...(isOpenAI ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
   };
 
   // Add tools if provided
