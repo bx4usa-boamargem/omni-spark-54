@@ -1,19 +1,25 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Download, Eye, Edit, CheckCircle, XCircle, Loader2, Clock, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Download, Eye, Edit, CheckCircle, XCircle, Loader2, Clock, AlertTriangle, RefreshCw, Search, FileText, Image, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { useIsSubAccount } from "@/hooks/useIsSubAccount";
+import { cn } from "@/lib/utils";
 
-// Safe projections - subaccounts get minimal fields only
+// ============================================================
+// SAFE PROJECTIONS — subaccounts get minimal fields only
+// ============================================================
 const JOB_SELECT_FULL = '*';
-const JOB_SELECT_SAFE = 'id, status, seo_score, started_at, completed_at, current_step, article_id, input, blog_id, needs_review, error_message, created_at';
+const JOB_SELECT_SAFE = 'id, status, seo_score, started_at, completed_at, current_step, article_id, input, blog_id, needs_review, created_at';
 const STEPS_SELECT_FULL = 'step_name, status, latency_ms, cost_usd, started_at, completed_at, output';
 const STEPS_SELECT_SAFE = 'step_name, status';
 
+// ============================================================
+// INTERNAL PIPELINE (admin only)
+// ============================================================
 const STEP_LABELS: Record<string, string> = {
   'INPUT_VALIDATION': '✅ Validando entrada',
   'SERP_ANALYSIS': '🔍 Analisando SERP',
@@ -26,14 +32,160 @@ const STEP_LABELS: Record<string, string> = {
   'META_GEN': '🏷️ Gerando meta tags',
   'OUTPUT': '📦 Montando HTML',
 };
-
 const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_ANALYSIS','NLP_KEYWORDS','TITLE_GEN','OUTLINE_GEN','CONTENT_GEN','IMAGE_GEN','SEO_SCORE','META_GEN','OUTPUT'] as const;
 
 const SEO_METRICS = ['topic_coverage','entity_coverage','intent_match','depth_score','eeat_signals','structure','readability'];
 const SEO_LABELS: Record<string,string> = { topic_coverage:'Cobertura', entity_coverage:'Entidades', intent_match:'Intenção', depth_score:'Profundidade', eeat_signals:'E-E-A-T', structure:'Estrutura', readability:'Legibilidade' };
 
-const ZOMBIE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+// ============================================================
+// CLIENT PIPELINE (subaccounts only) — 4 simplified stages
+// ============================================================
+const CLIENT_STAGES = [
+  { label: 'Analisando mercado', icon: Search, maps: ['INPUT_VALIDATION', 'SERP_ANALYSIS', 'NLP_KEYWORDS'] },
+  { label: 'Criando conteúdo', icon: FileText, maps: ['TITLE_GEN', 'OUTLINE_GEN', 'CONTENT_GEN'] },
+  { label: 'Preparando imagens', icon: Image, maps: ['IMAGE_GEN'] },
+  { label: 'Finalizando artigo', icon: Brain, maps: ['SEO_SCORE', 'META_GEN', 'OUTPUT'] },
+];
 
+// ============================================================
+// CLIENT-FRIENDLY STATUS MESSAGES
+// ============================================================
+const CLIENT_STATUS_MSG: Record<string, { label: string; sub: string }> = {
+  pending: { label: 'Iniciando geração do artigo...', sub: 'Aguarde um momento.' },
+  running: { label: 'A IA está criando seu conteúdo.', sub: 'Acompanhe o progresso abaixo.' },
+  completed: { label: 'Artigo pronto!', sub: 'Seu conteúdo foi gerado com sucesso.' },
+  failed: { label: 'Ocorreu um problema.', sub: 'Tente novamente.' },
+};
+
+const ZOMBIE_THRESHOLD_MS = 10 * 60 * 1000;
+
+// ============================================================
+// CLIENT PIPELINE VIEW
+// ============================================================
+function ClientPipelineView({ steps, jobStatus, currentStep, perceivedProgress }: {
+  steps: any[];
+  jobStatus: string;
+  currentStep: string | null;
+  perceivedProgress: number;
+}) {
+  const completedStepNames = new Set(steps.filter(s => s.status === 'completed').map(s => s.step_name));
+  const failedStepNames = new Set(steps.filter(s => s.status === 'failed').map(s => s.step_name));
+
+  const getStageStatus = (stage: typeof CLIENT_STAGES[0]) => {
+    const allDone = stage.maps.every(s => completedStepNames.has(s));
+    if (allDone) return 'completed';
+    const anyFailed = stage.maps.some(s => failedStepNames.has(s));
+    if (anyFailed) return 'failed';
+    const anyRunning = stage.maps.some(s => s === currentStep) || stage.maps.some(s => {
+      const step = steps.find(st => st.step_name === s);
+      return step?.status === 'running';
+    });
+    if (anyRunning) return 'running';
+    // If previous stages are done and this one hasn't started, it's pending
+    return 'pending';
+  };
+
+  return (
+    <div className="border rounded-lg p-4 bg-card space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-foreground">Progresso</span>
+        <span className="text-sm text-muted-foreground">{Math.round(perceivedProgress)}%</span>
+      </div>
+      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary/80 to-primary rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${perceivedProgress}%` }}
+        />
+      </div>
+
+      <div className="space-y-2 pt-2">
+        {CLIENT_STAGES.map((stage, idx) => {
+          const status = getStageStatus(stage);
+          const Icon = stage.icon;
+          return (
+            <div
+              key={idx}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300",
+                status === 'completed' && "bg-green-500/10",
+                status === 'running' && "bg-primary/10 border border-primary/30",
+                status === 'failed' && "bg-destructive/10",
+                status === 'pending' && "opacity-50"
+              )}
+            >
+              <div className={cn(
+                "w-7 h-7 rounded-full flex items-center justify-center",
+                status === 'completed' && "bg-green-500 text-white",
+                status === 'running' && "bg-primary text-primary-foreground",
+                status === 'failed' && "bg-destructive text-destructive-foreground",
+                status === 'pending' && "bg-muted text-muted-foreground"
+              )}>
+                {status === 'completed' ? <CheckCircle className="h-4 w-4" /> :
+                 status === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                 status === 'failed' ? <XCircle className="h-4 w-4" /> :
+                 <Icon className="h-4 w-4" />}
+              </div>
+              <span className={cn(
+                "text-sm font-medium",
+                status === 'completed' && "text-green-600 dark:text-green-400",
+                status === 'running' && "text-foreground",
+                status === 'failed' && "text-destructive",
+                status === 'pending' && "text-muted-foreground"
+              )}>
+                {stage.label}
+              </span>
+              <div className="ml-auto text-xs font-medium">
+                {status === 'completed' && <span className="text-green-600 dark:text-green-400">✓ Concluído</span>}
+                {status === 'running' && <span className="text-primary animate-pulse">Em andamento...</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// INTERNAL PIPELINE VIEW (admin/owner)
+// ============================================================
+function InternalPipelineView({ steps, job }: { steps: any[]; job: any }) {
+  const completedStepNames = new Set(steps.filter(s => s.status === 'completed').map(s => s.step_name));
+  const failedStepNames = new Set(steps.filter(s => s.status === 'failed').map(s => s.step_name));
+
+  return (
+    <div className="border rounded-lg p-4 bg-card">
+      <h3 className="font-semibold mb-3 text-foreground">Pipeline</h3>
+      <div className="space-y-1">
+        {ORDERED_STEPS.map(s => {
+          const stepData = steps.find(st => st.step_name === s);
+          const done = completedStepNames.has(s);
+          const failed = failedStepNames.has(s);
+          const running = job.current_step === s && job.status === 'running';
+          const modelUsed = stepData?.output?.model_used || stepData?.output?.model;
+          const duration = stepData?.latency_ms ? `${(stepData.latency_ms / 1000).toFixed(1)}s` : null;
+
+          return (
+            <div key={s} className={`flex items-center justify-between px-3 py-2 rounded text-sm ${done ? 'bg-green-100 text-green-700' : failed ? 'bg-red-100 text-red-700' : running ? 'bg-blue-100 text-blue-700 animate-pulse' : 'bg-muted text-muted-foreground'}`}>
+              <div className="flex items-center gap-2">
+                {done ? <CheckCircle className="w-4 h-4" /> : failed ? <XCircle className="w-4 h-4" /> : running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+                <span className="font-medium">{STEP_LABELS[s] || s}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                {modelUsed && <span className="opacity-70">{modelUsed}</span>}
+                {duration && <span className="opacity-70">{duration}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 export default function GenerationDetail() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
@@ -44,15 +196,17 @@ export default function GenerationDetail() {
   const [isZombie, setIsZombie] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
-  // Determine safe projections based on role
+  // PART 5 — Perceived progress (smooth animation for clients)
+  const [perceivedProgress, setPerceivedProgress] = useState(0);
+  const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const isClient = isSubAccount;
   const jobSelect = isClient ? JOB_SELECT_SAFE : JOB_SELECT_FULL;
   const stepsSelect = isClient ? STEPS_SELECT_SAFE : STEPS_SELECT_FULL;
 
+  // Data loading + realtime
   useEffect(() => {
     if (!jobId || roleLoading) return;
-
-    console.log(`[FRONT:DETAIL_LOADED] job=${jobId} mode=${isClient ? 'client' : 'internal'}`);
 
     const load = async () => {
       const [jobRes, stepsRes] = await Promise.all([
@@ -68,23 +222,14 @@ export default function GenerationDetail() {
     const channel = supabase.channel(`gen-job-${jobId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'generation_jobs', filter: `id=eq.${jobId}` }, (p) => {
         const newJob = p.new as any;
-        // For subaccounts, strip sensitive fields from realtime payloads
         if (isClient) {
           delete newJob?.cost_usd;
           delete newJob?.total_api_calls;
           delete newJob?.seo_breakdown;
           delete newJob?.output;
+          delete newJob?.error_message;
         }
         setJob(newJob);
-        console.log(`[FRONT:JOB_UPDATE] job=${jobId} status=${newJob?.status} step=${newJob?.current_step}`);
-
-        if (newJob?.status === 'completed') {
-          console.log(`[FRONT:JOB_COMPLETED] job=${jobId} article=${newJob?.article_id} seo=${newJob?.seo_score}`);
-        } else if (newJob?.status === 'failed') {
-          if (!isClient) {
-            console.error(`[FRONT:JOB_FAILED] job=${jobId} error="${newJob?.error_message}"`);
-          }
-        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'generation_steps', filter: `job_id=eq.${jobId}` }, () => {
         supabase.from('generation_steps').select(stepsSelect).eq('job_id', jobId).order('started_at', { ascending: true }).then(r => setSteps(r.data || []));
@@ -95,10 +240,7 @@ export default function GenerationDetail() {
 
   // Zombie detection
   useEffect(() => {
-    if (!job || job.status !== 'running') {
-      setIsZombie(false);
-      return;
-    }
+    if (!job || job.status !== 'running') { setIsZombie(false); return; }
     const createdAt = new Date(job.created_at).getTime();
     if (Date.now() - createdAt > ZOMBIE_THRESHOLD_MS) {
       setIsZombie(true);
@@ -108,13 +250,64 @@ export default function GenerationDetail() {
     }
   }, [job?.status, job?.created_at]);
 
-  // Dynamic progress calculation
-  const { progress, completedCount, totalCount } = useMemo(() => {
-    if (!steps || steps.length === 0) return { progress: 0, completedCount: 0, totalCount: ORDERED_STEPS.length };
+  // Real progress calculation
+  const realProgress = useMemo(() => {
+    if (!steps || steps.length === 0) return 0;
     const completed = steps.filter(s => s.status === 'completed').length;
     const total = Math.max(steps.length, ORDERED_STEPS.length);
-    return { progress: Math.round((completed / total) * 100), completedCount: completed, totalCount: total };
+    return Math.round((completed / total) * 100);
   }, [steps]);
+
+  // PART 5 — Perceived progress: smooth advance even while waiting
+  useEffect(() => {
+    if (!job) return;
+
+    if (job.status === 'completed') {
+      setPerceivedProgress(100);
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      return;
+    }
+    if (job.status === 'failed') {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      return;
+    }
+
+    // Always keep perceived >= real
+    if (realProgress > perceivedProgress) {
+      setPerceivedProgress(realProgress);
+    }
+
+    // Auto-advance perceived progress when running
+    if (job.status === 'running' || job.status === 'pending') {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      progressTimerRef.current = setInterval(() => {
+        setPerceivedProgress(prev => {
+          // Cap at 95% until truly complete, advance slowly
+          const maxPerceived = Math.max(realProgress + 15, 30);
+          const cap = Math.min(maxPerceived, 95);
+          if (prev >= cap) return prev;
+          return prev + 0.5;
+        });
+      }, 1000);
+    }
+
+    return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
+  }, [job?.status, realProgress]);
+
+  // PART 5 — Health check: auto-recovery for stalled pending jobs
+  useEffect(() => {
+    if (!job || !jobId) return;
+    if (job.status !== 'pending' || steps.length > 0) return;
+
+    const timer = setTimeout(() => {
+      if (job.status === 'pending' && steps.length === 0) {
+        console.log('[ENGINE:RECOVERY_TRIGGERED] job still pending with 0 steps after 30s');
+        handleRetry();
+      }
+    }, 30000);
+
+    return () => clearTimeout(timer);
+  }, [job?.status, steps.length, jobId]);
 
   const handleRetry = async () => {
     if (!job?.input || !jobId) return;
@@ -123,28 +316,21 @@ export default function GenerationDetail() {
       const input = job.input as Record<string, any>;
       const { data, error } = await supabase.functions.invoke('create-generation-job', {
         body: {
-          keyword: input.keyword,
-          blog_id: job.blog_id,
-          city: input.city || '',
-          niche: input.niche || '',
-          country: input.country || 'BR',
-          language: input.language || 'pt-BR',
-          job_type: input.job_type || 'article',
-          intent: input.intent || 'informational',
-          target_words: input.target_words || 2500,
-          image_count: input.image_count || 4,
-          brand_voice: input.brand_voice,
-          business: input.business,
+          keyword: input.keyword, blog_id: job.blog_id,
+          city: input.city || '', niche: input.niche || '',
+          country: input.country || 'BR', language: input.language || 'pt-BR',
+          job_type: input.job_type || 'article', intent: input.intent || 'informational',
+          target_words: input.target_words || 2500, image_count: input.image_count || 4,
+          brand_voice: input.brand_voice, business: input.business,
         },
       });
       if (error) throw error;
       if (data?.job_id) {
-        console.log(`[FRONT:JOB_RETRY] old=${jobId} new=${data.job_id}`);
-        toast.success('Novo job criado!');
+        toast.success(isClient ? 'Gerando novamente...' : 'Novo job criado!');
         navigate(`/client/articles/engine/${data.job_id}`, { replace: true });
       }
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao recriar job');
+      toast.error(isClient ? 'Não foi possível iniciar. Tente novamente.' : (e.message || 'Erro ao recriar job'));
     } finally {
       setRetrying(false);
     }
@@ -154,10 +340,9 @@ export default function GenerationDetail() {
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job não encontrado</div>;
 
   const input = job.input as Record<string, any> || {};
-  const completedStepNames = new Set(steps.filter(s => s.status === 'completed').map(s => s.step_name));
-  const failedStepNames = new Set(steps.filter(s => s.status === 'failed').map(s => s.step_name));
   const seoBreakdown = (job.seo_breakdown as Record<string, any>) || {};
   const elapsed = job.completed_at && job.started_at ? Math.round((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000) : null;
+  const statusMsg = CLIENT_STATUS_MSG[job.status] || CLIENT_STATUS_MSG.running;
 
   const downloadHtml = () => {
     const output = job.output as Record<string, any>;
@@ -169,11 +354,94 @@ export default function GenerationDetail() {
     URL.revokeObjectURL(url);
   };
 
+  // ============================================================
+  // CLIENT RENDER
+  // ============================================================
+  if (isClient) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/client/articles/engine')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
+
+        {/* Header — client safe */}
+        <div className="border rounded-lg p-6 bg-card">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-foreground mb-1">"{input.keyword || '—'}"</h1>
+              <p className="text-sm text-muted-foreground">{input.city || ''} {input.niche ? `• ${input.niche}` : ''}</p>
+            </div>
+            <Badge className={job.status === 'completed' ? 'bg-green-500/20 text-green-700' : job.status === 'failed' ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'}>
+              {(job.status === 'running' || job.status === 'pending') && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+              {statusMsg.label}
+            </Badge>
+          </div>
+
+          {/* Client sees only SEO score (when available) */}
+          {job.status === 'completed' && job.seo_score && (
+            <div className="mt-4">
+              <span className="text-sm text-muted-foreground">Score SEO</span>
+              <p className="font-bold text-lg">{job.seo_score}/100</p>
+            </div>
+          )}
+
+          {/* Status message */}
+          <p className="text-sm text-muted-foreground mt-3">{statusMsg.sub}</p>
+        </div>
+
+        {/* Client pipeline */}
+        {(job.status === 'running' || job.status === 'pending') && (
+          <ClientPipelineView
+            steps={steps}
+            jobStatus={job.status}
+            currentStep={job.current_step}
+            perceivedProgress={perceivedProgress}
+          />
+        )}
+
+        {/* Zombie — simplified */}
+        {isZombie && job.status === 'running' && (
+          <div className="border rounded-lg p-4 bg-yellow-500/10 border-yellow-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-5 h-5 text-yellow-600 animate-spin" />
+              <span className="text-sm text-yellow-700">Processando artigo... isso pode levar alguns minutos.</span>
+            </div>
+          </div>
+        )}
+
+        {/* Failed — generic message, no technical details */}
+        {job.status === 'failed' && (
+          <div className="border rounded-lg p-4 bg-destructive/10 border-destructive/30 text-center space-y-3">
+            <XCircle className="w-8 h-8 text-destructive mx-auto" />
+            <p className="text-sm text-destructive font-medium">Ocorreu um problema ao gerar o artigo.</p>
+            <Button variant="outline" size="sm" onClick={handleRetry} disabled={retrying}>
+              {retrying ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+              Tentar Novamente
+            </Button>
+          </div>
+        )}
+
+        {/* Actions — client */}
+        <div className="flex gap-2 flex-wrap">
+          {job.status === 'completed' && (
+            <>
+              {job.article_id && <Button onClick={() => navigate(`/client/articles/${job.article_id}/preview`)}><Eye className="w-4 h-4 mr-1" />Ver Artigo</Button>}
+              {job.article_id && <Button variant="outline" onClick={() => navigate(`/client/articles/${job.article_id}/edit`)}><Edit className="w-4 h-4 mr-1" />Editar</Button>}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // INTERNAL/ADMIN RENDER
+  // ============================================================
+  const completedCount = steps.filter(s => s.status === 'completed').length;
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <Button variant="ghost" size="sm" onClick={() => navigate('/client/articles/engine')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
 
-      {/* Header */}
+      {/* Header — full */}
       <div className="border rounded-lg p-6 bg-card">
         <div className="flex items-start justify-between">
           <div>
@@ -215,40 +483,15 @@ export default function GenerationDetail() {
         <div className="border rounded-lg p-4 bg-card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-foreground">Progresso</span>
-            <span className="text-sm text-muted-foreground">{completedCount}/{totalCount} steps • {progress}%</span>
+            <span className="text-sm text-muted-foreground">{completedCount}/{ORDERED_STEPS.length} steps • {realProgress}%</span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={realProgress} className="h-2" />
           {job.status === 'pending' && <p className="text-xs text-muted-foreground mt-2">Iniciando pipeline...</p>}
         </div>
       )}
 
-      {/* Pipeline Steps */}
-      <div className="border rounded-lg p-4 bg-card">
-        <h3 className="font-semibold mb-3 text-foreground">Pipeline</h3>
-        <div className="space-y-1">
-          {ORDERED_STEPS.map(s => {
-            const stepData = steps.find(st => st.step_name === s);
-            const done = completedStepNames.has(s);
-            const failed = failedStepNames.has(s);
-            const running = job.current_step === s && job.status === 'running';
-            const modelUsed = stepData?.output?.model_used || stepData?.output?.model;
-            const duration = stepData?.latency_ms ? `${(stepData.latency_ms / 1000).toFixed(1)}s` : null;
-
-            return (
-              <div key={s} className={`flex items-center justify-between px-3 py-2 rounded text-sm ${done ? 'bg-green-100 text-green-700' : failed ? 'bg-red-100 text-red-700' : running ? 'bg-blue-100 text-blue-700 animate-pulse' : 'bg-muted text-muted-foreground'}`}>
-                <div className="flex items-center gap-2">
-                  {done ? <CheckCircle className="w-4 h-4" /> : failed ? <XCircle className="w-4 h-4" /> : running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-                  <span className="font-medium">{STEP_LABELS[s] || s}</span>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  {modelUsed && <span className="opacity-70">{modelUsed}</span>}
-                  {duration && <span className="opacity-70">{duration}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Internal Pipeline */}
+      <InternalPipelineView steps={steps} job={job} />
 
       {/* SEO Breakdown */}
       {Object.keys(seoBreakdown).length > 0 && (
@@ -270,7 +513,7 @@ export default function GenerationDetail() {
         </div>
       )}
 
-      {/* Error message */}
+      {/* Error message — full technical */}
       {job.status === 'failed' && job.error_message && (
         <div className="border rounded-lg p-4 bg-red-500/10 border-red-500/30">
           <div className="flex items-center gap-2 mb-2">
@@ -281,7 +524,7 @@ export default function GenerationDetail() {
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — full */}
       <div className="flex gap-2 flex-wrap">
         {job.status === 'completed' && (
           <>

@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * create-generation-job — OmniSeen Article Engine v1
  * 
  * Validates input, creates job in generation_jobs, checks limits,
- * and triggers orchestrate-generation.
+ * and triggers orchestrate-generation with confirmed wake.
  * 
  * Hard cap: max 3 simultaneous running jobs per user.
  */
@@ -15,51 +15,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ============================================================
-// INPUT SCHEMA (validated server-side)
-// ============================================================
-
 interface GenerationInput {
-  // Required
   keyword: string;
   blog_id: string;
-  
-  // Locale
   country: string;
   city?: string;
   state?: string;
   language: string;
-  
-  // Content config
   niche: string;
   job_type: 'article' | 'super_page';
   intent: 'informational' | 'commercial' | 'transactional' | 'service';
   target_words: number;
   image_count: number;
-  
-  // Brand voice
-  brand_voice?: {
-    tone: string;
-    person: string;
-    avoid?: string[];
-  };
-  
-  // Business data (for CTA)
-  business?: {
-    name: string;
-    phone?: string;
-    whatsapp?: string;
-    website?: string;
-    services?: string[];
-  };
-  
-  // Layout preferences
-  layout_preferences?: {
-    use_tables: boolean;
-    use_callouts: boolean;
-    use_lists: boolean;
-    use_key_takeaways: boolean;
-  };
+  brand_voice?: { tone: string; person: string; avoid?: string[] };
+  business?: { name: string; phone?: string; whatsapp?: string; website?: string; services?: string[] };
+  layout_preferences?: { use_tables: boolean; use_callouts: boolean; use_lists: boolean; use_key_takeaways: boolean };
 }
 
 function validateInput(body: Record<string, unknown>): { valid: boolean; input?: GenerationInput; error?: string } {
@@ -88,19 +58,15 @@ function validateInput(body: Record<string, unknown>): { valid: boolean; input?:
     brand_voice: body.brand_voice as GenerationInput['brand_voice'],
     business: body.business as GenerationInput['business'],
     layout_preferences: (body.layout_preferences as GenerationInput['layout_preferences']) || {
-      use_tables: true,
-      use_callouts: true,
-      use_lists: true,
-      use_key_takeaways: true,
+      use_tables: true, use_callouts: true, use_lists: true, use_key_takeaways: true,
     },
   };
 
   return { valid: true, input };
 }
 
-// ============================================================
-// HANDLER
-// ============================================================
+// Helper: wait ms
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -112,100 +78,151 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Auth: get user from token
+    // Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Authorization header required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or expired token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Validate input
     const body = await req.json();
     const validation = validateInput(body);
     if (!validation.valid || !validation.input) {
-      return new Response(
-        JSON.stringify({ error: `VALIDATION_FAILED: ${validation.error}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: `VALIDATION_FAILED: ${validation.error}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const input = validation.input;
 
-    // Check: user owns the blog or is team member
+    // Check blog ownership
     const { data: blog, error: blogError } = await supabase
-      .from('blogs')
-      .select('id, user_id')
-      .eq('id', input.blog_id)
-      .maybeSingle();
+      .from('blogs').select('id, user_id').eq('id', input.blog_id).maybeSingle();
 
     if (blogError || !blog) {
-      return new Response(
-        JSON.stringify({ error: "Blog not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Blog not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Check concurrent job limit (max 3 running)
+    // Concurrent job limit (max 3)
     const { count: runningCount } = await supabase
-      .from('generation_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .in('status', ['pending', 'running']);
+      .from('generation_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).in('status', ['pending', 'running']);
 
     if ((runningCount || 0) >= 3) {
-      return new Response(
-        JSON.stringify({ error: "MAX_CONCURRENT_JOBS: You have 3 jobs running. Wait for one to complete." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "MAX_CONCURRENT_JOBS: You have 3 jobs running. Wait for one to complete." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Create job
     const { data: job, error: jobError } = await supabase
       .from('generation_jobs')
       .insert({
-        user_id: user.id,
-        blog_id: input.blog_id,
-        job_type: input.job_type,
-        status: 'pending',
-        input: input as unknown as Record<string, unknown>,
-        max_api_calls: 15,
+        user_id: user.id, blog_id: input.blog_id, job_type: input.job_type,
+        status: 'pending', input: input as unknown as Record<string, unknown>, max_api_calls: 15,
       })
-      .select()
-      .single();
+      .select().single();
 
     if (jobError || !job) {
       console.error("[CREATE_JOB] Insert error:", jobError);
-      return new Response(
-        JSON.stringify({ error: "Failed to create generation job" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to create generation job" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     console.log(`[CREATE_JOB] ✅ Job ${job.id} created for user ${user.id} | keyword: "${input.keyword}"`);
 
-    // Fire-and-forget: trigger orchestrator
-    const orchestratorUrl = `${supabaseUrl}/functions/v1/orchestrate-generation`;
-    fetch(orchestratorUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${supabaseServiceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ job_id: job.id }),
-    }).catch(err => {
-      console.error("[CREATE_JOB] Failed to trigger orchestrator:", err);
-    });
+    // ============================================================
+    // PART 1 — SYNCHRONOUS ENGINE WAKE (replaces fire-and-forget)
+    // ============================================================
+    let wakeOk = false;
+    try {
+      const orchestrateResp = await fetch(
+        `${supabaseUrl}/functions/v1/orchestrate-generation`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${supabaseServiceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ job_id: job.id }),
+        }
+      );
+
+      if (orchestrateResp.ok) {
+        wakeOk = true;
+        console.log(`[ENGINE:WAKE_OK] job_id=${job.id}`);
+      } else {
+        const errBody = await orchestrateResp.text();
+        console.error(`[ENGINE:WAKE_FAILED] job=${job.id} status=${orchestrateResp.status} body=${errBody}`);
+      }
+    } catch (wakeErr) {
+      console.error(`[ENGINE:WAKE_ERROR] job=${job.id}:`, wakeErr);
+    }
+
+    // ============================================================
+    // PART 2 — ENGINE START CONFIRMATION (verify steps created)
+    // ============================================================
+    if (wakeOk) {
+      await sleep(2000);
+
+      const { count: stepCount } = await supabase
+        .from('generation_steps')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', job.id);
+
+      if ((stepCount || 0) === 0) {
+        console.warn(`[ENGINE:NO_STEPS_DETECTED] job=${job.id} — retrying orchestrator`);
+
+        // Retry orchestrator ONE TIME
+        try {
+          const retryResp = await fetch(
+            `${supabaseUrl}/functions/v1/orchestrate-generation`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ job_id: job.id }),
+            }
+          );
+
+          if (retryResp.ok) {
+            console.log(`[ENGINE:RETRY_OK] job_id=${job.id}`);
+          } else {
+            console.error(`[ENGINE:RETRY_FAILED] job=${job.id}`);
+            wakeOk = false;
+          }
+        } catch (retryErr) {
+          console.error(`[ENGINE:RETRY_ERROR] job=${job.id}:`, retryErr);
+          wakeOk = false;
+        }
+      }
+    }
+
+    // If wake completely failed, mark job as failed
+    if (!wakeOk) {
+      await supabase.from('generation_jobs')
+        .update({ status: 'failed', error_message: 'ENGINE_START_TIMEOUT: Orchestrator did not start' })
+        .eq('id', job.id);
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          job_id: job.id,
+          status: 'failed',
+          message: 'Engine failed to start. Please retry.',
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({
