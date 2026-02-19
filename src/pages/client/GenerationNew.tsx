@@ -1,0 +1,172 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/contexts/TenantContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { ArrowLeft, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+
+export default function GenerationNew() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { currentBlog } = useTenant();
+  const [loading, setLoading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const [form, setForm] = useState({
+    keyword: '', city: '', state: '', niche: '',
+    intent: 'auto', target_words: '2500',
+    tone: 'profissional', person: 'nós',
+    business_name: '', phone: '', whatsapp: '', website: '', avoid: '',
+  });
+
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.keyword || form.keyword.trim().length < 2) { toast.error('Palavra-chave é obrigatória (min 2 chars)'); return; }
+    if (!form.city.trim()) { toast.error('Cidade é obrigatória'); return; }
+    if (!form.niche.trim()) { toast.error('Nicho é obrigatório'); return; }
+    if (!currentBlog?.id) { toast.error('Blog não encontrado'); return; }
+
+    setLoading(true);
+    try {
+      const payload: Record<string, unknown> = {
+        keyword: form.keyword.trim(),
+        blog_id: currentBlog.id,
+        city: form.city.trim(),
+        state: form.state.trim() || undefined,
+        country: 'BR',
+        language: 'pt-BR',
+        niche: form.niche.trim(),
+        job_type: 'article',
+        intent: form.intent === 'auto' ? 'informational' : form.intent,
+        target_words: parseInt(form.target_words),
+        image_count: 4,
+        brand_voice: { tone: form.tone, person: form.person, avoid: form.avoid ? form.avoid.split(',').map(s => s.trim()) : [] },
+      };
+      if (form.business_name) {
+        payload.business = { name: form.business_name, phone: form.phone || undefined, whatsapp: form.whatsapp || undefined, website: form.website || undefined };
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-generation-job', { body: payload });
+
+      if (error) {
+        const msg = error.message || 'Erro ao criar job';
+        if (msg.includes('MAX_CONCURRENT_JOBS') || msg.includes('429')) { toast.error('Você já tem 3 artigos em geração. Aguarde.'); }
+        else { toast.error(msg); }
+        return;
+      }
+
+      if (data?.job_id) {
+        toast.success('Job criado! Acompanhe o progresso.');
+        navigate(`/client/articles/engine/${data.job_id}`);
+      } else {
+        toast.error(data?.error || 'Erro desconhecido');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao criar job');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/client/articles/engine')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
+
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Novo Artigo — Engine v1</h1>
+        <p className="text-muted-foreground">Pipeline completo: SERP → NLP → Title → Outline → Content → SEO Score</p>
+      </div>
+
+      <div className="border rounded-lg p-6 bg-card space-y-4">
+        <div className="space-y-2">
+          <Label>Palavra-chave principal *</Label>
+          <Input placeholder="ex: como prevenir baratas em apartamento" value={form.keyword} onChange={e => set('keyword', e.target.value)} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Cidade *</Label>
+            <Input placeholder="ex: São Paulo" value={form.city} onChange={e => set('city', e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Estado</Label>
+            <Input placeholder="ex: SP" value={form.state} onChange={e => set('state', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Nicho *</Label>
+          <Input placeholder="ex: controle de pragas, encanamento, advocacia" value={form.niche} onChange={e => set('niche', e.target.value)} />
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>Intenção</Label>
+            <Select value={form.intent} onValueChange={v => set('intent', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="informational">Informacional</SelectItem>
+                <SelectItem value="service">Serviço</SelectItem>
+                <SelectItem value="transactional">Conversão</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Palavras-alvo</Label>
+            <Select value={form.target_words} onValueChange={v => set('target_words', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2000">2.000</SelectItem>
+                <SelectItem value="2500">2.500</SelectItem>
+                <SelectItem value="3000">3.000</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Tom</Label>
+            <Select value={form.tone} onValueChange={v => set('tone', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="profissional">Profissional</SelectItem>
+                <SelectItem value="informal">Informal</SelectItem>
+                <SelectItem value="técnico">Técnico</SelectItem>
+                <SelectItem value="amigável">Amigável</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Advanced */}
+        <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          Configurações avançadas
+        </button>
+
+        {showAdvanced && (
+          <div className="space-y-4 border-t pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>Nome da empresa</Label><Input placeholder="ex: DedetPro" value={form.business_name} onChange={e => set('business_name', e.target.value)} /></div>
+              <div className="space-y-2"><Label>Telefone</Label><Input placeholder="(11) 99999-9999" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>WhatsApp</Label><Input placeholder="5511999999999" value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)} /></div>
+              <div className="space-y-2"><Label>Website</Label><Input placeholder="https://..." value={form.website} onChange={e => set('website', e.target.value)} /></div>
+            </div>
+            <div className="space-y-2"><Label>Palavras a evitar (separar por vírgula)</Label><Input placeholder="ex: barato, grátis" value={form.avoid} onChange={e => set('avoid', e.target.value)} /></div>
+          </div>
+        )}
+
+        <Button className="w-full" size="lg" onClick={handleSubmit} disabled={loading}>
+          {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Criando job...</> : '🚀 Gerar Artigo'}
+        </Button>
+      </div>
+    </div>
+  );
+}

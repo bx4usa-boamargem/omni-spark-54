@@ -3530,6 +3530,7 @@ export type Database = {
           current_step:
             | Database["public"]["Enums"]["generation_step_name"]
             | null
+          engine_version: string | null
           error_message: string | null
           error_step: Database["public"]["Enums"]["generation_step_name"] | null
           id: string
@@ -3540,6 +3541,10 @@ export type Database = {
           max_api_calls: number
           needs_review: boolean
           output: Json | null
+          parent_job_id: string | null
+          published: boolean | null
+          published_at: string | null
+          published_url: string | null
           retry_count: number
           seo_breakdown: Json | null
           seo_score: number | null
@@ -3560,6 +3565,7 @@ export type Database = {
           current_step?:
             | Database["public"]["Enums"]["generation_step_name"]
             | null
+          engine_version?: string | null
           error_message?: string | null
           error_step?:
             | Database["public"]["Enums"]["generation_step_name"]
@@ -3572,6 +3578,10 @@ export type Database = {
           max_api_calls?: number
           needs_review?: boolean
           output?: Json | null
+          parent_job_id?: string | null
+          published?: boolean | null
+          published_at?: string | null
+          published_url?: string | null
           retry_count?: number
           seo_breakdown?: Json | null
           seo_score?: number | null
@@ -3592,6 +3602,7 @@ export type Database = {
           current_step?:
             | Database["public"]["Enums"]["generation_step_name"]
             | null
+          engine_version?: string | null
           error_message?: string | null
           error_step?:
             | Database["public"]["Enums"]["generation_step_name"]
@@ -3604,6 +3615,10 @@ export type Database = {
           max_api_calls?: number
           needs_review?: boolean
           output?: Json | null
+          parent_job_id?: string | null
+          published?: boolean | null
+          published_at?: string | null
+          published_url?: string | null
           retry_count?: number
           seo_breakdown?: Json | null
           seo_score?: number | null
@@ -3635,6 +3650,13 @@ export type Database = {
             columns: ["blog_id"]
             isOneToOne: false
             referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_parent_job_id_fkey"
+            columns: ["parent_job_id"]
+            isOneToOne: false
+            referencedRelation: "generation_jobs"
             referencedColumns: ["id"]
           },
         ]
