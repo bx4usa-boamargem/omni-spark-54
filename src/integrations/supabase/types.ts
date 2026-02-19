@@ -3520,6 +3520,182 @@ export type Database = {
           },
         ]
       }
+      generation_jobs: {
+        Row: {
+          article_id: string | null
+          blog_id: string
+          completed_at: string | null
+          cost_usd: number
+          created_at: string
+          current_step:
+            | Database["public"]["Enums"]["generation_step_name"]
+            | null
+          error_message: string | null
+          error_step: Database["public"]["Enums"]["generation_step_name"] | null
+          id: string
+          input: Json
+          job_type: Database["public"]["Enums"]["generation_job_type"]
+          locked_at: string | null
+          locked_by: string | null
+          max_api_calls: number
+          needs_review: boolean
+          output: Json | null
+          retry_count: number
+          seo_breakdown: Json | null
+          seo_score: number | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["generation_job_status"]
+          total_api_calls: number
+          total_tokens_in: number
+          total_tokens_out: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          article_id?: string | null
+          blog_id: string
+          completed_at?: string | null
+          cost_usd?: number
+          created_at?: string
+          current_step?:
+            | Database["public"]["Enums"]["generation_step_name"]
+            | null
+          error_message?: string | null
+          error_step?:
+            | Database["public"]["Enums"]["generation_step_name"]
+            | null
+          id?: string
+          input?: Json
+          job_type?: Database["public"]["Enums"]["generation_job_type"]
+          locked_at?: string | null
+          locked_by?: string | null
+          max_api_calls?: number
+          needs_review?: boolean
+          output?: Json | null
+          retry_count?: number
+          seo_breakdown?: Json | null
+          seo_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          total_api_calls?: number
+          total_tokens_in?: number
+          total_tokens_out?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          article_id?: string | null
+          blog_id?: string
+          completed_at?: string | null
+          cost_usd?: number
+          created_at?: string
+          current_step?:
+            | Database["public"]["Enums"]["generation_step_name"]
+            | null
+          error_message?: string | null
+          error_step?:
+            | Database["public"]["Enums"]["generation_step_name"]
+            | null
+          id?: string
+          input?: Json
+          job_type?: Database["public"]["Enums"]["generation_job_type"]
+          locked_at?: string | null
+          locked_by?: string | null
+          max_api_calls?: number
+          needs_review?: boolean
+          output?: Json | null
+          retry_count?: number
+          seo_breakdown?: Json | null
+          seo_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          total_api_calls?: number
+          total_tokens_in?: number
+          total_tokens_out?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_jobs_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "elite_engine_analytics"
+            referencedColumns: ["article_id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_queue: {
+        Row: {
+          blog_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          input: Json
+          job_id: string | null
+          priority: number
+          scheduled_for: string | null
+          status: Database["public"]["Enums"]["generation_job_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blog_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json
+          job_id?: string | null
+          priority?: number
+          scheduled_for?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blog_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json
+          job_id?: string | null
+          priority?: number
+          scheduled_for?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_queue_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_queue_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "generation_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generation_rate_limits: {
         Row: {
           blog_id: string
@@ -3551,6 +3727,77 @@ export type Database = {
             columns: ["blog_id"]
             isOneToOne: false
             referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_steps: {
+        Row: {
+          attempt: number
+          completed_at: string | null
+          cost_usd: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input: Json | null
+          job_id: string
+          latency_ms: number | null
+          model_used: string | null
+          output: Json | null
+          provider: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["generation_job_status"]
+          step_name: Database["public"]["Enums"]["generation_step_name"]
+          tokens_in: number | null
+          tokens_out: number | null
+          updated_at: string
+        }
+        Insert: {
+          attempt?: number
+          completed_at?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json | null
+          job_id: string
+          latency_ms?: number | null
+          model_used?: string | null
+          output?: Json | null
+          provider?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          step_name: Database["public"]["Enums"]["generation_step_name"]
+          tokens_in?: number | null
+          tokens_out?: number | null
+          updated_at?: string
+        }
+        Update: {
+          attempt?: number
+          completed_at?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input?: Json | null
+          job_id?: string
+          latency_ms?: number | null
+          model_used?: string | null
+          output?: Json | null
+          provider?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["generation_job_status"]
+          step_name?: Database["public"]["Enums"]["generation_step_name"]
+          tokens_in?: number | null
+          tokens_out?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_steps_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "generation_jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -6857,6 +7104,24 @@ export type Database = {
         | "staff_finance"
         | "staff_content"
         | "staff_support"
+      generation_job_status:
+        | "pending"
+        | "running"
+        | "completed"
+        | "failed"
+        | "cancelled"
+      generation_job_type: "article" | "super_page"
+      generation_step_name:
+        | "INPUT_VALIDATION"
+        | "SERP_ANALYSIS"
+        | "NLP_KEYWORDS"
+        | "TITLE_GEN"
+        | "OUTLINE_GEN"
+        | "CONTENT_GEN"
+        | "IMAGE_GEN"
+        | "SEO_SCORE"
+        | "META_GEN"
+        | "OUTPUT"
       subscription_plan: "free" | "essential" | "plus" | "scale" | "internal"
       subscription_status:
         | "active"
@@ -7004,6 +7269,26 @@ export const Constants = {
         "staff_finance",
         "staff_content",
         "staff_support",
+      ],
+      generation_job_status: [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+      generation_job_type: ["article", "super_page"],
+      generation_step_name: [
+        "INPUT_VALIDATION",
+        "SERP_ANALYSIS",
+        "NLP_KEYWORDS",
+        "TITLE_GEN",
+        "OUTLINE_GEN",
+        "CONTENT_GEN",
+        "IMAGE_GEN",
+        "SEO_SCORE",
+        "META_GEN",
+        "OUTPUT",
       ],
       subscription_plan: ["free", "essential", "plus", "scale", "internal"],
       subscription_status: [
