@@ -1,82 +1,172 @@
 
 
-# Engine Hard Reset — Remove Legacy Engine Completely
+# Engine V1 Hotfix — Anti-Zombie + blogId Fix + Heartbeat + Watchdog
 
-## Summary
+## Root Cause Analysis
 
-Audit confirms the Engine V1 architecture is already mostly clean. The single entry point (`create-generation-job` -> `orchestrate-generation`) is working correctly with lock-based idempotency. However, several legacy edge functions still exist as deployed code and need to be removed or fully blocked.
+The latest job `a6dd9c3a` completed ALL steps (INPUT through META_GEN) successfully, then crashed at OUTPUT with **`blogId is not defined`** — a simple JavaScript reference error. The variable `blogId` on line 1289 of `orchestrate-generation/index.ts` was never declared. It should be `(jobInput.blog_id as string)`.
 
-## Current State
+Additionally, the orchestrator has structural reliability gaps: no heartbeat loop, no progress watchdog, `safeInsert` uses `.select().single()` (deadlock risk), and lock refresh logic inside `safeInsert` adds contention.
 
-| Component | Status | Action |
-|-----------|--------|--------|
-| `create-generation-job` | Active, correct | Keep |
-| `orchestrate-generation` | Active, correct | Keep + add hard guard |
-| `ai-router` | Active, correct | Keep |
-| `generate-article-core` | Returns HTTP 410 (blocked) | Delete function |
-| `generate-article-structured` | Returns HTTP 410 for direct calls | Delete function |
-| `generate-article` | Legacy standalone generator, NOT called from frontend | Delete function |
-| `process-queue` | Already delegates to `create-generation-job` | Keep (queue system uses Engine V1) |
-| `article-chat` | Already delegates to `create-generation-job` | Keep |
-| `convert-opportunity-to-article` | Already delegates to `create-generation-job` | Keep |
-
-**Frontend:** No code calls legacy engines directly. All generation goes through `create-generation-job`.
+---
 
 ## Changes
 
-### 1. Delete Legacy Edge Functions (3 functions)
+### Fix 1 — blogId Reference Error (THE BLOCKER)
 
-Remove completely from codebase and deployed functions:
+**File:** `supabase/functions/orchestrate-generation/index.ts` (line 1289)
 
-- `supabase/functions/generate-article-core/` — deprecated stub (HTTP 410)
-- `supabase/functions/generate-article-structured/` — deprecated stub (HTTP 410)
-- `supabase/functions/generate-article/` — legacy standalone generator, no frontend references
+Replace the undeclared `blogId` with `(jobInput.blog_id as string)` in the `executeOutput` function's insert payload. Add a guard at the top of `executeOutput` to extract and validate `blogId` before proceeding.
 
-### 2. Add Hard Guard to Orchestrator
+### Fix 2 — Heartbeat Loop
 
-In `supabase/functions/orchestrate-generation/index.ts`, the lock guard already exists at line 1333-1358 (checks `locked_by`, uses atomic CAS via `.is('locked_by', null)`). Enhance it with explicit legacy block log:
+**File:** `supabase/functions/orchestrate-generation/index.ts`
 
-```text
-// After lock acquisition succeeds, add:
-console.log(`[ENGINE] LOCK_ACQUIRED job_id=${jobId} lockId=${lockId}`);
+After acquiring the lock (around line 1447), start a `setInterval` every 10 seconds that updates `generation_jobs.locked_at` and `public_message`. Clear it in both the success path and the catch/finally block.
+
+### Fix 3 — Progress Watchdog
+
+**File:** `supabase/functions/orchestrate-generation/index.ts`
+
+Track `lastProgressAt = Date.now()` and update it after each step completes. Add a `setInterval` (every 15s) that checks if 90 seconds pass without progress. If triggered, mark the job as `failed` with `ENGINE_STUCK_NO_PROGRESS_90S`, release the lock, and stop execution.
+
+### Fix 4 — safeInsert Hardening
+
+**File:** `supabase/functions/orchestrate-generation/index.ts` (lines 238-271)
+
+- Change `.select().single()` to `.select('id').maybeSingle()` to prevent blocking on no-row-return
+- Remove the lock refresh logic (lines 265-268) from inside `safeInsert` — the heartbeat loop handles lock refresh now
+
+### Fix 5 — try/catch/finally Finalizer
+
+**File:** `supabase/functions/orchestrate-generation/index.ts`
+
+Wrap the pipeline in `try/catch/finally`. In `finally`: if job status is not `completed`, release the lock. Clear heartbeat and watchdog intervals.
+
+### Fix 6 — create-generation-job Start Verification
+
+**File:** `supabase/functions/create-generation-job/index.ts`
+
+After firing the orchestrator, poll `generation_steps` for `INPUT_VALIDATION` every 1 second for up to 10 seconds. If it never appears, mark the job as `failed` with `ENGINE_NOT_STARTED` and return an error to the frontend.
+
+### Fix 7 — Deploy and Clean
+
+- Redeploy `orchestrate-generation` and `create-generation-job`
+- Cancel any stuck running jobs via SQL
+
+---
+
+## Technical Details
+
+### blogId fix (line 1289)
+```
+// BEFORE (broken):
+blog_id: blogId,
+
+// AFTER:
+blog_id: (jobInput.blog_id as string),
 ```
 
-If lock acquisition fails (another orchestrator already running), log:
-```text
-console.log(`[ENGINE] LEGACY_EXECUTION_BLOCKED job_id=${jobId} — another orchestrator holds the lock`);
+With guard at top of executeOutput:
+```typescript
+const blogId = (jobInput.blog_id as string);
+if (!blogId) throw new Error('blog_id missing from jobInput');
 ```
 
-### 3. Cancel Zombie Jobs (Database)
-
-Run SQL to clean up stuck jobs:
-
-```sql
-UPDATE generation_jobs
-SET status = 'cancelled', locked_by = NULL, locked_at = NULL
-WHERE status = 'running';
-
-DELETE FROM generation_steps WHERE status = 'running';
+### Heartbeat (after lock acquired, ~line 1447)
+```typescript
+let heartbeatRunning = true;
+const heartbeatInterval = setInterval(async () => {
+  if (!heartbeatRunning) { clearInterval(heartbeatInterval); return; }
+  await supabase.from('generation_jobs')
+    .update({ locked_at: new Date().toISOString() })
+    .eq('id', jobId).eq('locked_by', lockId);
+}, 10_000);
 ```
 
-### 4. Redeploy Clean
+### Progress Watchdog (after lock acquired)
+```typescript
+let lastProgressAt = Date.now();
+const watchdogInterval = setInterval(async () => {
+  if (Date.now() - lastProgressAt > 90_000) {
+    await supabase.from('generation_jobs').update({
+      status: 'failed',
+      error_message: 'ENGINE_STUCK_NO_PROGRESS_90S',
+      public_message: 'O gerador travou. Tente novamente.',
+      locked_by: null, locked_at: null,
+      completed_at: new Date().toISOString(),
+    }).eq('id', jobId);
+    heartbeatRunning = false;
+    clearInterval(watchdogInterval);
+    clearInterval(heartbeatInterval);
+  }
+}, 15_000);
+```
 
-After deleting legacy functions and updating the orchestrator:
-- Delete deployed functions: `generate-article-core`, `generate-article-structured`, `generate-article`
-- Redeploy: `orchestrate-generation`, `ai-router`, `create-generation-job`
+Update `lastProgressAt = Date.now()` after each step completion (in both parallel and sequential phases).
+
+### safeInsert fix
+```typescript
+// BEFORE:
+.select().single();
+
+// AFTER:
+.select('id').maybeSingle();
+```
+
+Remove lines 265-268 (lock refresh inside safeInsert).
+
+### Finally block
+```typescript
+} catch (error) {
+  // existing error handling...
+} finally {
+  heartbeatRunning = false;
+  clearInterval(heartbeatInterval);
+  clearInterval(watchdogInterval);
+  // Release lock if not already released
+  await supabase.from('generation_jobs')
+    .update({ locked_by: null, locked_at: null })
+    .eq('id', jobId).eq('locked_by', lockId);
+}
+```
+
+### create-generation-job start verification
+```typescript
+// After orchestrator wake, replace current sleep(3000) check with:
+let engineStarted = false;
+for (let i = 0; i < 10; i++) {
+  const { data } = await supabase
+    .from('generation_steps')
+    .select('id')
+    .eq('job_id', job.id)
+    .eq('step_name', 'INPUT_VALIDATION')
+    .maybeSingle();
+  if (data) { engineStarted = true; break; }
+  await sleep(1000);
+}
+if (!engineStarted) {
+  await supabase.from('generation_jobs').update({
+    status: 'failed',
+    error_message: 'ENGINE_NOT_STARTED',
+    public_message: 'O motor nao iniciou. Tente novamente.',
+  }).eq('id', job.id);
+}
+```
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `supabase/functions/orchestrate-generation/index.ts` | blogId fix, heartbeat, watchdog, safeInsert, finalizer |
+| `supabase/functions/create-generation-job/index.ts` | Start verification polling |
 
 ## What Does NOT Change
 
-- `process-queue` stays (it correctly delegates to `create-generation-job`)
-- `article-chat` stays (it correctly delegates to `create-generation-job`)
-- `convert-opportunity-to-article` stays (it correctly delegates to `create-generation-job`)
-- Multi-provider routing, soft timeouts, sequential inserts, lock heartbeat — all preserved
-- `locked_by` column stays as-is (already TEXT, already used for CAS locking)
-
-## Validation
-
-After deploy, logs must show:
-- `[ENGINE] LOCK_ACQUIRED` (exactly once per job)
-- No `generate-article-core`, `generate-article-structured`, or `generate-article` in active function list
-- API calls increment past 0
-- Pipeline progresses past SERP_ANALYSIS
+- No frontend changes
+- No architecture changes
+- No new features
+- No model changes
 
