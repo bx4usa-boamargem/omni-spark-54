@@ -3794,7 +3794,7 @@ export type Database = {
           provider: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["generation_job_status"]
-          step_name: Database["public"]["Enums"]["generation_step_name"]
+          step_name: string
           tokens_in: number | null
           tokens_out: number | null
           updated_at: string
@@ -3814,7 +3814,7 @@ export type Database = {
           provider?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["generation_job_status"]
-          step_name: Database["public"]["Enums"]["generation_step_name"]
+          step_name: string
           tokens_in?: number | null
           tokens_out?: number | null
           updated_at?: string
@@ -3834,7 +3834,7 @@ export type Database = {
           provider?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["generation_job_status"]
-          step_name?: Database["public"]["Enums"]["generation_step_name"]
+          step_name?: string
           tokens_in?: number | null
           tokens_out?: number | null
           updated_at?: string
