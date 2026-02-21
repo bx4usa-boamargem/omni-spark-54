@@ -72,23 +72,27 @@ type TaskType =
   | 'context_summary'
   | 'image_gen'
   | 'seo_score'
-  | 'meta_gen';
+  | 'meta_gen'
+  | 'serp_summary'
+  | 'article_gen_single_pass';
 
 // ============================================================
 // MODEL ROUTING TABLE (v1: Gemini only via Lovable Gateway)
 // ============================================================
 
 const MODEL_ROUTING: Record<TaskType, { model: string; temperature: number; maxTokens: number }> = {
-  serp_analysis:   { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 8000 },
-  nlp_keywords:    { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 8000 },
-  title_gen:       { model: 'google/gemini-2.5-flash',       temperature: 0.7, maxTokens: 8000 },
-  outline_gen:     { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 8000 },
-  content_gen:     { model: 'google/gemini-2.5-flash',       temperature: 0.5, maxTokens: 8000 },
-  content_critic:  { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
-  context_summary: { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 2000 },
-  image_gen:       { model: 'google/gemini-2.5-flash-image', temperature: 0.7, maxTokens: 4000 },
-  seo_score:       { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
-  meta_gen:        { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
+  serp_analysis:           { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 8000 },
+  nlp_keywords:            { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 8000 },
+  title_gen:               { model: 'google/gemini-2.5-flash',       temperature: 0.7, maxTokens: 8000 },
+  outline_gen:             { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 8000 },
+  content_gen:             { model: 'google/gemini-2.5-flash',       temperature: 0.5, maxTokens: 8000 },
+  content_critic:          { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
+  context_summary:         { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 2000 },
+  image_gen:               { model: 'google/gemini-2.5-flash-image', temperature: 0.7, maxTokens: 4000 },
+  seo_score:               { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
+  meta_gen:                { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
+  serp_summary:            { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 2000 },
+  article_gen_single_pass: { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 6000 },
 };
 
 // Cost per 1M tokens (Lovable Gateway estimates)

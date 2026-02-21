@@ -21,17 +21,12 @@ const STEPS_SELECT_FULL = 'step_name, status, latency_ms, cost_usd, started_at, 
 // ============================================================
 const STEP_LABELS: Record<string, string> = {
   'INPUT_VALIDATION': '✅ Validando entrada',
-  'SERP_ANALYSIS': '🔍 Analisando SERP',
-  'NLP_KEYWORDS': '📊 Extraindo keywords',
-  'TITLE_GEN': '✏️ Gerando título',
-  'OUTLINE_GEN': '📋 Criando outline',
-  'CONTENT_GEN': '📝 Escrevendo conteúdo',
-  'IMAGE_GEN': '🖼️ Gerando imagens',
-  'SEO_SCORE': '📈 Pontuando SEO',
-  'META_GEN': '🏷️ Gerando meta tags',
-  'OUTPUT': '📦 Montando HTML',
+  'SERP_SUMMARY': '🔍 Analisando mercado',
+  'ARTICLE_GEN_SINGLE_PASS': '📝 Gerando artigo completo',
+  'SAVE_ARTICLE': '💾 Salvando artigo',
+  'IMAGE_GEN_ASYNC': '🖼️ Gerando imagem contextual',
 };
-const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_ANALYSIS','NLP_KEYWORDS','TITLE_GEN','OUTLINE_GEN','CONTENT_GEN','IMAGE_GEN','SEO_SCORE','META_GEN','OUTPUT'] as const;
+const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_SUMMARY','ARTICLE_GEN_SINGLE_PASS','SAVE_ARTICLE','IMAGE_GEN_ASYNC'] as const;
 
 const SEO_METRICS = ['topic_coverage','entity_coverage','intent_match','depth_score','eeat_signals','structure','readability'];
 const SEO_LABELS: Record<string,string> = { topic_coverage:'Cobertura', entity_coverage:'Entidades', intent_match:'Intenção', depth_score:'Profundidade', eeat_signals:'E-E-A-T', structure:'Estrutura', readability:'Legibilidade' };
@@ -42,15 +37,13 @@ const SEO_LABELS: Record<string,string> = { topic_coverage:'Cobertura', entity_c
 const CLIENT_STAGES = [
   { key: 'ANALYZING_MARKET', label: 'Analisando mercado', icon: Search },
   { key: 'WRITING_CONTENT', label: 'Criando conteúdo', icon: FileText },
-  { key: 'PREPARING_IMAGES', label: 'Preparando imagens', icon: Image },
   { key: 'FINALIZING', label: 'Finalizando artigo', icon: Brain },
 ] as const;
 
 const CLIENT_STAGE_ORDER: Record<string, number> = {
   'ANALYZING_MARKET': 0,
   'WRITING_CONTENT': 1,
-  'PREPARING_IMAGES': 2,
-  'FINALIZING': 3,
+  'FINALIZING': 2,
 };
 
 // ============================================================
