@@ -1,97 +1,91 @@
 
+# Engine V2 — Ultra Fast SEO Mode
 
-# Engine Start Hard Guard — Top-Level Safety Net
+## Overview
+Replace the current 10-step orchestrator pipeline (SERP, NLP, TITLE, OUTLINE, CONTENT, IMAGE, SEO, META, OUTPUT) with a streamlined 5-step pipeline that generates a complete article in a single LLM call, reducing generation time from 4-6 minutes to 30-60 seconds.
 
-## Problem
+## What Changes
 
-If `orchestrate-generation` crashes before reaching the pipeline's `try/catch` block (e.g., during job loading, lock acquisition, or step loading on lines 1399-1496), the job stays frozen at 5% because:
-- No `INPUT_VALIDATION` step is created (so `create-generation-job` verification fails)
-- The job status remains `running` with no error message
-- Locks are never released
+### 1. Rewrite `orchestrate-generation/index.ts` (complete rewrite)
 
-## Root Cause
+The new pipeline has only 5 steps:
 
-The `orchestrate()` function has a `try/catch/finally` block starting at line 1497, but lines 1399-1496 (job load, lock acquisition, heartbeat/watchdog setup, step loading) are **outside** this safety net. Any crash there silently abandons the job.
-
-## Changes
-
-### File: `supabase/functions/orchestrate-generation/index.ts`
-
-#### 1. Add INITIALIZING status update (after job load, line 1404)
-
-Right after validating the job exists and is not completed/failed/cancelled, immediately update:
-
-```typescript
-// Immediately signal that orchestrator has booted
-await supabase.from('generation_jobs').update({
-  public_stage: 'INITIALIZING',
-  public_progress: 3,
-  public_message: 'Inicializando motor de geracao...',
-  public_updated_at: new Date().toISOString(),
-}).eq('id', jobId);
-console.log('[ORCHESTRATOR_BOOT]', jobId);
+```text
+INPUT_VALIDATION --> SERP_SUMMARY --> ARTICLE_GEN_SINGLE_PASS --> SAVE_ARTICLE --> IMAGE_GEN_ASYNC
 ```
 
-This gives the frontend a signal before lock acquisition even starts.
+**Step details:**
 
-#### 2. Wrap entire `orchestrate()` body in top-level try/catch
+- **INPUT_VALIDATION** (programmatic, 0 API calls) — Same as current, validates keyword/blog_id/niche
+- **SERP_SUMMARY** (1 API call, optional) — Lightweight SERP summary using Gemini 2.5 Flash with a short prompt; produces a brief competitive landscape summary (not the heavy 10-result analysis). If it fails, pipeline continues with empty context.
+- **ARTICLE_GEN_SINGLE_PASS** (1 API call, core step) — Single Gemini 2.5 Flash call that generates title, meta_description, html_article, FAQ, and image_prompt all at once in strict JSON format. 6000 max tokens, temperature 0.4.
+- **SAVE_ARTICLE** (programmatic, 0 API calls) — Parses JSON output, validates HTML, inserts article into `articles` table, updates `generation_jobs` with article_id.
+- **IMAGE_GEN_ASYNC** (1 API call, non-blocking) — Uses the `image_prompt` from the article output to call `google/gemini-2.5-flash-image` via Lovable AI Gateway. Updates article's `featured_image_url` after generation. Falls back to picsum if image generation fails. Article is already saved at this point.
 
-Move the existing content of `orchestrate()` (lines 1400-2018) inside a new outer try/catch that catches ANY crash and marks the job as failed:
+### 2. Update `ai-router/index.ts`
 
-```typescript
-async function orchestrate(...): Promise<void> {
-  try {
-    // ... entire existing body (job load, lock, heartbeat, pipeline, finally)
-  } catch (fatalErr) {
-    console.error('[ORCHESTRATOR_FATAL]', jobId, fatalErr);
-    try {
-      await supabase.from('generation_jobs').update({
-        status: 'failed',
-        error_message: 'ENGINE_FATAL_CRASH',
-        public_message: 'Falha interna ao iniciar o gerador.',
-        locked_by: null,
-        locked_at: null,
-        completed_at: new Date().toISOString(),
-        public_updated_at: new Date().toISOString(),
-      }).eq('id', jobId);
-    } catch (e) { console.error('[FATAL_CLEANUP_FAILED]', e); }
-    throw fatalErr;
-  }
-}
-```
+Add new task type `article_gen_single_pass` to the MODEL_ROUTING table with appropriate settings (Gemini 2.5 Flash, temp 0.4, maxTokens 6000).
 
-This ensures that even if the crash happens before the heartbeat/watchdog setup or before the inner try/catch, the job is marked as `failed` with a clear error and the lock is released.
+### 3. Update Frontend — `GenerationDetail.tsx`
 
-#### 3. Add boot log to the HTTP handler (line 2034)
+Update the client pipeline stages to reflect the simpler V2 flow:
 
-Add a console.log at the very first line of the handler's try block:
+- ANALYZING_MARKET (INPUT_VALIDATION + SERP_SUMMARY)  
+- WRITING_CONTENT (ARTICLE_GEN_SINGLE_PASS)
+- FINALIZING (SAVE_ARTICLE + IMAGE_GEN_ASYNC)
 
-```typescript
-try {
-  const { job_id } = await req.json();
-  console.log('[ORCHESTRATOR_HANDLER_ENTRY]', job_id);
-  // ... rest
-```
+Reduce from 4 client stages to 3. Update `STEP_LABELS` and `ORDERED_STEPS` for admin view.
 
-This confirms the function was actually invoked.
+### 4. Update `PUBLIC_STAGE_MAP` in orchestrator
 
-## What changes
+Map the 5 new steps to 3 client-facing stages with appropriate progress percentages.
 
-| Area | Change |
-|------|--------|
-| `orchestrate()` function | Outer try/catch wrapping entire body |
-| After job load (line ~1404) | INITIALIZING status update |
-| HTTP handler (line ~2034) | Boot log |
+## Technical Details
 
-## What does NOT change
+### New Orchestrator Flow
 
-- `create-generation-job` (no changes)
-- Frontend (no changes)
-- `ai-router` (no changes)
-- Pipeline logic (no changes)
-- Heartbeat/watchdog (unchanged, now inside the outer try/catch)
+1. Load job, acquire lock, start heartbeat/watchdog (same as V1)
+2. INPUT_VALIDATION: validate inputs (programmatic)
+3. SERP_SUMMARY: single short LLM call for competitive context (non-fatal if fails)
+4. ARTICLE_GEN_SINGLE_PASS: single LLM call with the full prompt returning JSON with title, meta, html_article, faq, image_prompt
+5. SAVE_ARTICLE: parse JSON, validate HTML has h1/style/content, insert into articles table
+6. IMAGE_GEN_ASYNC: call gemini-2.5-flash-image with the image_prompt, update featured_image_url
+7. Mark job completed, release lock
 
-## Deploy
+### Removed Components
 
-Redeploy only `orchestrate-generation`.
+- All multi-step functions: `executeSerpAnalysis`, `executeNlpKeywords`, `executeTitleGen`, `executeOutlineGen`, `generateBatch`, `runCritic`, `rewriteSection`, `executeSeoScore`, `executeMetaGen`
+- Budget reservation system (only 2-3 API calls total)
+- Content critic loop
+- Batch content generation
+- NLP tracker
+- Circuit breaker fallbacks (simplified error handling)
+- Complex SEO refinement loop
 
+### Kept Components
+
+- Lock/heartbeat/watchdog mechanism (reliability)
+- Public stage mapping (frontend compatibility)
+- JSON parser with fallback extraction
+- HTML validation (relaxed)
+- 3x article insert retry
+- Fatal crash guard
+
+### Image Generation
+
+- Uses `image_prompt` field from the LLM response (contextual, not generic)
+- Calls `google/gemini-2.5-flash-image` via Lovable AI Gateway directly (not through ai-router)
+- Extracts base64 image from response, uploads to `article-images` storage bucket
+- Updates article `featured_image_url` with public storage URL
+- Fallback: picsum.photos if image generation fails
+
+### Constants Changes
+
+- `MAX_API_CALLS`: 15 down to 5
+- `MAX_JOB_TIME_MS`: 360s down to 120s
+- `LOCK_TTL_MS`: 300s down to 120s
+- Pipeline steps: 10 down to 5
+
+### No Database Schema Changes Required
+
+The existing `articles` and `generation_jobs` tables already have all necessary columns. The `generation_steps` table will simply have fewer rows per job.
