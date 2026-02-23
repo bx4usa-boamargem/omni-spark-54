@@ -1,15 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { injectImagesIntoContent, validateContentStructure } from "../_shared/imageInjector.ts";
+import { QUALITY_GATE, getMinWordCount } from "../_shared/superPageEngine.ts";
 
 /**
- * orchestrate-generation — OmniSeen Article Engine v2
- * 
- * Ultra Fast SEO Mode — 5-step pipeline
- * 
- * States: PENDING -> INPUT_VALIDATION -> SERP_SUMMARY -> 
- *         ARTICLE_GEN_SINGLE_PASS -> SAVE_ARTICLE -> IMAGE_GEN_ASYNC -> COMPLETED | FAILED
- * 
- * Generates complete article in 30-60 seconds with contextual AI image.
+ * orchestrate-generation — OmniSeen TRUE SUPER PAGE ENGINE
+ *
+ * Pipeline: INPUT_VALIDATION -> SERP_ANALYSIS -> SERP_GAP_ANALYSIS -> OUTLINE_GEN ->
+ *   AUTO_SECTION_EXPANSION -> ENTITY_EXTRACTION -> ENTITY_COVERAGE -> CONTENT_GEN ->
+ *   SAVE_ARTICLE -> IMAGE_GEN (Gemini Nano Banana: hero + section + contextual) ->
+ *   INTERNAL_LINK_ENGINE -> SEO_SCORE -> QUALITY_GATE -> COMPLETED
+ *
+ * Super pages: SERP gap analysis, entity coverage, auto section expansion, internal links, quality gate blocks publish.
  */
 
 const corsHeaders = {
@@ -29,19 +31,35 @@ const LOCK_TTL_MS = 120_000;
 // PUBLIC STAGE MAPPING (client-facing progress)
 // ============================================================
 const PUBLIC_STAGE_MAP: Record<string, { stage: string; progress: number; message: string }> = {
-  'INPUT_VALIDATION':         { stage: 'ANALYZING_MARKET',  progress: 5,   message: 'Inicializando inteligência artificial...' },
-  'SERP_SUMMARY':             { stage: 'ANALYZING_MARKET',  progress: 20,  message: 'Analisando mercado e concorrentes...' },
-  'ARTICLE_GEN_SINGLE_PASS':  { stage: 'WRITING_CONTENT',   progress: 50,  message: 'Criando seu conteúdo completo...' },
-  'SAVE_ARTICLE':             { stage: 'FINALIZING',        progress: 85,  message: 'Salvando artigo...' },
-  'IMAGE_GEN_ASYNC':          { stage: 'FINALIZING',        progress: 95,  message: 'Gerando imagem contextual...' },
+  'INPUT_VALIDATION':      { stage: 'ANALYZING_MARKET', progress: 2,  message: 'Inicializando...' },
+  'SERP_ANALYSIS':         { stage: 'ANALYZING_MARKET', progress: 8,  message: 'Analisando SERP...' },
+  'SERP_GAP_ANALYSIS':    { stage: 'ANALYZING_MARKET', progress: 14, message: 'Detectando lacunas semânticas...' },
+  'OUTLINE_GEN':          { stage: 'ANALYZING_MARKET', progress: 20, message: 'Criando estrutura...' },
+  'AUTO_SECTION_EXPANSION': { stage: 'ANALYZING_MARKET', progress: 26, message: 'Expandindo seções...' },
+  'ENTITY_EXTRACTION':    { stage: 'WRITING_CONTENT',  progress: 32, message: 'Extraindo entidades...' },
+  'ENTITY_COVERAGE':      { stage: 'WRITING_CONTENT',  progress: 38, message: 'Distribuindo entidades...' },
+  'CONTENT_GEN':          { stage: 'WRITING_CONTENT',  progress: 55, message: 'Criando conteúdo...' },
+  'SAVE_ARTICLE':         { stage: 'FINALIZING',      progress: 72, message: 'Salvando artigo...' },
+  'IMAGE_GEN':            { stage: 'FINALIZING',      progress: 82, message: 'Gerando imagens (hero + seções)...' },
+  'INTERNAL_LINK_ENGINE': { stage: 'FINALIZING',      progress: 88, message: 'Gerando links internos...' },
+  'SEO_SCORE':            { stage: 'FINALIZING',      progress: 93, message: 'Calculando score SEO...' },
+  'QUALITY_GATE':         { stage: 'FINALIZING',      progress: 98, message: 'Verificando qualidade...' },
 };
 
 const PIPELINE_STEPS = [
   'INPUT_VALIDATION',
-  'SERP_SUMMARY',
-  'ARTICLE_GEN_SINGLE_PASS',
+  'SERP_ANALYSIS',
+  'SERP_GAP_ANALYSIS',
+  'OUTLINE_GEN',
+  'AUTO_SECTION_EXPANSION',
+  'ENTITY_EXTRACTION',
+  'ENTITY_COVERAGE',
+  'CONTENT_GEN',
   'SAVE_ARTICLE',
-  'IMAGE_GEN_ASYNC',
+  'IMAGE_GEN',
+  'INTERNAL_LINK_ENGINE',
+  'SEO_SCORE',
+  'QUALITY_GATE',
 ] as const;
 
 type StepName = typeof PIPELINE_STEPS[number];
@@ -235,12 +253,279 @@ Keep it under 300 words. This will be used as context for article generation.`;
 }
 
 // ============================================================
-// STEP 3: ARTICLE_GEN_SINGLE_PASS
+// STEP: SERP_GAP_ANALYSIS (compare competitors, missing semantic topics)
 // ============================================================
 
-async function executeArticleGenSinglePass(
+interface SerpGapResult {
+  semantic_gaps: string[];
+  competitor_topics: string[];
+  missing_in_outline?: string[];
+}
+
+async function executeSerpGapAnalysis(
   jobInput: Record<string, unknown>,
   serpSummary: string,
+  supabaseUrl: string,
+  serviceKey: string
+): Promise<{ output: SerpGapResult; aiResult: AIRouterResult }> {
+  const keyword = (jobInput.keyword as string) || '';
+  const niche = (jobInput.niche as string) || '';
+  const language = (jobInput.language as string) || 'pt-BR';
+
+  const prompt = `You are an SEO analyst. Compare top ranking competitors for the keyword "${keyword}" (niche: ${niche}, language: ${language}).
+
+SERP/Competitor context:
+${serpSummary?.slice(0, 2000) || 'No data.'}
+
+Identify:
+1) semantic_gaps: Topics or subtopics that competitors cover but are often missing in thin content (list 4-8 short phrases).
+2) competitor_topics: Main themes that top 10 results typically cover (list 5-10 short phrases).
+
+Return ONLY valid JSON (no markdown):
+{
+  "semantic_gaps": ["gap1", "gap2", ...],
+  "competitor_topics": ["topic1", "topic2", ...]
+}`;
+
+  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'serp_gap_analysis', [
+    { role: 'system', content: 'You are an SEO analyst. Return ONLY valid JSON with semantic_gaps and competitor_topics arrays.' },
+    { role: 'user', content: prompt },
+  ]);
+
+  if (!aiResult.success) throw new Error(`SERP_GAP_ANALYSIS_FAILED: ${aiResult.error}`);
+  const parsed = parseAIJson(aiResult.content, 'SERP_GAP_ANALYSIS');
+  const output: SerpGapResult = {
+    semantic_gaps: Array.isArray(parsed.semantic_gaps) ? parsed.semantic_gaps.map(String) : [],
+    competitor_topics: Array.isArray(parsed.competitor_topics) ? parsed.competitor_topics.map(String) : [],
+  };
+  return { output, aiResult };
+}
+
+// ============================================================
+// STEP: OUTLINE_GEN (mandatory before content)
+// ============================================================
+
+interface OutlineSection {
+  title: string;
+  h3: string[];
+}
+interface OutlineData {
+  h1: string;
+  h2: OutlineSection[];
+  meta_description?: string;
+  cta?: string;
+}
+
+async function executeOutlineGen(
+  jobInput: Record<string, unknown>,
+  serpSummary: string,
+  supabaseUrl: string,
+  serviceKey: string
+): Promise<{ output: { outline: OutlineData }; aiResult: AIRouterResult }> {
+  const keyword = (jobInput.keyword as string) || '';
+  const city = (jobInput.city as string) || '';
+  const niche = (jobInput.niche as string) || '';
+  const language = (jobInput.language as string) || 'pt-BR';
+  const jobType = ((jobInput.job_type as string) || 'article') as 'article' | 'super_page';
+
+  const wordHint = jobType === 'super_page'
+    ? 'Support 3000-6000 words: 6-10 H2 sections, 2-4 H3 per H2.'
+    : 'Support 1500-3000 words: 4-6 H2 sections, 2-3 H3 per H2.';
+
+  const prompt = `You are an SEO content architect. Create a strict outline for a blog article.
+
+Keyword: ${keyword}
+City/region: ${city || 'Brazil'}
+Niche: ${niche}
+Language: ${language}
+Content type: ${jobType}
+
+SERP context (use to inform structure and gaps):
+${serpSummary || 'No SERP data.'}
+
+${wordHint}
+Include a clear CTA idea at the end.
+Return ONLY a valid JSON object in this exact format (no markdown, no code blocks):
+{
+  "outline": {
+    "h1": "Main title with keyword and locale",
+    "h2": [
+      { "title": "Section title", "h3": ["Subsection 1", "Subsection 2"] }
+    ],
+    "meta_description": "Optional meta description max 155 chars",
+    "cta": "Optional CTA message"
+  }
+}`;
+
+  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'outline_gen', [
+    { role: 'system', content: 'You are an SEO architect. Return ONLY valid JSON with an "outline" object. No other text.' },
+    { role: 'user', content: prompt },
+  ]);
+
+  if (!aiResult.success) throw new Error(`OUTLINE_GEN_FAILED: ${aiResult.error}`);
+  const parsed = parseAIJson(aiResult.content, 'OUTLINE_GEN');
+  const outlineObj = (parsed.outline ?? parsed) as Record<string, unknown>;
+  if (!outlineObj?.h1 || !Array.isArray(outlineObj.h2)) {
+    throw new Error('OUTLINE_GEN: invalid outline (missing h1 or h2 array)');
+  }
+  const outline: OutlineData = {
+    h1: String(outlineObj.h1),
+    h2: (outlineObj.h2 as Array<{ title: string; h3: string[] }>).map((s) => ({
+      title: s.title || '',
+      h3: Array.isArray(s.h3) ? s.h3.map(String) : [],
+    })),
+    meta_description: outlineObj.meta_description != null ? String(outlineObj.meta_description) : undefined,
+    cta: outlineObj.cta != null ? String(outlineObj.cta) : undefined,
+  };
+  return { output: { outline }, aiResult };
+}
+
+// ============================================================
+// STEP: AUTO_SECTION_EXPANSION (add H2 for semantic gaps)
+// ============================================================
+
+async function executeAutoSectionExpansion(
+  outline: OutlineData,
+  gapAnalysis: SerpGapResult,
+  jobType: 'article' | 'super_page',
+  supabaseUrl: string,
+  serviceKey: string
+): Promise<{ output: { outline: OutlineData }; aiResult: AIRouterResult }> {
+  if (!gapAnalysis.semantic_gaps?.length) {
+    return { output: { outline }, aiResult: { success: true, content: '', model: '', provider: '', tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs: 0 } };
+  }
+  const prompt = `You are an SEO architect. Expand the outline by adding new H2 sections for semantic gaps. Content type: ${jobType}.
+
+Current outline (JSON):
+${JSON.stringify(outline, null, 0)}
+
+Semantic gaps to cover (add 1 H2 per gap if not already covered):
+${JSON.stringify(gapAnalysis.semantic_gaps)}
+
+Competitor topics for reference: ${(gapAnalysis.competitor_topics || []).slice(0, 6).join(', ')}
+
+Rules: Add only new H2 sections that address gaps. Each new H2 must have 2-3 H3 subsections. Do not remove existing sections. Return the FULL outline (existing + new sections) in the same JSON format: { "outline": { "h1": "...", "h2": [ { "title": "...", "h3": ["..."] }, ... ], "meta_description": "...", "cta": "..." } }.`;
+
+  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'section_expansion', [
+    { role: 'system', content: 'Return ONLY valid JSON with an "outline" object. No markdown.' },
+    { role: 'user', content: prompt },
+  ]);
+
+  if (!aiResult.success) return { output: { outline }, aiResult };
+  const parsed = parseAIJson(aiResult.content, 'AUTO_SECTION_EXPANSION');
+  const outlineObj = (parsed.outline ?? parsed) as Record<string, unknown>;
+  if (!outlineObj?.h1 || !Array.isArray(outlineObj.h2)) return { output: { outline }, aiResult };
+  const expanded: OutlineData = {
+    h1: String(outlineObj.h1),
+    h2: (outlineObj.h2 as Array<{ title: string; h3: string[] }>).map((s) => ({
+      title: s.title || '',
+      h3: Array.isArray(s.h3) ? s.h3.map(String) : [],
+    })),
+    meta_description: outlineObj.meta_description != null ? String(outlineObj.meta_description) : undefined,
+    cta: outlineObj.cta != null ? String(outlineObj.cta) : undefined,
+  };
+  return { output: { outline: expanded }, aiResult };
+}
+
+// ============================================================
+// STEP: ENTITY_EXTRACTION
+// ============================================================
+
+interface EntityData {
+  topics: string[];
+  terms: string[];
+  places?: string[];
+}
+
+async function executeEntityExtraction(
+  jobInput: Record<string, unknown>,
+  serpSummary: string,
+  outline: OutlineData,
+  supabaseUrl: string,
+  serviceKey: string
+): Promise<{ output: { entities: EntityData }; aiResult: AIRouterResult }> {
+  const keyword = (jobInput.keyword as string) || '';
+  const niche = (jobInput.niche as string) || '';
+  const language = (jobInput.language as string) || 'pt-BR';
+
+  const outlineStr = JSON.stringify({ h1: outline.h1, h2: outline.h2 }, null, 0);
+
+  const prompt = `Extract semantic entities for SEO content. Keyword: ${keyword}. Niche: ${niche}. Language: ${language}.
+
+SERP context: ${serpSummary?.slice(0, 800) || 'None'}
+
+Outline: ${outlineStr}
+
+Return ONLY a valid JSON object:
+{
+  "topics": ["topic1", "topic2"],
+  "terms": ["term1", "term2"],
+  "places": ["place1"]
+}
+Topics: main themes. Terms: key phrases to include. Places: locations if relevant. Use arrays of strings.`;
+
+  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'entity_extraction', [
+    { role: 'system', content: 'You are an SEO analyst. Return ONLY valid JSON with topics, terms, and optionally places.' },
+    { role: 'user', content: prompt },
+  ]);
+
+  if (!aiResult.success) throw new Error(`ENTITY_EXTRACTION_FAILED: ${aiResult.error}`);
+  const parsed = parseAIJson(aiResult.content, 'ENTITY_EXTRACTION');
+  const entities: EntityData = {
+    topics: Array.isArray(parsed.topics) ? parsed.topics.map(String) : [],
+    terms: Array.isArray(parsed.terms) ? parsed.terms.map(String) : [],
+    places: Array.isArray(parsed.places) ? parsed.places.map(String) : undefined,
+  };
+  return { output: { entities }, aiResult };
+}
+
+// ============================================================
+// STEP: ENTITY_COVERAGE (distribute entities across sections, validate score)
+// ============================================================
+
+interface EntityAssignment {
+  sectionIndex: number;
+  sectionTitle: string;
+  entityIds: number[];
+  terms: string[];
+}
+
+interface EntityCoverageResult {
+  assignment: EntityAssignment[];
+  coverageScore: number;
+  allEntities: string[];
+}
+
+function executeEntityCoverage(outline: OutlineData, entities: EntityData): EntityCoverageResult {
+  const allTerms = [...(entities.topics || []), ...(entities.terms || []), ...(entities.places || [])].filter(Boolean);
+  const assignment: EntityAssignment[] = outline.h2.map((section, i) => {
+    const count = outline.h2.length;
+    const start = Math.floor((i * allTerms.length) / count);
+    const end = i === count - 1 ? allTerms.length : Math.floor(((i + 1) * allTerms.length) / count);
+    const slice = allTerms.slice(start, end);
+    return {
+      sectionIndex: i + 1,
+      sectionTitle: section.title,
+      entityIds: slice.map((_, idx) => start + idx),
+      terms: slice,
+    };
+  });
+  const assignedCount = assignment.reduce((acc, a) => acc + a.terms.length, 0);
+  const coverageScore = allTerms.length > 0 ? Math.round((assignedCount / allTerms.length) * 100) : 100;
+  return { assignment, coverageScore, allEntities: allTerms };
+}
+
+// ============================================================
+// STEP: CONTENT_GEN (outline-driven, multi-section)
+// ============================================================
+
+async function executeContentGenFromOutline(
+  jobInput: Record<string, unknown>,
+  serpSummary: string,
+  outline: OutlineData,
+  entities: EntityData,
+  entityCoverage: EntityCoverageResult,
+  jobType: 'article' | 'super_page',
   supabaseUrl: string,
   serviceKey: string
 ): Promise<{ output: Record<string, unknown>; aiResult: AIRouterResult }> {
@@ -253,67 +538,60 @@ async function executeArticleGenSinglePass(
 
   const ctaInfo = whatsapp
     ? `Include a WhatsApp CTA: ${whatsapp}${businessName ? ` (${businessName})` : ''}`
-    : businessName
-      ? `Include a CTA for ${businessName}`
-      : 'Include a strong contact CTA';
+    : businessName ? `Include a CTA for ${businessName}` : 'Include a strong contact CTA';
 
-  const prompt = `You are a senior SEO content strategist and conversion copywriter.
-Create a HIGH-QUALITY, conversion-optimized, SEO-first article.
+  const wordRange = jobType === 'super_page' ? '3000–6000' : '1500–3000';
+  const outlineJson = JSON.stringify(outline, null, 0);
+  const entitiesJson = JSON.stringify(entities, null, 0);
+  const perSectionEntities = entityCoverage.assignment.map((a) => `Section "${a.sectionTitle}": cover these terms naturally: ${a.terms.slice(0, 8).join(', ')}`).join('\n');
+
+  const prompt = `You are a senior SEO content strategist. Write a FULL article following this EXACT outline. Content type: ${jobType}.
 
 INPUT:
 - keyword: ${keyword}
 - city: ${city || 'Brazil'}
 - niche: ${niche}
 - language: ${language}
-- serp_summary: ${serpSummary || 'No competitive data available'}
+- serp_summary: ${serpSummary || 'No competitive data'}
+
+MANDATORY OUTLINE (follow this structure exactly; write each H2 and H3 section):
+${outlineJson}
+
+ENTITY COVERAGE — distribute and cover these per section (improves semantic score):
+${perSectionEntities}
+
+SEMANTIC ENTITIES (full list to weave in naturally):
+${entitiesJson}
 
 REQUIREMENTS:
-1) Write between 900–1500 words.
-2) Strong H1, structured H2/H3.
-3) Use Answer-First introduction.
-4) Include real-world examples for the city.
-5) ${ctaInfo}
-6) Include FAQ section with 3–5 questions.
-7) Avoid generic filler text.
-8) Tone: authoritative but practical.
-9) Optimize for semantic SEO naturally (no keyword stuffing).
-10) Write in clean HTML format with inline CSS styles.
-11) The HTML must include <style> tag with professional styling.
-12) The HTML must start with <h1> as the first content element.
+1) Word count: ${wordRange} words.
+2) Use the exact H1 and H2/H3 from the outline. Do not skip or merge sections.
+3) Answer-first introduction. Real-world examples for the city.
+4) ${ctaInfo}
+5) FAQ section with 3–5 questions at the end.
+6) Clean HTML with <style> and inline CSS. First content element must be <h1>.
+7) Tone: authoritative, practical. No keyword stuffing.
 
-IMAGE REQUIREMENTS:
-Return also an image description that matches the article topic.
-The image description MUST:
-- Be realistic
-- Be specific to the keyword and city
-- Avoid generic stock-photo clichés
-- Include environment, mood, and context
-- Be suitable for AI image generation
+IMAGE: Return one image description for the hero (realistic, specific to keyword and city).
 
-OUTPUT FORMAT (STRICT JSON):
+OUTPUT FORMAT (STRICT JSON only):
 {
   "title": "...",
   "meta_description": "... max 155 chars ...",
   "html_article": "<!DOCTYPE html><html>...",
-  "faq": [
-    {"question": "...", "answer": "..."}
-  ],
-  "image_prompt": "... detailed realistic description ..."
+  "faq": [{"question": "...", "answer": "..."}],
+  "image_prompt": "... detailed hero image description ..."
 }`;
 
-  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'article_gen_single_pass', [
-    { role: 'system', content: `You are a premium SEO content writer for the ${niche} niche in ${language}. Return ONLY valid JSON. No markdown, no code blocks, no explanations outside the JSON.` },
+  const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'article_gen_from_outline', [
+    { role: 'system', content: `You are a premium SEO writer for ${niche} in ${language}. Return ONLY valid JSON. No markdown, no code blocks.` },
     { role: 'user', content: prompt },
   ]);
 
-  if (!aiResult.success) throw new Error(`ARTICLE_GEN_FAILED: ${aiResult.error}`);
-
-  const parsed = parseAIJson(aiResult.content, 'ARTICLE_GEN_SINGLE_PASS');
-
-  // Validate required fields
-  if (!parsed.title) throw new Error('ARTICLE_GEN: missing title');
-  if (!parsed.html_article) throw new Error('ARTICLE_GEN: missing html_article');
-
+  if (!aiResult.success) throw new Error(`CONTENT_GEN_FAILED: ${aiResult.error}`);
+  const parsed = parseAIJson(aiResult.content, 'CONTENT_GEN');
+  if (!parsed.title) throw new Error('CONTENT_GEN: missing title');
+  if (!parsed.html_article) throw new Error('CONTENT_GEN: missing html_article');
   return { output: parsed, aiResult };
 }
 
@@ -353,7 +631,8 @@ async function executeSaveArticle(
   jobInput: Record<string, unknown>,
   supabase: ReturnType<typeof createClient>,
   totalApiCalls: number,
-  totalCostUsd: number
+  totalCostUsd: number,
+  contentType: 'article' | 'super_page'
 ): Promise<Record<string, unknown>> {
   const blogId = (jobInput.blog_id as string);
   if (!blogId) throw new Error('blog_id missing from jobInput');
@@ -363,6 +642,7 @@ async function executeSaveArticle(
   const metaDescription = (articleData.meta_description as string) || '';
   const faqItems = (articleData.faq as Array<Record<string, unknown>>) || [];
   const imagePrompt = (articleData.image_prompt as string) || '';
+  const schemaJson = (articleData.schema_faq as string) ?? null;
 
   // Validate HTML
   if (!htmlArticle || htmlArticle.length < 200) {
@@ -380,10 +660,11 @@ async function executeSaveArticle(
   // Generate excerpt
   const excerpt = metaDescription || title;
 
-  // Calculate word count
+  // Calculate word count and target
   const textContent = htmlArticle.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const wordCount = textContent.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.ceil(wordCount / 200);
+  const wordCountTarget = contentType === 'super_page' ? 4500 : 2250;
 
   // Fetch CTA config from blog
   const { data: blogData } = await supabase
@@ -412,7 +693,7 @@ async function executeSaveArticle(
   // Inject CTA into HTML
   const finalHtml = injectCtaIntoHtml(htmlArticle, cta);
 
-  const insertPayload = {
+  const insertPayload: Record<string, unknown> = {
     blog_id: blogId,
     title,
     slug,
@@ -429,7 +710,10 @@ async function executeSaveArticle(
     reading_time: readingTime,
     cta: cta as unknown,
     source_payload: { image_prompt: imagePrompt } as unknown,
+    content_type: contentType,
+    word_count_target: wordCountTarget,
   };
+  if (schemaJson) insertPayload.schema_json = schemaJson;
 
   // 3x retry insert
   let articleId: string | null = null;
@@ -475,124 +759,243 @@ async function executeSaveArticle(
 }
 
 // ============================================================
-// STEP 5: IMAGE_GEN_ASYNC (contextual AI image)
+// STEP: SEO_SCORE (post-save, non-fatal)
 // ============================================================
 
-async function executeImageGenAsync(
+async function executeSeoScoreStep(
   articleId: string | null,
-  imagePrompt: string,
-  jobInput: Record<string, unknown>,
-  supabase: ReturnType<typeof createClient>
+  title: string,
+  content: string,
+  keyword: string,
+  blogId: string,
+  supabaseUrl: string,
+  serviceKey: string
 ): Promise<Record<string, unknown>> {
-  if (!articleId) {
-    console.warn('[IMAGE_GEN_ASYNC] No article_id, skipping image generation');
-    return { skipped: true, reason: 'no_article_id' };
-  }
-
-  if (!imagePrompt || imagePrompt.trim().length < 10) {
-    console.warn('[IMAGE_GEN_ASYNC] No valid image_prompt, using fallback');
-    const keyword = (jobInput.keyword as string) || 'article';
-    const slug = keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const fallbackUrl = `https://picsum.photos/seed/${slug}-hero/1024/576`;
-    await supabase.from('articles').update({
-      featured_image_url: fallbackUrl,
-      featured_image_alt: `${keyword} — imagem ilustrativa`,
-    }).eq('id', articleId);
-    return { fallback: true, url: fallbackUrl };
-  }
-
+  if (!articleId) return { skipped: true, reason: 'no_article_id' };
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
-
-    console.log(`[IMAGE_GEN_ASYNC] Generating image with prompt: "${imagePrompt.substring(0, 100)}..."`);
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
+    const url = `${supabaseUrl}/functions/v1/calculate-content-score`;
+    const resp = await fetch(url, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: `Generate a professional, realistic 16:9 aspect ratio image for a blog article. The image should be: ${imagePrompt}. Style: editorial photography, high quality, realistic lighting.`,
-          },
-        ],
-        modalities: ["image", "text"],
+        articleId,
+        title,
+        content: content.slice(0, 100_000),
+        keyword,
+        blogId,
+        saveScore: true,
+        userInitiated: false,
       }),
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Image API HTTP ${response.status}: ${errText.substring(0, 200)}`);
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.warn('[SEO_SCORE] calculate-content-score failed:', resp.status, err?.slice(0, 200));
+      return { success: false, error: `HTTP ${resp.status}` };
     }
-
-    const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!imageUrl) {
-      throw new Error('No image URL in response');
-    }
-
-    // Upload base64 image to storage
-    const base64Match = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!base64Match) {
-      throw new Error('Image URL is not base64 format');
-    }
-
-    const imageFormat = base64Match[1];
-    const base64Data = base64Match[2];
-    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const fileName = `${articleId}-hero.${imageFormat}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('article-images')
-      .upload(fileName, binaryData, {
-        contentType: `image/${imageFormat}`,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new Error(`Storage upload failed: ${uploadError.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('article-images')
-      .getPublicUrl(fileName);
-
-    const publicUrl = publicUrlData.publicUrl;
-
-    // Update article with the image URL
-    await supabase.from('articles').update({
-      featured_image_url: publicUrl,
-      featured_image_alt: imagePrompt.substring(0, 200),
-    }).eq('id', articleId);
-
-    console.log(`[IMAGE_GEN_ASYNC] ✅ Image generated and uploaded: ${publicUrl}`);
-    return { success: true, url: publicUrl, prompt_used: imagePrompt };
-
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown image error';
-    console.error(`[IMAGE_GEN_ASYNC] ❌ Failed: ${errMsg}. Using fallback.`);
-
-    // Fallback to picsum
-    const keyword = (jobInput.keyword as string) || 'article';
-    const slug = keyword.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const fallbackUrl = `https://picsum.photos/seed/${slug}-hero/1024/576`;
-    await supabase.from('articles').update({
-      featured_image_url: fallbackUrl,
-      featured_image_alt: `${keyword} — imagem ilustrativa`,
-    }).eq('id', articleId);
-
-    return { fallback: true, url: fallbackUrl, error: errMsg };
+    const data = await resp.json();
+    return { success: true, score: data?.score ?? data?.totalScore, data };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[SEO_SCORE] Error:', msg);
+    return { success: false, error: msg };
   }
 }
 
 // ============================================================
-// ORCHESTRATOR CORE (v2: 5-step pipeline)
+// STEP: IMAGE_GEN — Gemini Nano Banana (hero + section + contextual)
+// ============================================================
+
+const GEMINI_IMAGE_MODEL = "google/gemini-2.5-flash-image";
+const LOVABLE_IMAGE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function generateOneImage(prompt: string, apiKey: string): Promise<{ url: string; base64?: string } | null> {
+  const res = await fetch(LOVABLE_IMAGE_GATEWAY, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: GEMINI_IMAGE_MODEL,
+      messages: [{ role: "user", content: `Generate a professional, realistic 16:9 image for a blog. ${prompt}. Style: editorial, high quality.` }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  if (!imageUrl?.startsWith("data:")) return null;
+  return { url: imageUrl, base64: imageUrl };
+}
+
+async function executeImageGenGeminiNanoBanana(
+  articleId: string | null,
+  articleData: Record<string, unknown>,
+  outline: OutlineData,
+  jobInput: Record<string, unknown>,
+  supabase: ReturnType<typeof createClient>
+): Promise<Record<string, unknown>> {
+  if (!articleId) return { skipped: true, reason: "no_article_id" };
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return { skipped: true, reason: "LOVABLE_API_KEY not set" };
+
+  const heroPrompt = (articleData.image_prompt as string) || (articleData.title as string) || (jobInput.keyword as string) || "professional blog";
+  const keyword = (jobInput.keyword as string) || "article";
+  const slug = keyword.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  const contentImages: { context: string; url: string; alt?: string; after_section: number }[] = [];
+  let heroUrl: string | null = null;
+  let heroAlt: string | null = null;
+
+  try {
+    const hero = await generateOneImage(heroPrompt, apiKey);
+    if (hero?.url) {
+      const base64Match = hero.url.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (base64Match) {
+        const fmt = base64Match[1];
+        const bin = Uint8Array.from(atob(base64Match[2]), (c) => c.charCodeAt(0));
+        const fname = `${articleId}-hero.${fmt}`;
+        await supabase.storage.from("article-images").upload(fname, bin, { contentType: `image/${fmt}`, upsert: true });
+        const { data: pub } = supabase.storage.from("article-images").getPublicUrl(fname);
+        heroUrl = pub.publicUrl;
+        heroAlt = (articleData.title as string) || keyword;
+      }
+    }
+    if (!heroUrl) {
+      heroUrl = `https://picsum.photos/seed/${slug}-hero/1024/576`;
+      heroAlt = `${keyword} — imagem ilustrativa`;
+    }
+    await supabase.from("articles").update({ featured_image_url: heroUrl, featured_image_alt: heroAlt }).eq("id", articleId);
+
+    const html = (articleData.html_article as string) || "";
+    const sectionCount = (html.match(/<h2[^>]*>/gi) || []).length;
+    const maxSectionImages = Math.min(sectionCount, 8);
+    for (let i = 0; i < maxSectionImages; i++) {
+      const sectionTitle = outline.h2[i]?.title || `Section ${i + 1}`;
+      const prompt = `${keyword}, ${sectionTitle}. Editorial, realistic.`;
+      const img = await generateOneImage(prompt, apiKey);
+      let url: string;
+      if (img?.url && img.url.startsWith("data:")) {
+        const base64Match = img.url.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (base64Match) {
+          const fmt = base64Match[1];
+          const bin = Uint8Array.from(atob(base64Match[2]), (c) => c.charCodeAt(0));
+          const fname = `${articleId}-section-${i + 1}-${Date.now()}.${fmt}`;
+          await supabase.storage.from("article-images").upload(fname, bin, { contentType: `image/${fmt}`, upsert: true });
+          const { data: pub } = supabase.storage.from("article-images").getPublicUrl(fname);
+          url = pub.publicUrl;
+        } else continue;
+      } else url = `https://picsum.photos/seed/${slug}-sec-${i}/800/450`;
+      contentImages.push({ context: sectionTitle, url, alt: sectionTitle, after_section: i + 1 });
+    }
+
+    if (contentImages.length > 0 && validateContentStructure(html)) {
+      const injected = injectImagesIntoContent(html, contentImages.map((c) => ({ ...c, alt: c.alt })));
+      if (injected.injected > 0) {
+        await supabase.from("articles").update({ content: injected.content, content_images: contentImages }).eq("id", articleId);
+      }
+    }
+    return { success: true, heroUrl, sectionCount: contentImages.length };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const fallback = `https://picsum.photos/seed/${slug}-hero/1024/576`;
+    await supabase.from("articles").update({ featured_image_url: fallback, featured_image_alt: `${keyword} — imagem ilustrativa` }).eq("id", articleId);
+    return { success: false, fallback: true, error: msg };
+  }
+}
+
+// ============================================================
+// STEP: INTERNAL_LINK_ENGINE (cluster links between articles/super pages)
+// ============================================================
+
+async function executeInternalLinkEngine(
+  articleId: string | null,
+  blogId: string,
+  keyword: string,
+  title: string,
+  supabase: ReturnType<typeof createClient>
+): Promise<Record<string, unknown>> {
+  if (!articleId) return { skipped: true, reason: "no_article_id" };
+  try {
+    const { data: candidates } = await supabase
+      .from("articles")
+      .select("id, title, slug")
+      .eq("blog_id", blogId)
+      .neq("id", articleId)
+      .in("status", ["draft", "published"])
+      .limit(10);
+    if (!candidates?.length) return { inserted: 0, reason: "no_candidates" };
+    const links: { source_article_id: string; target_article_id: string; anchor_text: string }[] = [];
+    const words = (keyword + " " + title).toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+    for (const t of candidates.slice(0, 5)) {
+      const anchor = t.title?.slice(0, 60) || t.slug || "";
+      if (!anchor) continue;
+      links.push({ source_article_id: articleId, target_article_id: t.id, anchor_text: anchor });
+    }
+    for (const link of links) {
+      const { error } = await supabase.from("article_internal_links").insert(link);
+      if (error && error.code !== '23505') console.warn("[INTERNAL_LINK_ENGINE] insert warning:", error.message);
+    }
+    return { inserted: links.length, candidates: candidates.length };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ============================================================
+// STEP: QUALITY_GATE (block publish if thresholds not met)
+// ============================================================
+
+async function executeQualityGate(
+  articleId: string | null,
+  blogId: string,
+  articleData: Record<string, unknown>,
+  entityCoverageScore: number,
+  seoScoreResult: Record<string, unknown>,
+  jobType: "article" | "super_page",
+  supabase: ReturnType<typeof createClient>
+): Promise<Record<string, unknown>> {
+  if (!articleId) return { passed: false, reason: "no_article_id" };
+  const html = (articleData.html_article as string) || "";
+  const wordCount = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean).length;
+  const faq = (articleData.faq as Array<{ question?: string; answer?: string }>) || [];
+  const faqCount = Array.isArray(faq) ? faq.length : 0;
+  const contentScore = Number(seoScoreResult?.score ?? seoScoreResult?.totalScore ?? 0);
+
+  const minWords = getMinWordCount(jobType);
+  const entityOk = entityCoverageScore >= QUALITY_GATE.ENTITY_COVERAGE_MIN;
+  const wordOk = wordCount >= minWords;
+  const faqOk = faqCount >= QUALITY_GATE.FAQ_MIN_ITEMS;
+  const scoreOk = contentScore >= QUALITY_GATE.SEMANTIC_SCORE_MIN;
+
+  const passed = entityOk && wordOk && faqOk && scoreOk;
+  const reasons: string[] = [];
+  if (!entityOk) reasons.push(`entity_coverage ${entityCoverageScore} < ${QUALITY_GATE.ENTITY_COVERAGE_MIN}`);
+  if (!wordOk) reasons.push(`word_count ${wordCount} < ${minWords}`);
+  if (!faqOk) reasons.push(`faq_items ${faqCount} < ${QUALITY_GATE.FAQ_MIN_ITEMS}`);
+  if (!scoreOk) reasons.push(`semantic_score ${contentScore} < ${QUALITY_GATE.SEMANTIC_SCORE_MIN}`);
+
+  const qualityGateStatus = passed ? "approved" : "blocked";
+  await supabase.from("articles").update({
+    quality_gate_status: qualityGateStatus,
+    ...(passed ? { ready_for_publish_at: new Date().toISOString() } : {}),
+  }).eq("id", articleId);
+  await supabase.from("quality_gate_audits").insert({
+    article_id: articleId,
+    blog_id: blogId,
+    approved: passed,
+    attempt_number: 1,
+    validated_at: new Date().toISOString(),
+    failures: reasons,
+    word_count: wordCount,
+    seo_score: Math.round(contentScore),
+  });
+
+  return { passed, entityOk, wordOk, faqOk, scoreOk, reasons, quality_gate_status: qualityGateStatus };
+}
+
+// ============================================================
+// ORCHESTRATOR CORE (TRUE SUPER PAGE ENGINE)
 // ============================================================
 
 async function orchestrate(jobId: string, supabase: ReturnType<typeof createClient>, supabaseUrl: string, serviceKey: string): Promise<void> {
@@ -603,6 +1006,8 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
   if (jobError || !job) { console.error(`[ORCHESTRATOR] Job ${jobId} not found:`, jobError); return; }
   if (['completed', 'failed', 'cancelled'].includes(job.status)) { console.log(`[ORCHESTRATOR] Job ${jobId} already ${job.status}.`); return; }
 
+  const jobType = ((job.job_type ?? job.input?.job_type) || 'article') as 'article' | 'super_page';
+
   // Signal boot
   await supabase.from('generation_jobs').update({
     public_stage: 'ANALYZING_MARKET',
@@ -610,10 +1015,10 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     public_message: 'Inicializando motor de geração v2...',
     public_updated_at: new Date().toISOString(),
   }).eq('id', jobId);
-  console.log('[ORCHESTRATOR_BOOT:V2]', jobId);
+  console.log('[ORCHESTRATOR_BOOT:V2]', jobId, 'job_type=', jobType);
 
-  const jobInput = job.input as Record<string, unknown> || {};
-  console.log(`[ORCHESTRATOR:V2] job_id=${jobId} input=${JSON.stringify({ keyword: jobInput.keyword, city: jobInput.city, niche: jobInput.niche })}`);
+  const jobInput = { ...(job.input as Record<string, unknown> || {}), job_type: jobType };
+  console.log(`[ORCHESTRATOR:V2] job_id=${jobId} input=${JSON.stringify({ keyword: jobInput.keyword, city: jobInput.city, niche: jobInput.niche, job_type: jobType })}`);
 
   // Lock
   if (job.locked_at) {
@@ -663,7 +1068,7 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     // ============================================================
     // STEP 1: INPUT_VALIDATION (programmatic)
     // ============================================================
-    console.log(`[V2] Step 1/5: INPUT_VALIDATION`);
+    console.log(`[V2] Step 1/8: INPUT_VALIDATION`);
     await updatePublicStatus(supabase, jobId, 'INPUT_VALIDATION', false, lockId);
     await supabase.from('generation_jobs').update({ current_step: 'INPUT_VALIDATION' }).eq('id', jobId);
 
@@ -681,113 +1086,196 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     console.log(`[V2] ✅ INPUT_VALIDATION ${valLatency}ms`);
 
     // ============================================================
-    // STEP 2: SERP_SUMMARY (optional, non-fatal)
+    // STEP 2: SERP_ANALYSIS
     // ============================================================
-    console.log(`[V2] Step 2/5: SERP_SUMMARY`);
-    await updatePublicStatus(supabase, jobId, 'SERP_SUMMARY', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'SERP_SUMMARY' }).eq('id', jobId);
+    console.log(`[V2] Step 2/8: SERP_ANALYSIS`);
+    await updatePublicStatus(supabase, jobId, 'SERP_ANALYSIS', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'SERP_ANALYSIS' }).eq('id', jobId);
 
     let serpStepId: string | null = null;
     let serpSummaryText = '';
     const serpStart = Date.now();
     try {
-      serpStepId = await createStepOrFail(supabase, jobId, 'SERP_SUMMARY', { keyword: jobInput.keyword, city: jobInput.city });
-
+      serpStepId = await createStepOrFail(supabase, jobId, 'SERP_ANALYSIS', { keyword: jobInput.keyword, city: jobInput.city });
       const serpResult = await withTimeout(
         executeSerpSummary(jobInput, supabaseUrl, serviceKey),
-        30_000, 'SERP_SUMMARY'
+        30_000, 'SERP_ANALYSIS'
       );
       serpSummaryText = (serpResult.output.serp_summary as string) || '';
       totalApiCalls++;
       totalCostUsd += serpResult.aiResult.costUsd || 0;
-
       await supabase.from('generation_steps').update({
         status: 'completed', output: serpResult.output, latency_ms: Date.now() - serpStart,
         completed_at: new Date().toISOString(), model_used: serpResult.aiResult.model,
         provider: serpResult.aiResult.provider, cost_usd: serpResult.aiResult.costUsd,
         tokens_in: serpResult.aiResult.tokensIn, tokens_out: serpResult.aiResult.tokensOut,
       }).eq('id', serpStepId);
-      console.log(`[V2] ✅ SERP_SUMMARY ${Date.now() - serpStart}ms`);
+      console.log(`[V2] ✅ SERP_ANALYSIS ${Date.now() - serpStart}ms`);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : 'SERP failed';
-      console.warn(`[V2] ⚠️ SERP_SUMMARY failed (non-fatal): ${errMsg}`);
+      console.warn(`[V2] ⚠️ SERP_ANALYSIS failed (non-fatal): ${errMsg}`);
       if (serpStepId) {
         await supabase.from('generation_steps').update({
           status: 'completed', output: { serp_summary: '', error: errMsg }, latency_ms: Date.now() - serpStart,
-          completed_at: new Date().toISOString(), model_used: 'fallback', provider: 'fallback',
-          error_message: errMsg,
+          completed_at: new Date().toISOString(), model_used: 'fallback', provider: 'fallback', error_message: errMsg,
         }).eq('id', serpStepId);
       }
     }
-    await updatePublicStatus(supabase, jobId, 'SERP_SUMMARY', true, lockId);
+    await updatePublicStatus(supabase, jobId, 'SERP_ANALYSIS', true, lockId);
     await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
 
     // ============================================================
-    // STEP 3: ARTICLE_GEN_SINGLE_PASS (core)
+    // STEP: SERP_GAP_ANALYSIS
     // ============================================================
-    console.log(`[V2] Step 3/5: ARTICLE_GEN_SINGLE_PASS`);
-    await updatePublicStatus(supabase, jobId, 'ARTICLE_GEN_SINGLE_PASS', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'ARTICLE_GEN_SINGLE_PASS' }).eq('id', jobId);
+    let gapAnalysis: SerpGapResult = { semantic_gaps: [], competitor_topics: [] };
+    console.log(`[V2] Step: SERP_GAP_ANALYSIS`);
+    await updatePublicStatus(supabase, jobId, 'SERP_GAP_ANALYSIS', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'SERP_GAP_ANALYSIS' }).eq('id', jobId);
+    try {
+      const gapStepId = await createStepOrFail(supabase, jobId, 'SERP_GAP_ANALYSIS', { keyword: jobInput.keyword });
+      const gapResult = await withTimeout(executeSerpGapAnalysis(jobInput, serpSummaryText, supabaseUrl, serviceKey), 25_000, 'SERP_GAP_ANALYSIS');
+      gapAnalysis = gapResult.output;
+      totalApiCalls++;
+      totalCostUsd += gapResult.aiResult.costUsd || 0;
+      await supabase.from('generation_steps').update({
+        status: 'completed', output: gapResult.output, completed_at: new Date().toISOString(), model_used: gapResult.aiResult.model, provider: gapResult.aiResult.provider, cost_usd: gapResult.aiResult.costUsd,
+      }).eq('id', gapStepId);
+    } catch (_) { /* non-fatal */ }
+    await updatePublicStatus(supabase, jobId, 'SERP_GAP_ANALYSIS', true, lockId);
+    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
 
-    const genStepId = await createStepOrFail(supabase, jobId, 'ARTICLE_GEN_SINGLE_PASS', { keyword: jobInput.keyword, serp_summary_length: serpSummaryText.length });
+    // ============================================================
+    // STEP: OUTLINE_GEN (mandatory)
+    // ============================================================
+    console.log(`[V2] Step: OUTLINE_GEN`);
+    await updatePublicStatus(supabase, jobId, 'OUTLINE_GEN', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'OUTLINE_GEN' }).eq('id', jobId);
 
+    const outlineStepId = await createStepOrFail(supabase, jobId, 'OUTLINE_GEN', { keyword: jobInput.keyword });
+    const outlineStart = Date.now();
+    const outlineResult = await withTimeout(
+      executeOutlineGen(jobInput, serpSummaryText, supabaseUrl, serviceKey),
+      45_000, 'OUTLINE_GEN'
+    );
+    let outline = outlineResult.output.outline;
+    totalApiCalls++;
+    totalCostUsd += outlineResult.aiResult.costUsd || 0;
+    await supabase.from('generation_steps').update({
+      status: 'completed', output: { outline: outline }, latency_ms: Date.now() - outlineStart,
+      completed_at: new Date().toISOString(), model_used: outlineResult.aiResult.model,
+      provider: outlineResult.aiResult.provider, cost_usd: outlineResult.aiResult.costUsd,
+    }).eq('id', outlineStepId);
+    await updatePublicStatus(supabase, jobId, 'OUTLINE_GEN', true, lockId);
+    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
+    console.log(`[V2] ✅ OUTLINE_GEN ${Date.now() - outlineStart}ms | h1="${outline.h1?.slice(0, 40)}"`);
+
+    // ============================================================
+    // STEP: AUTO_SECTION_EXPANSION
+    // ============================================================
+    let expandedOutline = outline;
+    console.log(`[V2] Step: AUTO_SECTION_EXPANSION`);
+    await updatePublicStatus(supabase, jobId, 'AUTO_SECTION_EXPANSION', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'AUTO_SECTION_EXPANSION' }).eq('id', jobId);
+    try {
+      const expStepId = await createStepOrFail(supabase, jobId, 'AUTO_SECTION_EXPANSION', { gaps: gapAnalysis.semantic_gaps?.length || 0 });
+      const expResult = await withTimeout(executeAutoSectionExpansion(outline, gapAnalysis, jobType, supabaseUrl, serviceKey), 35_000, 'AUTO_SECTION_EXPANSION');
+      expandedOutline = expResult.output.outline;
+      if (expResult.aiResult.success && expResult.aiResult.tokensOut) {
+        totalApiCalls++;
+        totalCostUsd += expResult.aiResult.costUsd || 0;
+      }
+      await supabase.from('generation_steps').update({
+        status: 'completed', output: { outline: expandedOutline }, completed_at: new Date().toISOString(), model_used: expResult.aiResult.model || 'none', provider: expResult.aiResult.provider || 'none',
+      }).eq('id', expStepId);
+    } catch (_) { /* non-fatal, use original outline */ }
+    await updatePublicStatus(supabase, jobId, 'AUTO_SECTION_EXPANSION', true, lockId);
+    outline = expandedOutline;
+
+    // ============================================================
+    // STEP: ENTITY_EXTRACTION
+    // ============================================================
+    console.log(`[V2] Step: ENTITY_EXTRACTION`);
+    await updatePublicStatus(supabase, jobId, 'ENTITY_EXTRACTION', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'ENTITY_EXTRACTION' }).eq('id', jobId);
+
+    const entityStepId = await createStepOrFail(supabase, jobId, 'ENTITY_EXTRACTION', { keyword: jobInput.keyword });
+    const entityStart = Date.now();
+    const entityResult = await withTimeout(
+      executeEntityExtraction(jobInput, serpSummaryText, outline, supabaseUrl, serviceKey),
+      30_000, 'ENTITY_EXTRACTION'
+    );
+    const entities = entityResult.output.entities;
+    totalApiCalls++;
+    totalCostUsd += entityResult.aiResult.costUsd || 0;
+    await supabase.from('generation_steps').update({
+      status: 'completed', output: { entities }, latency_ms: Date.now() - entityStart,
+      completed_at: new Date().toISOString(), model_used: entityResult.aiResult.model,
+      provider: entityResult.aiResult.provider, cost_usd: entityResult.aiResult.costUsd,
+    }).eq('id', entityStepId);
+    await updatePublicStatus(supabase, jobId, 'ENTITY_EXTRACTION', true, lockId);
+    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
+    console.log(`[V2] ✅ ENTITY_EXTRACTION ${Date.now() - entityStart}ms`);
+
+    // ============================================================
+    // STEP: ENTITY_COVERAGE (distribute entities, score)
+    // ============================================================
+    const entityCoverage = executeEntityCoverage(outline, entities);
+    console.log(`[V2] Step: ENTITY_COVERAGE | score=${entityCoverage.coverageScore}`);
+    await updatePublicStatus(supabase, jobId, 'ENTITY_COVERAGE', true, lockId);
+
+    // ============================================================
+    // STEP: CONTENT_GEN (outline-driven + entity coverage)
+    // ============================================================
+    console.log(`[V2] Step: CONTENT_GEN`);
+    await updatePublicStatus(supabase, jobId, 'CONTENT_GEN', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'CONTENT_GEN' }).eq('id', jobId);
+
+    const genStepId = await createStepOrFail(supabase, jobId, 'CONTENT_GEN', { keyword: jobInput.keyword, job_type: jobType });
     const genStart = Date.now();
     let articleData: Record<string, unknown>;
-
-    // 1x retry for parse errors
     try {
       const genResult = await withTimeout(
-        executeArticleGenSinglePass(jobInput, serpSummaryText, supabaseUrl, serviceKey),
-        90_000, 'ARTICLE_GEN_SINGLE_PASS'
+        executeContentGenFromOutline(jobInput, serpSummaryText, outline, entities, entityCoverage, jobType, supabaseUrl, serviceKey),
+        120_000, 'CONTENT_GEN'
       );
       articleData = genResult.output;
       totalApiCalls++;
       totalCostUsd += genResult.aiResult.costUsd || 0;
-
       await supabase.from('generation_steps').update({
-        status: 'completed', output: { title: articleData.title, word_count: ((articleData.html_article as string) || '').length },
-        latency_ms: Date.now() - genStart, completed_at: new Date().toISOString(),
-        model_used: genResult.aiResult.model, provider: genResult.aiResult.provider,
-        cost_usd: genResult.aiResult.costUsd, tokens_in: genResult.aiResult.tokensIn,
-        tokens_out: genResult.aiResult.tokensOut,
+        status: 'completed', output: { title: articleData.title }, latency_ms: Date.now() - genStart,
+        completed_at: new Date().toISOString(), model_used: genResult.aiResult.model,
+        provider: genResult.aiResult.provider, cost_usd: genResult.aiResult.costUsd,
       }).eq('id', genStepId);
     } catch (firstErr) {
-      console.warn(`[V2] ARTICLE_GEN first attempt failed: ${firstErr instanceof Error ? firstErr.message : 'unknown'}. Retrying...`);
+      console.warn(`[V2] CONTENT_GEN first attempt failed: ${firstErr instanceof Error ? firstErr.message : 'unknown'}. Retrying...`);
       await new Promise(r => setTimeout(r, 2000));
-
       const retryResult = await withTimeout(
-        executeArticleGenSinglePass(jobInput, serpSummaryText, supabaseUrl, serviceKey),
-        90_000, 'ARTICLE_GEN_SINGLE_PASS_RETRY'
+        executeContentGenFromOutline(jobInput, serpSummaryText, outline, entities, entityCoverage, jobType, supabaseUrl, serviceKey),
+        120_000, 'CONTENT_GEN_RETRY'
       );
       articleData = retryResult.output;
       totalApiCalls++;
       totalCostUsd += retryResult.aiResult.costUsd || 0;
-
       await supabase.from('generation_steps').update({
-        status: 'completed', output: { title: articleData.title, retried: true },
-        latency_ms: Date.now() - genStart, completed_at: new Date().toISOString(),
-        model_used: retryResult.aiResult.model, provider: retryResult.aiResult.provider,
-        cost_usd: retryResult.aiResult.costUsd,
+        status: 'completed', output: { title: articleData.title, retried: true }, latency_ms: Date.now() - genStart,
+        completed_at: new Date().toISOString(), model_used: retryResult.aiResult.model, provider: retryResult.aiResult.provider, cost_usd: retryResult.aiResult.costUsd,
       }).eq('id', genStepId);
     }
-
-    await updatePublicStatus(supabase, jobId, 'ARTICLE_GEN_SINGLE_PASS', true, lockId);
+    await updatePublicStatus(supabase, jobId, 'CONTENT_GEN', true, lockId);
     await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
-    console.log(`[V2] ✅ ARTICLE_GEN_SINGLE_PASS ${Date.now() - genStart}ms | title="${(articleData!.title as string || '').substring(0, 50)}"`);
+    console.log(`[V2] ✅ CONTENT_GEN ${Date.now() - genStart}ms | title="${(articleData!.title as string || '').slice(0, 50)}"`);
 
     // ============================================================
-    // STEP 4: SAVE_ARTICLE (programmatic)
+    // STEP 6: SAVE_ARTICLE
     // ============================================================
-    console.log(`[V2] Step 4/5: SAVE_ARTICLE`);
+    console.log(`[V2] Step 6/8: SAVE_ARTICLE`);
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', false, lockId);
     await supabase.from('generation_jobs').update({ current_step: 'SAVE_ARTICLE' }).eq('id', jobId);
 
     const saveStepId = await createStepOrFail(supabase, jobId, 'SAVE_ARTICLE', { title: articleData!.title });
-
     const saveStart = Date.now();
-    const saveOutput = await executeSaveArticle(jobId, articleData!, jobInput, supabase, totalApiCalls, totalCostUsd);
+    const saveOutput = await executeSaveArticle(jobId, articleData!, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
     const saveLatency = Date.now() - saveStart;
-
     await supabase.from('generation_steps').update({
       status: 'completed', output: saveOutput, latency_ms: saveLatency,
       completed_at: new Date().toISOString(), model_used: 'programmatic', provider: 'programmatic',
@@ -796,47 +1284,120 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     console.log(`[V2] ✅ SAVE_ARTICLE ${saveLatency}ms | article_id=${saveOutput.article_id}`);
 
     // ============================================================
-    // STEP 5: IMAGE_GEN_ASYNC (non-blocking)
+    // STEP: IMAGE_GEN (Gemini Nano Banana — hero + section + contextual)
     // ============================================================
-    console.log(`[V2] Step 5/5: IMAGE_GEN_ASYNC`);
-    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN_ASYNC', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'IMAGE_GEN_ASYNC' }).eq('id', jobId);
-
+    console.log(`[V2] Step: IMAGE_GEN`);
+    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'IMAGE_GEN' }).eq('id', jobId);
     let imgStepId: string | null = null;
     try {
-      imgStepId = await createStepOrFail(supabase, jobId, 'IMAGE_GEN_ASYNC', { image_prompt: ((articleData!.image_prompt as string) || '').substring(0, 200) });
-
+      imgStepId = await createStepOrFail(supabase, jobId, 'IMAGE_GEN', { article_id: saveOutput.article_id });
       const imgStart = Date.now();
       const imgOutput = await withTimeout(
-        executeImageGenAsync(
-          saveOutput.article_id as string | null,
-          (articleData!.image_prompt as string) || '',
-          jobInput,
-          supabase
-        ),
-        60_000, 'IMAGE_GEN_ASYNC'
+        executeImageGenGeminiNanoBanana(saveOutput.article_id as string | null, articleData!, outline, jobInput, supabase),
+        180_000, 'IMAGE_GEN'
       );
-      const imgLatency = Date.now() - imgStart;
-
       await supabase.from('generation_steps').update({
-        status: 'completed', output: imgOutput, latency_ms: imgLatency,
-        completed_at: new Date().toISOString(),
-        model_used: imgOutput.fallback ? 'picsum-fallback' : 'gemini-2.5-flash-image',
-        provider: imgOutput.fallback ? 'fallback' : 'lovable-gateway',
+        status: 'completed', output: imgOutput, latency_ms: Date.now() - imgStart,
+        completed_at: new Date().toISOString(), model_used: GEMINI_IMAGE_MODEL, provider: 'gemini-nano-banana',
       }).eq('id', imgStepId);
-
-      if (!imgOutput.fallback) totalApiCalls++;
-      console.log(`[V2] ✅ IMAGE_GEN_ASYNC ${imgLatency}ms | ${imgOutput.fallback ? 'FALLBACK' : 'AI_GENERATED'}`);
+      console.log(`[V2] ✅ IMAGE_GEN ${Date.now() - imgStart}ms`);
     } catch (imgErr) {
       const imgErrMsg = imgErr instanceof Error ? imgErr.message : 'Image gen failed';
-      console.warn(`[V2] ⚠️ IMAGE_GEN_ASYNC failed (non-fatal): ${imgErrMsg}`);
-      if (imgStepId) {
+      console.warn(`[V2] ⚠️ IMAGE_GEN failed (non-fatal): ${imgErrMsg}`);
+      if (imgStepId) await supabase.from('generation_steps').update({ status: 'failed', error_message: imgErrMsg, completed_at: new Date().toISOString() }).eq('id', imgStepId);
+    }
+    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', true, lockId);
+
+    // ============================================================
+    // STEP: INTERNAL_LINK_ENGINE
+    // ============================================================
+    console.log(`[V2] Step: INTERNAL_LINK_ENGINE`);
+    await updatePublicStatus(supabase, jobId, 'INTERNAL_LINK_ENGINE', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'INTERNAL_LINK_ENGINE' }).eq('id', jobId);
+    try {
+      const linkOutput = await executeInternalLinkEngine(
+        saveOutput.article_id as string | null,
+        (jobInput.blog_id as string) || '',
+        (jobInput.keyword as string) || '',
+        (articleData!.title as string) || '',
+        supabase
+      );
+      console.log(`[V2] ✅ INTERNAL_LINK_ENGINE inserted=${linkOutput.inserted ?? 0}`);
+    } catch (_) { /* non-fatal */ }
+    await updatePublicStatus(supabase, jobId, 'INTERNAL_LINK_ENGINE', true, lockId);
+
+    // ============================================================
+    // STEP: SEO_SCORE (non-fatal)
+    // ============================================================
+    console.log(`[V2] Step: SEO_SCORE`);
+    await updatePublicStatus(supabase, jobId, 'SEO_SCORE', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'SEO_SCORE' }).eq('id', jobId);
+    let seoStepId: string | null = null;
+    try {
+      seoStepId = await createStepOrFail(supabase, jobId, 'SEO_SCORE', { article_id: saveOutput.article_id });
+      const htmlForScore = (articleData!.html_article as string) || '';
+      const seoOutput = await executeSeoScoreStep(
+        saveOutput.article_id as string | null,
+        (articleData!.title as string) || '',
+        htmlForScore,
+        (jobInput.keyword as string) || '',
+        (jobInput.blog_id as string) || '',
+        supabaseUrl,
+        serviceKey
+      );
+      await supabase.from('generation_steps').update({
+        status: 'completed', output: seoOutput, completed_at: new Date().toISOString(), model_used: 'calculate-content-score', provider: 'programmatic',
+      }).eq('id', seoStepId);
+      console.log(`[V2] ✅ SEO_SCORE ${seoOutput.skipped ? '(skipped)' : '(done)'}`);
+    } catch (seoErr) {
+      const seoErrMsg = seoErr instanceof Error ? seoErr.message : 'SEO score failed';
+      console.warn(`[V2] ⚠️ SEO_SCORE failed (non-fatal): ${seoErrMsg}`);
+      if (seoStepId) {
         await supabase.from('generation_steps').update({
-          status: 'failed', error_message: imgErrMsg, completed_at: new Date().toISOString(),
-        }).eq('id', imgStepId);
+          status: 'failed', error_message: seoErrMsg, completed_at: new Date().toISOString(),
+        }).eq('id', seoStepId);
       }
     }
-    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN_ASYNC', true, lockId);
+    await updatePublicStatus(supabase, jobId, 'SEO_SCORE', true, lockId);
+
+    // ============================================================
+    // STEP: QUALITY_GATE (block publish if thresholds not met)
+    // ============================================================
+    let seoScoreData: Record<string, unknown> = {};
+    try {
+      const scoreResp = await fetch(`${supabaseUrl}/functions/v1/calculate-content-score`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articleId: saveOutput.article_id,
+          title: articleData!.title,
+          content: (articleData!.html_article as string)?.slice(0, 100_000),
+          keyword: jobInput.keyword,
+          blogId: jobInput.blog_id,
+          saveScore: false,
+        }),
+      });
+      if (scoreResp.ok) seoScoreData = await scoreResp.json();
+    } catch (_) { /* use empty */ }
+    console.log(`[V2] Step: QUALITY_GATE`);
+    await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', false, lockId);
+    await supabase.from('generation_jobs').update({ current_step: 'QUALITY_GATE' }).eq('id', jobId);
+    const qgStepId = await createStepOrFail(supabase, jobId, 'QUALITY_GATE', { article_id: saveOutput.article_id });
+    const qgOutput = await executeQualityGate(
+      saveOutput.article_id as string | null,
+      (jobInput.blog_id as string) || '',
+      articleData!,
+      entityCoverage.coverageScore,
+      seoScoreData,
+      jobType,
+      supabase
+    );
+    await supabase.from('generation_steps').update({
+      status: 'completed', output: qgOutput, completed_at: new Date().toISOString(), model_used: 'programmatic', provider: 'quality_gate',
+    }).eq('id', qgStepId);
+    await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', true, lockId);
+    console.log(`[V2] ✅ QUALITY_GATE passed=${qgOutput.passed} ${!qgOutput.passed ? `reasons=${(qgOutput.reasons as string[])?.join('; ')}` : ''}`);
 
     // ============================================================
     // COMPLETED

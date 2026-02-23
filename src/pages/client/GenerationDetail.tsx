@@ -21,12 +21,23 @@ const STEPS_SELECT_FULL = 'step_name, status, latency_ms, cost_usd, started_at, 
 // ============================================================
 const STEP_LABELS: Record<string, string> = {
   'INPUT_VALIDATION': '✅ Validando entrada',
+  'SERP_ANALYSIS': '🔍 Analisando SERP',
   'SERP_SUMMARY': '🔍 Analisando mercado',
+  'SERP_GAP_ANALYSIS': '🔍 Lacunas semânticas',
+  'OUTLINE_GEN': '📐 Estrutura',
+  'AUTO_SECTION_EXPANSION': '📐 Expandindo seções',
+  'ENTITY_EXTRACTION': '🏷️ Entidades',
+  'ENTITY_COVERAGE': '🏷️ Cobertura',
+  'CONTENT_GEN': '📝 Gerando conteúdo',
   'ARTICLE_GEN_SINGLE_PASS': '📝 Gerando artigo completo',
   'SAVE_ARTICLE': '💾 Salvando artigo',
+  'IMAGE_GEN': '🖼️ Imagens (hero + seções)',
   'IMAGE_GEN_ASYNC': '🖼️ Gerando imagem contextual',
+  'INTERNAL_LINK_ENGINE': '🔗 Links internos',
+  'SEO_SCORE': '📊 Score SEO',
+  'QUALITY_GATE': '✅ Quality gate',
 };
-const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_SUMMARY','ARTICLE_GEN_SINGLE_PASS','SAVE_ARTICLE','IMAGE_GEN_ASYNC'] as const;
+const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_ANALYSIS','SERP_GAP_ANALYSIS','OUTLINE_GEN','AUTO_SECTION_EXPANSION','ENTITY_EXTRACTION','ENTITY_COVERAGE','CONTENT_GEN','SAVE_ARTICLE','IMAGE_GEN','INTERNAL_LINK_ENGINE','SEO_SCORE','QUALITY_GATE'] as const;
 
 const SEO_METRICS = ['topic_coverage','entity_coverage','intent_match','depth_score','eeat_signals','structure','readability'];
 const SEO_LABELS: Record<string,string> = { topic_coverage:'Cobertura', entity_coverage:'Entidades', intent_match:'Intenção', depth_score:'Profundidade', eeat_signals:'E-E-A-T', structure:'Estrutura', readability:'Legibilidade' };

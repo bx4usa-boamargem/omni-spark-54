@@ -74,7 +74,12 @@ type TaskType =
   | 'seo_score'
   | 'meta_gen'
   | 'serp_summary'
-  | 'article_gen_single_pass';
+  | 'article_gen_single_pass'
+  | 'entity_extraction'
+  | 'article_gen_from_outline'
+  | 'serp_gap_analysis'
+  | 'section_expansion'
+  | 'entity_coverage_assign';
 
 // ============================================================
 // MODEL ROUTING TABLE (v1: Gemini only via Lovable Gateway)
@@ -93,6 +98,11 @@ const MODEL_ROUTING: Record<TaskType, { model: string; temperature: number; maxT
   meta_gen:                { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
   serp_summary:            { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 2000 },
   article_gen_single_pass: { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 6000 },
+  entity_extraction:       { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
+  article_gen_from_outline:{ model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 12000 },
+  serp_gap_analysis:      { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
+  section_expansion:      { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
+  entity_coverage_assign:  { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
 };
 
 // Cost per 1M tokens (Lovable Gateway estimates)

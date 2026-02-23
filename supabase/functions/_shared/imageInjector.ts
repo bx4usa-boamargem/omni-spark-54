@@ -43,8 +43,8 @@ export function validateContentStructure(content: string): boolean {
   
   console.log(`[IMAGES][STRUCTURE] H2 count: ${totalH2} (html: ${h2Html}, md: ${h2Md})`);
   
-  if (totalH2 < 5) {
-    console.warn(`[IMAGES][STRUCTURE_GUARD] Content has only ${totalH2} H2s - minimum 5 required`);
+  if (totalH2 < 1) {
+    console.warn(`[IMAGES][STRUCTURE_GUARD] Content has no H2s - cannot inject section images`);
     return false;
   }
   

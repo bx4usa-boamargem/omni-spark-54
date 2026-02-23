@@ -161,8 +161,8 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 sticky top-0",
-        collapsed ? "w-16" : "w-64"
+        "h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 sticky top-0 shrink-0",
+        collapsed ? "w-[80px] max-w-[80px]" : "w-64"
       )}
     >
       {/* Header - FIXED */}

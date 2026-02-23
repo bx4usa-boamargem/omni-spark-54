@@ -131,8 +131,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <NotificationBell />
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 lg:pt-0 pt-16 overflow-auto flex flex-col">
+      {/* Main Content - min-w-0 so flex child can shrink and editor stays visible */}
+      <main className="flex-1 min-w-0 lg:pt-0 pt-16 overflow-auto flex flex-col">
         {/* Trial Banner - show only for users in active trial */}
         {isInActiveTrial && (
           <TrialBanner 
