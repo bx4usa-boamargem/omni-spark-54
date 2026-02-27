@@ -87,6 +87,7 @@ export default function ClientStrategy() {
   const [loading, setLoading] = useState(true);
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
   const [activeTab, setActiveTab] = useState('strategy');
@@ -116,9 +117,11 @@ export default function ClientStrategy() {
     if (!blog?.id) return;
 
     setStrategyError(null);
+    setLoadingTimeout(false);
+    const timeoutId = setTimeout(() => setLoadingTimeout(true), 10000);
+
     const fetchStrategy = async () => {
       setLoading(true);
-
       try {
         const { data, error } = await supabase
           .from('client_strategy')
@@ -164,6 +167,7 @@ export default function ClientStrategy() {
     };
 
     fetchStrategy();
+    return () => clearTimeout(timeoutId);
   }, [blog?.id, blog?.name, retryCount]);
 
   const handleSave = async () => {
@@ -249,6 +253,16 @@ export default function ClientStrategy() {
   }
 
   if (loading) {
+    if (loadingTimeout) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 p-4">
+          <p className="text-sm text-muted-foreground">O carregamento está demorando mais que o esperado.</p>
+          <Button variant="outline" onClick={() => setRetryCount((c) => c + 1)}>
+            Tentar novamente
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

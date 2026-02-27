@@ -424,7 +424,8 @@ const CustomDomainRouteDecider = () => {
 };
 
 /**
- * Public hosts: "/" "/login" "/signup" are ALWAYS public here. No auth redirect.
+ * Public hosts: "/" "/login" "/signup" ALWAYS public. No auth redirect.
+ * Única lógica de detecção para landing.
  */
 function isPublicLandingHost(host: string): boolean {
   return (
@@ -435,36 +436,30 @@ function isPublicLandingHost(host: string): boolean {
 }
 
 /**
- * AppRoutes: Componente principal que decide o modo da aplicação por hostname
- *
- * REGRAS:
- * - omniseen.app, www.omniseen.app, *.vercel.app → LandingRoutes (sempre público, sem redirect)
- * - app.omniseen.app → PlatformRoutes
- * - {slug}.app.omniseen.app → SubaccountRouteDecider
- * - domínio customizado → CustomDomainRouteDecider
+ * App (plataforma) host: rotas /client/* e /app/* com guards.
+ */
+function isAppHost(host: string): boolean {
+  return host === 'app.omniseen.app' || host === 'localhost' || host === '127.0.0.1';
+}
+
+/**
+ * AppRoutes: decisão por hostname. Primeiro branch = público.
  */
 const AppRoutes = () => {
   const host = typeof window !== 'undefined' ? window.location.hostname : 'ssr';
 
-  // FIRST: public landing hosts — never redirect to login, no auth guard
   if (isPublicLandingHost(host)) {
     return <LandingRoutes />;
   }
-
-  // Platform SaaS host
-  if (host === 'app.omniseen.app') {
+  if (isAppHost(host)) {
     return <PlatformRoutes />;
   }
-
   if (isSubaccountHost()) {
     return <SubaccountRouteDecider />;
   }
-
   if (isCustomDomainHost()) {
     return <CustomDomainRouteDecider />;
   }
-
-  // Localhost / other dev → platform (login required for /client)
   return <PlatformRoutes />;
 };
 

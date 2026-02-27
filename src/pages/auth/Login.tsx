@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Mail, Lock, ArrowRight, Loader2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
@@ -126,11 +126,7 @@ function LoginContent() {
     try {
       const validation = loginSchema.safeParse({ email, password });
       if (!validation.success) {
-        toast({
-          title: 'Dados inválidos',
-          description: validation.error.errors[0].message,
-          variant: 'destructive',
-        });
+        toast.error(validation.error.errors[0].message);
         setIsLoading(false);
         return;
       }
@@ -138,19 +134,12 @@ function LoginContent() {
       const { error } = await signIn(email, password);
 
       if (error) {
-        toast({
-          title: 'Erro no login',
-          description: 'Email ou senha incorretos. Use "Esqueceu a senha?" para recuperar.',
-          variant: 'destructive',
-        });
+        toast.error('Email ou senha incorretos. Use "Esqueceu a senha?" para recuperar.');
         setIsLoading(false);
         return;
       }
 
-      toast({
-        title: 'Bem-vindo de volta!',
-        description: 'Login realizado com sucesso',
-      });
+      toast.success('Login realizado com sucesso');
       
       // Aguarda uma única verificação de sessão antes de navegar
       // O TenantGuard e AutoProvisionTenant cuidam do resto
@@ -163,16 +152,10 @@ function LoginContent() {
         console.log('[Login] Session pending, TenantGuard will handle');
       }
       
-      // Navigate - TenantGuard + AutoProvisionTenant handle the rest
-      safeRedirect('/app');
-
+      safeRedirect('/client/dashboard');
     } catch (err) {
       console.error('[Login] Unexpected error:', err);
-      toast({
-        title: 'Erro',
-        description: 'Ocorreu um erro inesperado',
-        variant: 'destructive',
-      });
+      toast.error('Ocorreu um erro inesperado');
     } finally {
       setIsLoading(false);
     }
@@ -183,19 +166,11 @@ function LoginContent() {
     try {
       const { error } = await signInWithGoogle();
       if (error) {
-        toast({
-          title: 'Erro',
-          description: error.message || 'Erro ao fazer login com Google',
-          variant: 'destructive',
-        });
+        toast.error(error.message || 'Erro ao fazer login com Google');
       }
     } catch (err) {
       console.error('[Login] Google sign in error:', err);
-      toast({
-        title: 'Erro',
-        description: 'Erro ao fazer login com Google',
-        variant: 'destructive',
-      });
+      toast.error('Erro ao fazer login com Google');
     } finally {
       setIsLoading(false);
     }
@@ -227,10 +202,11 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Language Switcher */}
-      <div className="absolute top-4 right-4 z-50">
-        <LanguageSwitcher />
-      </div>
+      {!isLoading && (
+        <div className="absolute top-4 right-4 z-50">
+          <LanguageSwitcher />
+        </div>
+      )}
 
       {/* Left side - Branding (desktop) */}
       <div className="hidden lg:flex lg:w-1/2 gradient-primary relative overflow-hidden">
