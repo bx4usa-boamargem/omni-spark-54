@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, TrendingUp, RefreshCw, BarChart3, Search, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 import { MetricsTab } from '@/components/consultant/tabs/MetricsTab';
 import { SearchPerformanceTab } from '@/components/consultant/tabs/SearchPerformanceTab';
 import { ROIRealTab } from '@/components/consultant/tabs/ROIRealTab';
@@ -31,7 +32,7 @@ interface Article {
 }
 
 export default function ClientConsultantMetrics() {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<Period>('30d');
@@ -166,6 +167,16 @@ export default function ClientConsultantMetrics() {
     });
   }, [opportunities, period]);
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

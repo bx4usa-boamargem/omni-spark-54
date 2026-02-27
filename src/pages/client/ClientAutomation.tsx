@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useLocaleFormat } from '@/hooks/useLocaleFormat';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 import { QueueTab } from '@/components/client/automation/QueueTab';
 
 type AutomationMode = 'manual' | 'suggest' | 'auto';
@@ -87,7 +88,7 @@ const MODE_CONFIG = {
 };
 
 export default function ClientAutomation() {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const [searchParams, setSearchParams] = useSearchParams();
   const { formatDateShort } = useLocaleFormat();
   
@@ -425,6 +426,16 @@ export default function ClientAutomation() {
     }
   };
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

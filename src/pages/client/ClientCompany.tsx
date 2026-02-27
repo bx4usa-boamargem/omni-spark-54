@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Building2, Loader2, Save, CheckCircle2, MessageCircle, Globe, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 import { BusinessEconomicsSection } from '@/components/company/BusinessEconomicsSection';
 import { TerritoriesSection } from '@/components/company/TerritoriesSection';
 import { BrandAgentSettings } from '@/components/company/BrandAgentSettings';
@@ -38,7 +39,7 @@ const validateBlogSlug = (slug: string): { valid: boolean; error?: string } => {
 };
 
 export default function ClientCompany({ embedded }: { embedded?: boolean }) {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -239,6 +240,16 @@ export default function ClientCompany({ embedded }: { embedded?: boolean }) {
     }
   };
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

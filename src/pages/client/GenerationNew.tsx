@@ -52,7 +52,11 @@ export default function GenerationNew() {
       validationErrors.forEach(e => toast.error(e));
       return;
     }
-    if (!blog?.id) { toast.error('Blog não encontrado'); return; }
+    if (!blog?.id) {
+      console.error('[GenerationNew] Blog não encontrado');
+      toast.error('Blog não encontrado. Configure a empresa em Configurações da Empresa.');
+      return;
+    }
 
     const trimmedKeyword = form.keyword.trim();
     const blogId = blog.id;
@@ -102,7 +106,9 @@ export default function GenerationNew() {
         payload.business = { name: form.business_name, phone: form.phone || undefined, whatsapp: form.whatsapp || undefined, website: form.website || undefined };
       }
 
+      console.log('[GenerationNew] create-generation-job payload:', payload);
       const { data, error } = await supabase.functions.invoke('create-generation-job', { body: payload });
+      console.log('[GenerationNew] create-generation-job response:', { data, error: error?.message ?? error });
 
       if (error) {
         const msg = error.message || '';
@@ -114,13 +120,13 @@ export default function GenerationNew() {
           toast.error(msg || 'Dados inválidos. Verifique os campos.');
         } else {
           toast.error('Erro ao criar artigo. Tente novamente.');
-          console.error(`[FRONT:JOB_ERROR]`, error);
+          console.error('[GenerationNew] JOB_ERROR', error);
         }
         return;
       }
 
       if (data?.job_id) {
-        console.log(`[FRONT:JOB_CREATED] job=${data.job_id} keyword="${trimmedKeyword}"`);
+        console.log('[GenerationNew] JOB_CREATED job=', data.job_id, 'keyword=', trimmedKeyword);
         toast.success('Job criado! Acompanhe o progresso.');
         navigate(`/client/articles/engine/${data.job_id}`);
       } else {

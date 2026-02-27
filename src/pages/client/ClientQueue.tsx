@@ -51,6 +51,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { usePublishValidation, PublishValidationResult } from '@/hooks/usePublishValidation';
 import { PublishWithBoostDialog } from '@/components/editor/PublishWithBoostDialog';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 
 interface QueueItem {
   id: string;
@@ -116,7 +117,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export default function ClientQueue() {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -390,6 +391,16 @@ export default function ClientQueue() {
     return matchesSearch && matchesStatus;
   });
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

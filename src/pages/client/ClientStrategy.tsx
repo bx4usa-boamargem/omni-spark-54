@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 import { ClientCompetitorsTab } from '@/components/client/strategy/ClientCompetitorsTab';
 import { ClientOpportunitiesTab } from '@/components/client/strategy/ClientOpportunitiesTab';
 import { MarketRadarTab } from '@/components/client/strategy/MarketRadarTab';
@@ -81,9 +82,11 @@ interface ClientStrategy {
 }
 
 export default function ClientStrategy() {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [strategyError, setStrategyError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
   const [activeTab, setActiveTab] = useState('strategy');
@@ -112,9 +115,10 @@ export default function ClientStrategy() {
   useEffect(() => {
     if (!blog?.id) return;
 
+    setStrategyError(null);
     const fetchStrategy = async () => {
       setLoading(true);
-      
+
       try {
         const { data, error } = await supabase
           .from('client_strategy')
@@ -144,7 +148,6 @@ export default function ClientStrategy() {
           });
           setIsConfigured(!!data.empresa_nome);
         } else {
-          // Initialize with blog name if available
           setStrategy(prev => ({
             ...prev,
             blog_id: blog.id,
@@ -153,13 +156,15 @@ export default function ClientStrategy() {
         }
       } catch (error) {
         console.error('Error fetching strategy:', error);
+        const message = error instanceof Error ? error.message : 'Falha ao carregar estratégia.';
+        setStrategyError(message);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     fetchStrategy();
-  }, [blog?.id, blog?.name]);
+  }, [blog?.id, blog?.name, retryCount]);
 
   const handleSave = async () => {
     if (!blog?.id) return;
@@ -231,6 +236,18 @@ export default function ClientStrategy() {
     }));
   };
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -241,6 +258,20 @@ export default function ClientStrategy() {
 
   return (
     <div className="space-y-6">
+      {strategyError && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+            <span>{strategyError}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRetryCount((c) => c + 1)}
+            >
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

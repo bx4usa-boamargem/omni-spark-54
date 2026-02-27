@@ -143,13 +143,16 @@ export default function ArticleGenerator() {
   };
   
   const handleGenerate = async () => {
-    if (!isValid || !blog) return;
-    
-    setIsGenerating(true);
-    
-    try {
-      console.log('[ArticleGenerator] Creating generation job...');
+    if (!isValid) return;
+    if (!blog) {
+      console.error('[ArticleGenerator] Blog não encontrado');
+      toast.error('Blog não encontrado. Configure a empresa em Configurações da Empresa.');
+      return;
+    }
 
+    setIsGenerating(true);
+
+    try {
       const enginePayload = {
         keyword: formData.keyword.trim(),
         blog_id: blog.id,
@@ -164,17 +167,20 @@ export default function ArticleGenerator() {
         image_count: formData.mode === 'authority' ? 8 : 4,
       };
 
+      console.log('[ArticleGenerator] create-generation-job payload:', enginePayload);
       const { data, error } = await supabase.functions.invoke('create-generation-job', { body: enginePayload });
+      console.log('[ArticleGenerator] create-generation-job response:', { data, error: error?.message ?? error });
+
       if (error) throw error;
       if (!data?.job_id) throw new Error(data?.error || 'Resposta inesperada do servidor');
 
       toast.success('Job criado! Acompanhe o progresso.');
       navigate(`/client/articles/engine/${data.job_id}`);
-      
     } catch (err: any) {
-      console.error('[V5.0] Generation setup error:', err);
+      console.error('[ArticleGenerator] Generation setup error:', err);
+      toast.error(err?.message || 'Erro ao iniciar geração');
+    } finally {
       setIsGenerating(false);
-      toast.error(err.message || 'Erro ao iniciar geração');
     }
   };
 

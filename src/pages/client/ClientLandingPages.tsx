@@ -4,6 +4,7 @@ import { Plus, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBlog } from "@/hooks/useBlog";
+import { BlogRequiredState } from "@/components/client/BlogRequiredState";
 import { useLandingPages } from "@/components/client/landingpage/hooks/useLandingPages";
 import { LandingPageCard } from "@/components/client/landingpage/LandingPageCard";
 import { LandingPageFilters, useLandingPageFilters } from "@/components/client/landingpage/LandingPageFilters";
@@ -22,7 +23,7 @@ import { toast } from "sonner";
 
 export default function ClientLandingPages() {
   const navigate = useNavigate();
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const { pages, loading, fetchPages, deletePage, duplicatePage, archivePage, unarchivePage } = useLandingPages();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pageToDelete, setPageToDelete] = useState<string | null>(null);
@@ -75,6 +76,17 @@ export default function ClientLandingPages() {
       setPageToDelete(null);
     }
   };
+
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[240px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
 
   return (
     <div className="space-y-6">

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { BlogRequiredState } from '@/components/client/BlogRequiredState';
 
 interface Lead {
   id: string;
@@ -62,7 +63,7 @@ interface Conversation {
 }
 
 export default function ClientLeads() {
-  const { blog } = useBlog();
+  const { blog, loading: blogLoading } = useBlog();
   const { buildLink: buildWhatsAppLink } = useGlobalWhatsApp();
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -190,6 +191,16 @@ export default function ClientLeads() {
     return 'bg-red-100 text-red-700';
   };
 
+  if (blogLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!blog) {
+    return <BlogRequiredState />;
+  }
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
