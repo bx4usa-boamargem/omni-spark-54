@@ -120,6 +120,11 @@ export const isCustomDomainHost = (): boolean => {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
   
+  // Vercel fallback domain is never a custom domain
+  if (host.endsWith('.vercel.app')) {
+    return false;
+  }
+
   // Exclude all omniseen domains
   if (host.endsWith('omniseen.app') || host === 'omniseen.app') {
     return false;

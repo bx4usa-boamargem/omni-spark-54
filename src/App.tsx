@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { ErrorBoundary } from "react-error-boundary";
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { TenantGuard } from "@/components/auth/TenantGuard";
 import { PlatformAdminGuard } from "@/components/auth/PlatformAdminGuard";
@@ -18,6 +18,7 @@ import { BlogRoutes } from "@/routes/BlogRoutes";
 // New Auth Pages
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
+import PublicLanding from "./pages/PublicLanding";
 
 // Legacy pages (to be migrated)
 import Dashboard from "./pages/Dashboard";
@@ -105,6 +106,32 @@ import GenerationDetail from "./pages/client/GenerationDetail";
 import WordPressCallback from "./pages/cms/WordPressCallback";
 
 const queryClient = new QueryClient();
+
+const LandingRoutes = () => (
+  <Routes>
+    <Route path="/" element={<PublicLanding />} />
+    <Route path="/login" element={<Login />} />
+    <Route path="/signup" element={<Signup />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
+    <Route path="/terms" element={<TermsOfUse />} />
+    <Route path="/privacy" element={<PrivacyPolicy />} />
+    <Route path="/services" element={<Services />} />
+    <Route path="/pricing" element={<Pricing />} />
+    <Route path="*" element={<PublicLanding />} />
+  </Routes>
+);
+
+const PlatformRoot = () => {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Carregando...</div>
+      </div>
+    );
+  }
+  return <Navigate to={user ? "/client/dashboard" : "/login"} replace />;
+};
 
 // Redirect component for dynamic article routes
 const ArticleEditRedirect = () => {
@@ -267,8 +294,8 @@ const ClientRoutes = () => (
 // Platform routes - for app.omniseen.app only
 const PlatformRoutes = () => (
   <Routes>
-    {/* Redirect root to login */}
-    <Route path="/" element={<Navigate to="/login" replace />} />
+    {/* Root: dashboard when authed, otherwise login */}
+    <Route path="/" element={<PlatformRoot />} />
 
     {/* New Auth routes */}
     <Route path="/login" element={<Login />} />
@@ -413,6 +440,24 @@ const AppRoutes = () => {
     isCustomDomain: isCustomDomainHost(),
     isPlatform: isPlatformHost()
   });
+
+  // Landing (marketing) hosts are ALWAYS public
+  if (host === 'omniseen.app' || host === 'www.omniseen.app') {
+    console.log('[AppRoutes] ✅ Landing host detected, using LandingRoutes');
+    return <LandingRoutes />;
+  }
+
+  // Platform SaaS host
+  if (host === 'app.omniseen.app') {
+    console.log('[AppRoutes] ✅ Platform host detected, using PlatformRoutes');
+    return <PlatformRoutes />;
+  }
+
+  // Vercel fallback should never attempt blog resolution
+  if (host.endsWith('.vercel.app')) {
+    console.log('[AppRoutes] ✅ Vercel fallback host detected, using LandingRoutes');
+    return <LandingRoutes />;
+  }
 
   if (isSubaccountHost()) {
     console.log('[AppRoutes] ✅ Subaccount host detected, using SubaccountRouteDecider');
