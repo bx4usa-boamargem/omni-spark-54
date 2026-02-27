@@ -263,23 +263,34 @@ serve(async (req) => {
         gl: "us",
       });
       if (!raw.ok) {
-        return new Response(
-          JSON.stringify({ error: `GOOGLE_SEARCH_FAILED:${raw.error}`, status: raw.status ?? null, raw: raw.raw ?? null }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        console.error("[AI_ROUTER] Google Search failed; continuing without SERP evidence", {
+          task,
+          query: q,
+          status: raw.status ?? null,
+          error: raw.error ?? null,
+        });
+        effectiveMessages = [
+          ...effectiveMessages.slice(0, 1),
+          {
+            role: "system",
+            content:
+              "SERP evidence is temporarily unavailable (Google Custom Search failed). Continue without citing specific URLs. Do not fabricate external sources.",
+          },
+          ...effectiveMessages.slice(1),
+        ];
+      } else {
+        const top10 = normalizeTop10Results(raw.data);
+        const serpCtx = [
+          `Google Custom Search (top ${top10.length}) for query=\"${q}\":`,
+          ...top10.map((r) => `#${r.position} ${r.title}\n${r.url}\n${r.snippet}`),
+        ].join("\n\n");
+
+        effectiveMessages = [
+          ...effectiveMessages.slice(0, 1),
+          { role: "system", content: `Use ONLY the following SERP evidence for analysis (do not invent):\n\n${serpCtx}` },
+          ...effectiveMessages.slice(1),
+        ];
       }
-
-      const top10 = normalizeTop10Results(raw.data);
-      const serpCtx = [
-        `Google Custom Search (top ${top10.length}) for query="${q}":`,
-        ...top10.map((r) => `#${r.position} ${r.title}\n${r.url}\n${r.snippet}`),
-      ].join("\n\n");
-
-      effectiveMessages = [
-        ...effectiveMessages.slice(0, 1),
-        { role: "system", content: `Use ONLY the following SERP evidence for analysis (do not invent):\n\n${serpCtx}` },
-        ...effectiveMessages.slice(1),
-      ];
     }
 
     const wantsJson =
