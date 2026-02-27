@@ -121,6 +121,10 @@ const LandingRoutes = () => (
   </Routes>
 );
 
+/**
+ * Root "/" for platform host only. Never redirect while auth is loading.
+ * Public routes (/, /login, /signup) on landing/vercel are handled by LandingRoutes.
+ */
 const PlatformRoot = () => {
   const { user, loading } = useAuth();
   if (loading) {
@@ -420,57 +424,47 @@ const CustomDomainRouteDecider = () => {
 };
 
 /**
+ * Public hosts: "/" "/login" "/signup" are ALWAYS public here. No auth redirect.
+ */
+function isPublicLandingHost(host: string): boolean {
+  return (
+    host === 'omniseen.app' ||
+    host === 'www.omniseen.app' ||
+    host.endsWith('.vercel.app')
+  );
+}
+
+/**
  * AppRoutes: Componente principal que decide o modo da aplicação por hostname
- * 
- * REGRAS ABSOLUTAS:
- * - app.omniseen.app → PlatformRoutes (plataforma SaaS)
- * - {slug}.app.omniseen.app → SubaccountRouteDecider (blog + admin isolado)
- * - domínio customizado → CustomDomainRouteDecider (blog público apenas)
- * - Lovable preview/localhost → PlatformRoutes (dev mode)
+ *
+ * REGRAS:
+ * - omniseen.app, www.omniseen.app, *.vercel.app → LandingRoutes (sempre público, sem redirect)
+ * - app.omniseen.app → PlatformRoutes
+ * - {slug}.app.omniseen.app → SubaccountRouteDecider
+ * - domínio customizado → CustomDomainRouteDecider
  */
 const AppRoutes = () => {
   const host = typeof window !== 'undefined' ? window.location.hostname : 'ssr';
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
-  
-  // Debug logging detalhado para troubleshooting de roteamento
-  console.log('[AppRoutes] Host detection:', {
-    hostname: host,
-    pathname,
-    isSubaccount: isSubaccountHost(),
-    isCustomDomain: isCustomDomainHost(),
-    isPlatform: isPlatformHost()
-  });
 
-  // Landing (marketing) hosts are ALWAYS public
-  if (host === 'omniseen.app' || host === 'www.omniseen.app') {
-    console.log('[AppRoutes] ✅ Landing host detected, using LandingRoutes');
+  // FIRST: public landing hosts — never redirect to login, no auth guard
+  if (isPublicLandingHost(host)) {
     return <LandingRoutes />;
   }
 
   // Platform SaaS host
   if (host === 'app.omniseen.app') {
-    console.log('[AppRoutes] ✅ Platform host detected, using PlatformRoutes');
     return <PlatformRoutes />;
   }
 
-  // Vercel fallback should never attempt blog resolution
-  if (host.endsWith('.vercel.app')) {
-    console.log('[AppRoutes] ✅ Vercel fallback host detected, using LandingRoutes');
-    return <LandingRoutes />;
-  }
-
   if (isSubaccountHost()) {
-    console.log('[AppRoutes] ✅ Subaccount host detected, using SubaccountRouteDecider');
     return <SubaccountRouteDecider />;
   }
-  
+
   if (isCustomDomainHost()) {
-    console.log('[AppRoutes] ✅ Custom domain host detected, using CustomDomainRouteDecider');
     return <CustomDomainRouteDecider />;
   }
-  
-  // Platform host (app.omniseen.app) or dev/preview
-  console.log('[AppRoutes] ⚠️ Platform/dev host, using PlatformRoutes');
+
+  // Localhost / other dev → platform (login required for /client)
   return <PlatformRoutes />;
 };
 
