@@ -1,0 +1,64 @@
+{
+    "arch": "arm64",
+    "build": "h74094d2_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "libmamba ==2.5.0 h7950639_0",
+        "__osx >=11.0",
+        "libcxx >=19",
+        "zstd >=1.5.7,<1.6.0a0",
+        "libmamba >=2.5.0,<2.6.0a0",
+        "reproc-cpp >=14.2,<15.0a0",
+        "reproc >=14.2,<15.0a0"
+    ],
+    "extracted_package_dir": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/mamba-2.5.0-h74094d2_0",
+    "files": [
+        "bin/mamba",
+        "condabin/mamba",
+        "etc/profile.d/mamba.sh"
+    ],
+    "fn": "mamba-2.5.0-h74094d2_0.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "link": {
+        "source": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/mamba-2.5.0-h74094d2_0",
+        "type": 1
+    },
+    "md5": "c90f4a1e53f22b460c1964bd56100687",
+    "name": "mamba",
+    "package_tarball_full_path": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/mamba-2.5.0-h74094d2_0.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "bin/mamba",
+                "path_type": "hardlink",
+                "sha256": "2bd030c7ede8b86c114f60e92d313dc3c94c2a4857ca3a8d58bbbd7ec31fd902",
+                "sha256_in_prefix": "ca0b25d738769064e3de5ba3c9a2c9c8259a77f37cff5ffb74df644adf3a2274",
+                "size_in_bytes": 1914560
+            },
+            {
+                "_path": "condabin/mamba",
+                "path_type": "softlink",
+                "sha256_in_prefix": "ca0b25d738769064e3de5ba3c9a2c9c8259a77f37cff5ffb74df644adf3a2274",
+                "size_in_bytes": 12
+            },
+            {
+                "_path": "etc/profile.d/mamba.sh",
+                "path_type": "hardlink",
+                "sha256": "62d1a9053073477ab2e56753b877332d5c784b7fcfff871481adff86e26f77ba",
+                "sha256_in_prefix": "b795cde406a46abd66035e033e0e1918059d09e153448cf05f121496c38e069c",
+                "size_in_bytes": 2336
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "mamba==2.5.0=h74094d2_0",
+    "sha256": "9e22ee758918e31149cbf418897809fa094d43f5134a1b7a7517fcc17a6d7705",
+    "size": 475415,
+    "subdir": "osx-arm64",
+    "timestamp": 1767884201477,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/mamba-2.5.0-h74094d2_0.conda",
+    "version": "2.5.0"
+}

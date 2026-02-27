@@ -599,88 +599,8 @@ export default function ClientArticleEditor() {
     : null;
 
   // ============================================================
-  // EARLY REDIRECT PATTERN: Create placeholder and navigate immediately
+  // GLOBAL PLATFORM MODE: generation via generation_jobs (no placeholders)
   // ============================================================
-  const createArticlePlaceholder = async (blogId: string, theme: string): Promise<string | null> => {
-    console.log("[CLICK][GEN_ARTICLE] createArticlePlaceholder iniciado", {
-      timestamp: new Date().toISOString(),
-      blogId,
-      theme,
-    });
-
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      console.log("[AUTH][GEN_ARTICLE]", {
-        userId: user?.id,
-        email: user?.email,
-        expiresAt: session?.expires_at,
-        authError: authError?.message,
-      });
-
-      if (!user) {
-        console.error("[AUTH][GEN_ARTICLE] User null - sessão expirada");
-        toast.error("Sessão expirada. Faça login novamente.");
-        return null;
-      }
-
-      // Validate blog ownership
-      const { data: blogData, error: blogError } = await supabase
-        .from('blogs')
-        .select('user_id')
-        .eq('id', blogId)
-        .single();
-
-      console.log("[BLOG][GEN_ARTICLE]", {
-        blogOwnerId: blogData?.user_id,
-        currentUserId: user.id,
-        match: blogData?.user_id === user.id,
-        blogError: blogError?.message,
-      });
-
-      const slug = theme
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "")
-        .substring(0, 60) + `-${Date.now()}`;
-
-      console.log("[INSERT][GEN_ARTICLE] Attempting insert...", { blogId, slug, status: "generating" });
-
-      const { data, error } = await supabase
-        .from("articles")
-        .insert({
-          blog_id: blogId,
-          title: theme,
-          slug,
-          status: "generating",
-          generation_source: "form",
-        })
-        .select("id")
-        .single();
-
-      if (error) {
-        console.error("[INSERT-ERROR][GEN_ARTICLE]", {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
-        toast.error(`Erro ao criar artigo: ${error.message}`);
-        return null;
-      }
-
-      console.log("[INSERT-SUCCESS][GEN_ARTICLE]", { articleId: data.id });
-      return data.id;
-    } catch (err: any) {
-      console.error("[EXCEPTION][GEN_ARTICLE]", err);
-      toast.error(err.message || "Erro inesperado ao criar artigo");
-      return null;
-    }
-  };
-
   const handleGenerate = async (formData: SimpleFormData) => {
     console.log("[ENTER][GEN_ARTICLE][handleGenerate]", {
       timestamp: new Date().toISOString(),
@@ -714,27 +634,29 @@ export default function ClientArticleEditor() {
         return;
       }
 
-      // 1. Create placeholder IMMEDIATELY
-      const placeholderId = await createArticlePlaceholder(blog.id, formData.theme);
-      if (!placeholderId) {
-        generationLockRef.current = false;
-        return;
-      }
+      const enginePayload = {
+        keyword: formData.theme.trim(),
+        blog_id: blog.id,
+        city: "",
+        niche: "default",
+        template: "auto",
+        job_type: "article",
+        language: "pt-BR",
+        intent: "informational" as const,
+        target_words: formData.generationMode === "authority" ? 2500 : 1200,
+        image_count: formData.generateImages ? 4 : 0,
+      };
 
-      // Store form data for generation inside editor
-      localStorage.setItem('pendingArticleGeneration', JSON.stringify({
-        theme: formData.theme,
-        generationMode: formData.generationMode,
-        generateImages: formData.generateImages,
-        scheduleMode: formData.scheduleMode,
-        scheduledDate: formData.scheduledDate?.toISOString(),
-        scheduledTime: formData.scheduledTime,
-      }));
+      const { data, error } = await supabase.functions.invoke("create-generation-job", {
+        body: enginePayload,
+      });
 
-      console.log("[NAVIGATING][GEN_ARTICLE]", { placeholderId });
-      
-      // 2. Navigate IMMEDIATELY to the editor
-      navigate(`/client/articles/${placeholderId}/edit`, { replace: true });
+      if (error) throw error;
+      if (!data?.job_id) throw new Error(data?.error || "Resposta inesperada do servidor");
+
+      generationLockRef.current = false;
+      toast.success("Job criado! Acompanhe o progresso.");
+      navigate(`/client/articles/engine/${data.job_id}`);
       
     } catch (err: any) {
       console.error("[EXCEPTION][handleGenerate]", err);

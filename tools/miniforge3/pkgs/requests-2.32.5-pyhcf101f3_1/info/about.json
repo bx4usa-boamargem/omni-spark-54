@@ -1,0 +1,14 @@
+{
+  "channels": [
+    "https://conda.anaconda.org/conda-forge/"
+  ],
+  "dev_url": "https://github.com/psf/requests",
+  "extra": {
+    "flow_run_id": "azure_20251228.2.1",
+    "remote_url": "https://github.com/conda-forge/requests-feedstock",
+    "sha": "624c19897677afe8167202b275f733c78d0158eb"
+  },
+  "home": "http://python-requests.org/",
+  "license": "Apache-2.0",
+  "summary": "Requests is an elegant and simple HTTP library for Python, built with ♥."
+}

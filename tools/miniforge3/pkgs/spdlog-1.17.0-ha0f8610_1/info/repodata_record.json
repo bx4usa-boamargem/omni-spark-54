@@ -1,0 +1,23 @@
+{
+    "arch": "arm64",
+    "build": "ha0f8610_1",
+    "build_number": 1,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "__osx >=11.0",
+        "fmt >=12.1.0,<12.2.0a0",
+        "libcxx >=19"
+    ],
+    "fn": "spdlog-1.17.0-ha0f8610_1.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "md5": "1885f7cface8cd627774407eeacb2caf",
+    "name": "spdlog",
+    "platform": "osx",
+    "sha256": "465e81abc0e662937046a2c6318d1a9e74baee0addd51234d36e08bae6811296",
+    "size": 166603,
+    "subdir": "osx-arm64",
+    "timestamp": 1767781942683,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/spdlog-1.17.0-ha0f8610_1.conda",
+    "version": "1.17.0"
+}

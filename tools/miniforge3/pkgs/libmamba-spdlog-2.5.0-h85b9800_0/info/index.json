@@ -1,0 +1,16 @@
+{
+  "arch": "arm64",
+  "build": "h85b9800_0",
+  "build_number": 0,
+  "depends": [
+    "libcxx >=19",
+    "__osx >=11.0",
+    "libmamba >=2.5.0,<2.6.0a0"
+  ],
+  "license": "BSD-3-Clause",
+  "name": "libmamba-spdlog",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1767884201476,
+  "version": "2.5.0"
+}

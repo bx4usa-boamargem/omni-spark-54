@@ -41,8 +41,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { ArticleTemplatePreviewModal } from '@/components/client/ArticleTemplatePreviewModal';
 import { NicheSelectorDropdown } from '@/components/client/NicheSelectorDropdown';
 import { TemplateSelectorRadio } from '@/components/client/TemplateSelectorRadio';
-import { ArticleGenerationProgress } from '@/components/client/ArticleGenerationProgress';
-import { useGenerationPolling } from '@/hooks/useGenerationPolling';
 import type { TemplateType, ArticleMode, NicheType } from '@/lib/article-engine/types';
 import { useQuery } from '@tanstack/react-query';
 
@@ -110,40 +108,10 @@ export default function ArticleGenerator() {
   });
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const [placeholderArticleId, setPlaceholderArticleId] = useState<string | null>(null);
-  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
   
   // Refs
   const timeoutWarningRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // V5.0: Real polling from DB
-  const polling = useGenerationPolling({
-    articleId: placeholderArticleId,
-    enabled: isGenerating && !!placeholderArticleId,
-    intervalMs: 1500,
-    onComplete: useCallback(() => {
-      console.log('[V5.0] ✅ Polling detected completion for', placeholderArticleId);
-      setIsGenerating(false);
-      setShowTimeoutWarning(false);
-      if (timeoutWarningRef.current) clearTimeout(timeoutWarningRef.current);
-      toast.success('Artigo gerado com sucesso!');
-      navigate(`/client/articles/${placeholderArticleId}/preview`);
-    }, [placeholderArticleId, navigate]),
-    onError: useCallback((error: string) => {
-      console.error('[V5.0] ❌ Polling detected failure:', error);
-      setIsGenerating(false);
-      setShowTimeoutWarning(false);
-      if (timeoutWarningRef.current) clearTimeout(timeoutWarningRef.current);
-      toast.error(error);
-    }, [])
-  });
-
-  // V5.0: Derive progress from polling stage (DB is source of truth)
-  const currentStage = isGenerating ? (polling.stage || 'validating') : null;
-  const currentProgress = isGenerating 
-    ? (polling.progress || STAGE_PROGRESS_MAP[polling.stage] || 5)
-    : 0;
   
   // Validation
   const isValid = formData.keyword.trim().length >= 3 && formData.city.trim().length > 0;
@@ -159,7 +127,7 @@ export default function ArticleGenerator() {
   useEffect(() => {
     if (isGenerating) {
       timeoutWarningRef.current = setTimeout(() => {
-        setShowTimeoutWarning(true);
+        toast.warning('A geração está demorando mais que o esperado. Aguarde mais um momento...');
       }, 180000); // 3 minutes
       
       return () => {
@@ -174,83 +142,14 @@ export default function ArticleGenerator() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
   
-  const handleCancel = async () => {
-    // V5.0: Mark placeholder as draft/failed on cancel
-    if (placeholderArticleId) {
-      await supabase
-        .from('articles')
-        .update({ status: 'draft', generation_stage: 'failed' })
-        .eq('id', placeholderArticleId);
-    }
-    
-    setIsGenerating(false);
-    setPlaceholderArticleId(null);
-    setShowTimeoutWarning(false);
-    if (timeoutWarningRef.current) clearTimeout(timeoutWarningRef.current);
-    toast.info('Geração cancelada');
-  };
-  
   const handleGenerate = async () => {
     if (!isValid || !blog) return;
     
     setIsGenerating(true);
-    setShowTimeoutWarning(false);
     
     try {
-      // V5.0 Step 1: Create placeholder in DB
-      console.log('[V5.0] Creating placeholder...');
-      const { data: placeholder, error: placeholderError } = await supabase
-        .from('articles')
-        .insert({
-          blog_id: blog.id,
-          title: `Gerando: ${formData.keyword.trim()}`,
-          status: 'generating',
-          generation_stage: 'validating',
-          generation_progress: 5,
-          slug: `generating-${Date.now()}`,
-        })
-        .select('id')
-        .single();
+      console.log('[ArticleGenerator] Creating generation job...');
 
-      if (placeholderError || !placeholder?.id) {
-        console.error('[V5.0] Placeholder creation failed:', placeholderError);
-        toast.error('Erro ao iniciar geração. Tente novamente.');
-        setIsGenerating(false);
-        return;
-      }
-
-      const articleId = placeholder.id;
-      console.log('[V5.0] Placeholder created:', articleId);
-      setPlaceholderArticleId(articleId);
-
-      // V5.0 Step 2: Polling starts automatically via useGenerationPolling hook
-      // (enabled becomes true when placeholderArticleId is set)
-
-      // V5.0 Step 3: Call edge function with article_id (non-blocking for UI)
-      const payload = {
-        article_id: articleId,
-        theme: formData.keyword.trim(),
-        keywords: [formData.keyword.trim()],
-        city: formData.city.trim(),
-        state: formData.state,
-        niche: formData.niche,
-        mode: formData.mode,
-        webResearch: formData.webResearch,
-        templateOverride: formData.template !== 'auto' ? formData.template : undefined,
-        blogId: blog.id,
-        blog_id: blog.id,
-        businessName: businessProfile?.company_name || blog.name,
-        businessWhatsapp: businessProfile?.whatsapp,
-        useEat: formData.eatInjection,
-        contextualAlt: formData.imageAlt,
-        image_count: formData.mode === 'authority' ? 8 : 3,
-        word_count: formData.mode === 'authority' ? 2400 : 1000,
-        generation_mode: formData.mode === 'authority' ? 'deep' : 'fast',
-      };
-      
-      console.log('[V5.0] Invoking Engine v1 via create-generation-job...');
-      
-      // ENGINE V1: All generation goes through create-generation-job → orchestrate-generation
       const enginePayload = {
         keyword: formData.keyword.trim(),
         blog_id: blog.id,
@@ -265,68 +164,16 @@ export default function ArticleGenerator() {
         image_count: formData.mode === 'authority' ? 8 : 4,
       };
 
-      // V5.0: Fire-and-forget — polling handles completion/failure
-      supabase.functions.invoke('create-generation-job', {
-        body: enginePayload
-      }).then(({ data, error }) => {
-        if (error) {
-          const errorMsg = error.message || '';
-          // V5.0: Timeout errors are OK — polling will detect completion
-          const isTimeout = 
-            errorMsg.includes('Failed to fetch') ||
-            errorMsg.includes('FunctionsFetchError') ||
-            errorMsg.includes('Failed to send') ||
-            errorMsg.includes('timed out');
-          
-          if (isTimeout) {
-            console.log('[V5.0] Invoke timeout — continuing polling...');
-            return; // Polling will handle it
-          }
+      const { data, error } = await supabase.functions.invoke('create-generation-job', { body: enginePayload });
+      if (error) throw error;
+      if (!data?.job_id) throw new Error(data?.error || 'Resposta inesperada do servidor');
 
-          // Real errors (not timeout)
-          if (errorMsg.includes('429')) {
-            toast.error('Limite de requisições excedido. Aguarde alguns minutos.');
-          } else if (errorMsg.includes('402')) {
-            toast.error('Créditos insuficientes.');
-          } else {
-            console.error('[V5.0] Edge function error:', error);
-            // Don't stop — let polling decide (backend may have already started)
-          }
-        }
-
-        // Handle QUALITY_GATE_FAILED from response data
-        if (data?.error === 'QUALITY_GATE_FAILED') {
-          const errorCode = data?.code || '';
-          const errorMap: Record<string, string> = {
-            'missing_city': 'Cidade é obrigatória para gerar o artigo',
-            'missing_niche': 'Nicho é obrigatório para gerar o artigo',
-            'invalid_json': 'Erro ao processar resposta da IA. Tente novamente.',
-            'missing_title': 'Artigo gerado sem título. Tente novamente.',
-            'insufficient_sections': data?.details || 'Artigo com estrutura incompleta',
-            'invalid_sections': data?.details || 'Artigo contém seções vazias',
-            'insufficient_faq': data?.details || 'FAQ insuficiente no artigo',
-            'insufficient_images': data?.details || 'Imagens insuficientes no artigo',
-            'missing_hero_image': 'Hero image obrigatória não foi gerada',
-            'insufficient_word_count': data?.details || 'Artigo muito curto',
-            'missing_introduction': 'Artigo sem introdução adequada',
-            'missing_conclusion': 'Artigo sem conclusão'
-          };
-          
-          const errorMessage = errorMap[errorCode] || data?.message || 'Erro na geração';
-          setIsGenerating(false);
-          setPlaceholderArticleId(null);
-          toast.error(errorMessage);
-        }
-      }).catch((err) => {
-        // Network-level errors (timeout) — polling continues
-        console.log('[V5.0] Invoke catch (likely timeout):', err?.message);
-        // Don't stop generation — polling handles recovery
-      });
+      toast.success('Job criado! Acompanhe o progresso.');
+      navigate(`/client/articles/engine/${data.job_id}`);
       
     } catch (err: any) {
       console.error('[V5.0] Generation setup error:', err);
       setIsGenerating(false);
-      setPlaceholderArticleId(null);
       toast.error(err.message || 'Erro ao iniciar geração');
     }
   };
@@ -593,24 +440,7 @@ export default function ArticleGenerator() {
           </Button>
         </div>
       </div>
-      
-      {/* Generation Progress Overlay — V5.0: Real polling data */}
-      {isGenerating && (
-        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-lg">
-            <ArticleGenerationProgress
-              currentStage={currentStage}
-              progress={currentProgress}
-              showTimeoutWarning={showTimeoutWarning}
-              keyword={formData.keyword}
-              onCancel={handleCancel}
-              isStuck={polling.isStuck}
-              stuckDuration={polling.stuckCounter}
-            />
-          </div>
-        </div>
-      )}
-      
+    
       {/* Template Preview Modal */}
       <ArticleTemplatePreviewModal
         open={showTemplatePreview}

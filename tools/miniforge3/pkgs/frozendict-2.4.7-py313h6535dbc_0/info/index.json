@@ -1,0 +1,18 @@
+{
+  "arch": "arm64",
+  "build": "py313h6535dbc_0",
+  "build_number": 0,
+  "depends": [
+    "__osx >=11.0",
+    "python >=3.13,<3.14.0a0",
+    "python >=3.13,<3.14.0a0 *_cp313",
+    "python_abi 3.13.* *_cp313"
+  ],
+  "license": "LGPL-3.0-only",
+  "license_family": "LGPL",
+  "name": "frozendict",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1763083221165,
+  "version": "2.4.7"
+}

@@ -324,7 +324,9 @@ export default function GenerationDetail() {
     return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
   }, [job?.status, job?.public_progress, realProgress, isClient]);
 
-  // Auto-redirect to editor when job completes
+  const effectiveStatus = (job?.status === 'completed' && !job?.article_id) ? 'failed' : job?.status;
+
+  // Auto-redirect to editor when job completes (ONLY if article_id exists)
   useEffect(() => {
     if (!job) return;
     if (job.status === 'completed' && job.article_id) {
@@ -381,7 +383,7 @@ export default function GenerationDetail() {
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job não encontrado</div>;
 
   const input = job.input as Record<string, any> || {};
-  const statusMsg = CLIENT_STATUS_MSG[job.status] || CLIENT_STATUS_MSG.running;
+  const statusMsg = CLIENT_STATUS_MSG[(effectiveStatus as string) || 'running'] || CLIENT_STATUS_MSG.running;
 
   // ============================================================
   // CLIENT RENDER — zero internal pipeline, zero cost, zero tech
@@ -398,14 +400,14 @@ export default function GenerationDetail() {
               <h1 className="text-xl font-bold text-foreground mb-1">"{input.keyword || '—'}"</h1>
               <p className="text-sm text-muted-foreground">{input.city || ''} {input.niche ? `• ${input.niche}` : ''}</p>
             </div>
-            <Badge className={job.status === 'completed' ? 'bg-green-500/20 text-green-700' : job.status === 'failed' ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'}>
-              {(job.status === 'running' || job.status === 'pending') && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+            <Badge className={effectiveStatus === 'completed' ? 'bg-green-500/20 text-green-700' : effectiveStatus === 'failed' ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-primary'}>
+              {(effectiveStatus === 'running' || effectiveStatus === 'pending') && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
               {statusMsg.label}
             </Badge>
           </div>
 
           {/* Client sees only SEO score (when available) */}
-          {job.status === 'completed' && job.seo_score && (
+          {effectiveStatus === 'completed' && job.seo_score && (
             <div className="mt-4">
               <span className="text-sm text-muted-foreground">Score SEO</span>
               <p className="font-bold text-lg">{job.seo_score}/100</p>
@@ -417,17 +419,17 @@ export default function GenerationDetail() {
         </div>
 
         {/* Client pipeline — driven entirely by public_stage from DB */}
-        {(job.status === 'running' || job.status === 'pending') && (
+        {(effectiveStatus === 'running' || effectiveStatus === 'pending') && (
           <ClientPipelineView
             publicStage={job.public_stage}
             publicProgress={perceivedProgress}
             publicMessage={job.public_message}
-            jobStatus={job.status}
+            jobStatus={effectiveStatus as string}
           />
         )}
 
         {/* Zombie — simplified */}
-        {isZombie && job.status === 'running' && (
+        {isZombie && effectiveStatus === 'running' && (
           <div className="border rounded-lg p-4 bg-yellow-500/10 border-yellow-500/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Loader2 className="w-5 h-5 text-yellow-600 animate-spin" />
@@ -437,7 +439,7 @@ export default function GenerationDetail() {
         )}
 
         {/* Failed — generic message, no technical details */}
-        {job.status === 'failed' && (
+        {effectiveStatus === 'failed' && (
           <div className="border rounded-lg p-4 bg-destructive/10 border-destructive/30 text-center space-y-3">
             <XCircle className="w-8 h-8 text-destructive mx-auto" />
             <p className="text-sm text-destructive font-medium">Ocorreu um problema ao gerar o artigo.</p>
@@ -449,7 +451,7 @@ export default function GenerationDetail() {
         )}
 
         {/* Completion state — redirecting */}
-        {job.status === 'completed' && job.article_id && (
+        {effectiveStatus === 'completed' && job.article_id && (
           <div className="border rounded-lg p-4 bg-green-500/10 border-green-500/30 text-center space-y-2">
             <CheckCircle className="w-8 h-8 text-green-600 mx-auto" />
             <p className="text-sm font-medium text-green-700">Artigo pronto! Redirecionando para o editor...</p>
@@ -459,7 +461,7 @@ export default function GenerationDetail() {
 
         {/* Actions — client */}
         <div className="flex gap-2 flex-wrap">
-          {job.status === 'completed' && (
+          {effectiveStatus === 'completed' && (
             <>
               {job.article_id && <Button onClick={() => navigate(`/client/articles/${job.article_id}/preview`)}><Eye className="w-4 h-4 mr-1" />Ver Artigo</Button>}
               {job.article_id && <Button variant="outline" onClick={() => navigate(`/client/articles/${job.article_id}/edit`)}><Edit className="w-4 h-4 mr-1" />Editar</Button>}

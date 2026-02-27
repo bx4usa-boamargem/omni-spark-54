@@ -1,0 +1,15 @@
+{
+  "arch": "arm64",
+  "build": "hc919400_0",
+  "build_number": 0,
+  "depends": [
+    "__osx >=11.0"
+  ],
+  "license": "MIT",
+  "license_family": "MIT",
+  "name": "c-ares",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1765215064054,
+  "version": "1.34.6"
+}

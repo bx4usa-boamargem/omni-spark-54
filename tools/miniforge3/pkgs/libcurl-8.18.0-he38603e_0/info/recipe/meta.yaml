@@ -1,0 +1,107 @@
+# This file created by conda-build 25.11.1
+# ------------------------------------------------
+
+package:
+  name: libcurl
+  version: 8.18.0
+source:
+  url: http://curl.haxx.se/download/curl-8.18.0.tar.bz2
+  sha256: ffd671a3dad424fb68e113a5b9894c5d1b5e13a88c6bdf0d4af6645123b31faf
+build:
+  run_exports:
+    - libcurl >=8.18.0,<9.0a0
+  number: 0
+  string: he38603e_0
+requirements:
+  build:
+    - ca-certificates 2026.1.4 hbd8a1cb_0
+    - cctools_impl_osx-64 1030.6.3 llvm19_1_h3b512aa_3
+    - cctools_impl_osx-arm64 1030.6.3 llvm19_1_h5cc7f4e_3
+    - cctools_osx-arm64 1030.6.3 llvm19_1_h6cc4725_3
+    - clang 19.1.7 default_h1323312_6
+    - clang-19 19.1.7 default_hd70426c_6
+    - clang_impl_osx-64 19.1.7 default_ha1a018a_6
+    - clang_impl_osx-arm64 19.1.7 h4c5f930_29
+    - clang_osx-arm64 19.1.7 h877a2d5_29
+    - compiler-rt 19.1.7 he914875_1
+    - compiler-rt_osx-64 19.1.7 h138dee1_1
+    - ld64 956.6 llvm19_1_hc3792c1_3
+    - ld64_osx-64 956.6 llvm19_1_h466f870_3
+    - ld64_osx-arm64 956.6 llvm19_1_hcfa1dea_3
+    - libclang-cpp19.1 19.1.7 default_hd70426c_6
+    - libcxx 21.1.8 h3d58e20_0
+    - libiconv 1.18 h57a12c2_2
+    - libllvm19 19.1.7 h56e7563_2
+    - liblzma 5.8.1 hd471939_2
+    - libsigtool 0.1.3 hc0f2934_0
+    - libxml2 2.15.1 h745d5cb_1
+    - libxml2-16 2.15.1 hd57b93d_1
+    - libzlib 1.3.1 hd23fc13_2
+    - llvm-openmp 21.1.8 h472b3d1_0
+    - llvm-tools 19.1.7 hb0207f0_2
+    - llvm-tools-19 19.1.7 h879f4bc_2
+    - macosx_deployment_target_osx-arm64 11.0 h6553868_5
+    - ncurses 6.5 h0622a9a_3
+    - openssl 3.6.0 h230baf5_0
+    - sdkroot_env_osx-arm64 26.0 hc6f8731_5
+    - sigtool-codesign 0.1.3 hc0f2934_0
+    - tapi 1600.0.11.8 h8d8e812_0
+    - zstd 1.5.7 h3eecb57_6
+  host:
+    - c-ares 1.34.6 hc919400_0
+    - ca-certificates 2026.1.4 hbd8a1cb_0
+    - krb5 1.21.3 h237132a_0
+    - libcxx 21.1.8 hf598326_0
+    - libedit 3.1.20250104 pl5321hafb1f1b_0
+    - libev 4.33 h93a5062_2
+    - libnghttp2 1.67.0 hc438710_0
+    - libssh2 1.11.1 h1590b86_0
+    - libzlib 1.3.1 h8359307_2
+    - ncurses 6.5 h5e97a16_3
+    - openssl 3.5.4 h5503f6c_0
+    - zlib 1.3.1 h8359307_2
+    - zstd 1.5.7 hbf9d68e_6
+  run:
+    - __osx >=11.0
+    - krb5 >=1.21.3,<1.22.0a0
+    - libnghttp2 >=1.67.0,<2.0a0
+    - libssh2 >=1.11.1,<2.0a0
+    - libzlib >=1.3.1,<2.0a0
+    - openssl >=3.5.4,<4.0a0
+    - zstd >=1.5.7,<1.6.0a0
+test:
+  commands:
+    - curl-config --features
+    - curl-config --protocols
+    - test -f ${PREFIX}/lib/pkgconfig/libcurl.pc
+    - test -f ${PREFIX}/lib/libcurl${SHLIB_EXT}
+    - test ! -f ${PREFIX}/lib/libcurl.a
+    - CURL_SSL_BACKENDS=$(curl-config --ssl-backends)
+    - if ! echo $CURL_SSL_BACKENDS | grep -q "OpenSSL"; then exit 1; fi
+about:
+  home: http://curl.haxx.se/
+  license: curl
+  license_family: MIT
+  license_file: COPYING
+  summary: tool and library for transferring data with URL syntax
+  description: 'Curl is an open source command line tool and library for transferring
+    data
+
+    with URL syntax. It is used in command lines or scripts to transfer data.
+
+    '
+  doc_url: https://curl.haxx.se/docs/
+  dev_url: https://github.com/curl/curl
+  doc_source_url: https://github.com/curl/curl/tree/master/docs
+extra:
+  recipe-maintainers:
+    - jakirkham
+    - mingwandroid
+    - msarahan
+    - ocefpaf
+    - xylar
+  final: true
+  copy_test_source_files: true
+  flow_run_id: azure_20260107.2.1
+  remote_url: https://github.com/conda-forge/curl-feedstock
+  sha: 3131e8ed693ad3669232c25959edecf942f45c28

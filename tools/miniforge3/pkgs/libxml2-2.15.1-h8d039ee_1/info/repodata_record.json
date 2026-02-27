@@ -1,0 +1,26 @@
+{
+    "arch": "arm64",
+    "build": "h8d039ee_1",
+    "build_number": 1,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "__osx >=11.0",
+        "icu >=78.1,<79.0a0",
+        "libiconv >=1.18,<2.0a0",
+        "liblzma >=5.8.1,<6.0a0",
+        "libxml2-16 2.15.1 h5ef1a60_1",
+        "libzlib >=1.3.1,<2.0a0"
+    ],
+    "fn": "libxml2-2.15.1-h8d039ee_1.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "md5": "fd804ee851e20faca4fecc7df0901d07",
+    "name": "libxml2",
+    "platform": "osx",
+    "sha256": "59f96fa27cce6a9a27414c5bb301eedda1a1b85cd0d8f5d68f77e46b86e7c95f",
+    "size": 40607,
+    "subdir": "osx-arm64",
+    "timestamp": 1766327501392,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libxml2-2.15.1-h8d039ee_1.conda",
+    "version": "2.15.1"
+}

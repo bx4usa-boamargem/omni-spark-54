@@ -1,0 +1,27 @@
+{
+    "arch": "arm64",
+    "build": "py313h9734d34_1",
+    "build_number": 1,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "python",
+        "cffi >=1.11",
+        "zstd >=1.5.7,<1.5.8.0a0",
+        "__osx >=11.0",
+        "python 3.13.* *_cp313",
+        "zstd >=1.5.7,<1.6.0a0",
+        "python_abi 3.13.* *_cp313"
+    ],
+    "fn": "zstandard-0.25.0-py313h9734d34_1.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "md5": "7ac13a947d4d9f57859993c06faf887b",
+    "name": "zstandard",
+    "platform": "osx",
+    "sha256": "c8525ae1a739db3c9b4f901d08fd7811402cf46b61ddf5d63419a3c533e02071",
+    "size": 396449,
+    "subdir": "osx-arm64",
+    "timestamp": 1762512722894,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/zstandard-0.25.0-py313h9734d34_1.conda",
+    "version": "0.25.0"
+}

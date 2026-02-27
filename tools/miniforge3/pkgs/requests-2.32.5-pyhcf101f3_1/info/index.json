@@ -1,0 +1,21 @@
+{
+  "build": "pyhcf101f3_1",
+  "build_number": 1,
+  "constrains": [
+    "chardet >=3.0.2,<6"
+  ],
+  "depends": [
+    "python >=3.10",
+    "certifi >=2017.4.17",
+    "charset-normalizer >=2,<4",
+    "idna >=2.5,<4",
+    "urllib3 >=1.21.1,<3",
+    "python"
+  ],
+  "license": "Apache-2.0",
+  "name": "requests",
+  "noarch": "python",
+  "subdir": "noarch",
+  "timestamp": 1766926974520,
+  "version": "2.32.5"
+}

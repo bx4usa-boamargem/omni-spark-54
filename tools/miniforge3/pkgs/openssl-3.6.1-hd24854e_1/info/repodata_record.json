@@ -1,0 +1,22 @@
+{
+    "arch": "arm64",
+    "build": "hd24854e_1",
+    "build_number": 1,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "__osx >=11.0",
+        "ca-certificates"
+    ],
+    "fn": "openssl-3.6.1-hd24854e_1.conda",
+    "license": "Apache-2.0",
+    "license_family": "Apache",
+    "md5": "f4f6ad63f98f64191c3e77c5f5f29d76",
+    "name": "openssl",
+    "platform": "osx",
+    "sha256": "361f5c5e60052abc12bdd1b50d7a1a43e6a6653aab99a2263bf2288d709dcf67",
+    "size": 3104268,
+    "subdir": "osx-arm64",
+    "timestamp": 1769556384749,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.1-hd24854e_1.conda",
+    "version": "3.6.1"
+}

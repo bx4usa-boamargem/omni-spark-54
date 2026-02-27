@@ -1,0 +1,17 @@
+{
+  "arch": "arm64",
+  "build": "ha0f8610_1",
+  "build_number": 1,
+  "depends": [
+    "__osx >=11.0",
+    "fmt >=12.1.0,<12.2.0a0",
+    "libcxx >=19"
+  ],
+  "license": "MIT",
+  "license_family": "MIT",
+  "name": "spdlog",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1767781942683,
+  "version": "1.17.0"
+}

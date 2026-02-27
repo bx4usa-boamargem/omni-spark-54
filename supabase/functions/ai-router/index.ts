@@ -1,36 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAdminSupabaseClient } from "../_shared/getIntegrationKey.ts";
+import { fetchGoogleCustomSearchRaw, normalizeTop10Results } from "../_shared/googleSearch.ts";
+import { getGlobalKey } from "../_shared/getGlobalKey.ts";
+import { getGeminiModel } from "../_shared/getGeminiModel.ts";
 
 /**
  * AI Router — OmniSeen Article Engine v1
  * 
- * Abstraction layer for LLM calls.
- * - Single provider (Lovable AI Gateway / Gemini) for v1
- * - Interface prepared for multi-provider (Claude/GPT) in future
- * - Tracks tokens, cost, latency per call
- * - Rate limit handling with retry
- * 
- * CRITICAL: This is the ONLY file that calls the AI gateway.
- * All step functions call this router instead.
+ * Camada única para chamadas DIRETAS ao Gemini (Google Generative Language API).
+ * - Sem gateways/provedores intermediários
+ * - Chave via `GOOGLE_GLOBAL_API_KEY` (getGlobalKey)
+ * - Modelo via secret `GEMINI_MODEL` (getGeminiModel)
  */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// ============================================================
-// INTERFACES (prepared for multi-provider future)
-// ============================================================
-
-export interface ModelProvider {
-  type: 'lovable-gateway';
-  call(params: AICallParams): Promise<AICallResult>;
-}
-
-export interface SerpProvider {
-  type: 'llm-simulated' | 'dataforseo' | 'serpapi';
-  analyze(keyword: string, locale: Locale): Promise<unknown>;
-}
 
 export interface Locale {
   country: string;
@@ -47,6 +34,8 @@ export interface AICallParams {
   responseFormat?: 'json' | 'text';
   tools?: unknown[];
   toolChoice?: unknown;
+  apiKey: string;
+  responseMimeType?: "application/json" | "text/plain";
 }
 
 export interface AICallResult {
@@ -82,34 +71,32 @@ type TaskType =
   | 'entity_coverage_assign';
 
 // ============================================================
-// MODEL ROUTING TABLE (v1: Gemini only via Lovable Gateway)
+// ROUTING TABLE (temperature/maxTokens por task)
 // ============================================================
 
-const MODEL_ROUTING: Record<TaskType, { model: string; temperature: number; maxTokens: number }> = {
-  serp_analysis:           { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 8000 },
-  nlp_keywords:            { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 8000 },
-  title_gen:               { model: 'google/gemini-2.5-flash',       temperature: 0.7, maxTokens: 8000 },
-  outline_gen:             { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 8000 },
-  content_gen:             { model: 'google/gemini-2.5-flash',       temperature: 0.5, maxTokens: 8000 },
-  content_critic:          { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
-  context_summary:         { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 2000 },
-  image_gen:               { model: 'google/gemini-2.5-flash-image', temperature: 0.7, maxTokens: 4000 },
-  seo_score:               { model: 'google/gemini-2.5-flash',       temperature: 0.1, maxTokens: 4000 },
-  meta_gen:                { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
-  serp_summary:            { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 2000 },
-  article_gen_single_pass: { model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 6000 },
-  entity_extraction:       { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
-  article_gen_from_outline:{ model: 'google/gemini-2.5-flash',       temperature: 0.4, maxTokens: 12000 },
-  serp_gap_analysis:      { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
-  section_expansion:      { model: 'google/gemini-2.5-flash',       temperature: 0.3, maxTokens: 4000 },
-  entity_coverage_assign:  { model: 'google/gemini-2.5-flash',       temperature: 0.2, maxTokens: 4000 },
+const MODEL_ROUTING: Record<TaskType, { temperature: number; maxTokens: number }> = {
+  serp_analysis:            { temperature: 0.3, maxTokens: 8000 },
+  nlp_keywords:             { temperature: 0.2, maxTokens: 8000 },
+  title_gen:                { temperature: 0.7, maxTokens: 4000 },
+  outline_gen:              { temperature: 0.4, maxTokens: 8000 },
+  content_gen:              { temperature: 0.5, maxTokens: 12000 },
+  content_critic:           { temperature: 0.1, maxTokens: 4000 },
+  context_summary:          { temperature: 0.1, maxTokens: 2000 },
+  image_gen:                { temperature: 0.7, maxTokens: 2000 },
+  seo_score:                { temperature: 0.1, maxTokens: 4000 },
+  meta_gen:                 { temperature: 0.3, maxTokens: 4000 },
+  serp_summary:             { temperature: 0.3, maxTokens: 2000 },
+  article_gen_single_pass:  { temperature: 0.4, maxTokens: 8000 },
+  entity_extraction:        { temperature: 0.2, maxTokens: 4000 },
+  article_gen_from_outline: { temperature: 0.4, maxTokens: 12000 },
+  serp_gap_analysis:        { temperature: 0.2, maxTokens: 4000 },
+  section_expansion:        { temperature: 0.3, maxTokens: 4000 },
+  entity_coverage_assign:   { temperature: 0.2, maxTokens: 4000 },
 };
 
-// Cost per 1M tokens (Lovable Gateway estimates)
+// Cost per 1M tokens (placeholder; optional)
 const COST_TABLE: Record<string, { input: number; output: number }> = {
-  'google/gemini-2.5-pro':         { input: 1.25, output: 10.0 },
-  'google/gemini-2.5-flash':       { input: 0.15, output: 0.60 },
-  'google/gemini-2.5-flash-image': { input: 0.15, output: 0.60 },
+  'gemini-2.5-flash': { input: 0.0, output: 0.0 },
 };
 
 function estimateCost(model: string, tokensIn: number, tokensOut: number): number {
@@ -118,152 +105,81 @@ function estimateCost(model: string, tokensIn: number, tokensOut: number): numbe
 }
 
 // ============================================================
-// CORE: Call Lovable AI Gateway
+// CORE: Call Gemini API (direct API key)
 // ============================================================
 
-async function callGateway(params: AICallParams): Promise<AICallResult> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    return {
-      success: false, content: '', model: '', provider: 'lovable-gateway',
-      tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs: 0,
-      error: 'LOVABLE_API_KEY not configured',
-    };
-  }
+function toGeminiRole(role: string): "user" | "model" {
+  return role === "assistant" ? "model" : "user";
+}
 
+function splitSystemAndContents(messages: Array<{ role: string; content: string }>): { systemText: string; contents: any[] } {
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content || ""))
+    .filter(Boolean)
+    .join("\n\n");
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: toGeminiRole(m.role),
+      parts: [{ text: String(m.content || "") }],
+    }));
+  return { systemText, contents };
+}
+
+async function callGeminiApiKey(params: AICallParams): Promise<AICallResult> {
   const routing = MODEL_ROUTING[params.task];
-  const model = routing.model;
+  const model = getGeminiModel();
   const temperature = params.temperature ?? routing.temperature;
   const maxTokens = params.maxTokens ?? routing.maxTokens;
 
-  // Production mode: single provider (Gemini), no tools/function calling
-  const body: Record<string, unknown> = {
-    model,
-    messages: params.messages,
-    temperature,
-    max_tokens: maxTokens,
-  };
+  const { systemText, contents } = splitSystemAndContents(params.messages);
 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(params.apiKey)}`;
   const startMs = Date.now();
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        ...(params.responseMimeType ? { responseMimeType: params.responseMimeType } : {}),
       },
+      ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
     const latencyMs = Date.now() - startMs;
+    const data = await response.json().catch(() => ({} as any));
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[AI_ROUTER] ${params.task}: HTTP ${response.status} - ${errText}`);
-
+      const errText = JSON.stringify(data).slice(0, 400);
       if (response.status === 429) {
-        return {
-          success: false, content: '', model, provider: 'lovable-gateway',
-          tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs,
-          error: `RATE_LIMITED: ${response.status}`,
-        };
+        return { success: false, content: "", model, provider: "gemini", tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs, error: `RATE_LIMITED:${response.status}:${errText}` };
       }
-      if (response.status === 402) {
-        return {
-          success: false, content: '', model, provider: 'lovable-gateway',
-          tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs,
-          error: `PAYMENT_REQUIRED: ${response.status}`,
-        };
-      }
-
-      return {
-        success: false, content: '', model, provider: 'lovable-gateway',
-        tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs,
-        error: `HTTP_${response.status}: ${errText.substring(0, 200)}`,
-      };
+      return { success: false, content: "", model, provider: "gemini", tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs, error: `HTTP_${response.status}:${errText}` };
     }
 
-    const data = await response.json();
-    
-    // PATCH B: Robust content extraction with multiple fallbacks
-    let content = '';
-    const choice = data.choices?.[0];
-    
-    // Path 1: tool_calls (function calling)
-    if (choice?.message?.tool_calls?.[0]) {
-      const tc = choice.message.tool_calls[0];
-      content = tc.function?.arguments || tc?.args || '';
-      // Fallback: if tool_calls returned empty, try message.content
-      if (!content && choice.message?.content) {
-        console.warn(`[AI_ROUTER] ${params.task}: tool_calls.arguments empty, falling back to message.content`);
-        content = choice.message.content;
-      }
-    }
-    // Path 2: regular content
-    if (!content) {
-      // Handle string content
-      if (typeof choice?.message?.content === 'string') {
-        content = choice.message.content;
-      }
-      // Handle array content (some models return [{type:"text", text:"..."}])
-      else if (Array.isArray(choice?.message?.content)) {
-        content = choice.message.content
-          .filter((c: Record<string, unknown>) => c.type === 'text')
-          .map((c: Record<string, unknown>) => c.text)
-          .join('');
-      }
-    }
-    
-    // Path 3: If still empty, log warning with safe dump
-    if (!content || content.trim() === '') {
-      const safeDump = JSON.stringify({
-        has_tool_calls: !!choice?.message?.tool_calls,
-        tool_calls_length: choice?.message?.tool_calls?.length || 0,
-        content_type: typeof choice?.message?.content,
-        content_preview: typeof choice?.message?.content === 'string' 
-          ? choice.message.content.substring(0, 200) 
-          : JSON.stringify(choice?.message?.content)?.substring(0, 200),
-        finish_reason: choice?.finish_reason,
-      });
-      console.error(`[AI_ROUTER] ${params.task}: ⚠️ EMPTY_MODEL_OUTPUT | dump=${safeDump}`);
-      
-      return {
-        success: false, content: '', model, provider: 'lovable-gateway',
-        tokensIn: data.usage?.prompt_tokens || 0,
-        tokensOut: data.usage?.completion_tokens || 0,
-        costUsd: estimateCost(model, data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0),
-        latencyMs,
-        error: 'EMPTY_MODEL_OUTPUT',
-      };
-    }
-
-    const tokensIn = data.usage?.prompt_tokens || 0;
-    const tokensOut = data.usage?.completion_tokens || 0;
+    const text = (data as any)?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || "").join("") || "";
+    const tokensIn = Number((data as any)?.usageMetadata?.promptTokenCount || 0);
+    const tokensOut = Number((data as any)?.usageMetadata?.candidatesTokenCount || 0);
     const costUsd = estimateCost(model, tokensIn, tokensOut);
 
-    console.log(`[AI_ROUTER] ${params.task}: ✅ ${model} | ${tokensIn}+${tokensOut} tokens | $${costUsd.toFixed(6)} | ${latencyMs}ms`);
+    if (!text || !String(text).trim().length) {
+      return { success: false, content: "", model, provider: "gemini", tokensIn, tokensOut, costUsd, latencyMs, error: "EMPTY_MODEL_OUTPUT", rawResponse: data };
+    }
 
-    return {
-      success: true,
-      content,
-      model,
-      provider: 'lovable-gateway',
-      tokensIn,
-      tokensOut,
-      costUsd,
-      latencyMs,
-      rawResponse: data,
-    };
+    return { success: true, content: String(text), model, provider: "gemini", tokensIn, tokensOut, costUsd, latencyMs, rawResponse: data };
   } catch (error) {
     const latencyMs = Date.now() - startMs;
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[AI_ROUTER] ${params.task}: ❌ ${errorMsg}`);
-    return {
-      success: false, content: '', model, provider: 'lovable-gateway',
-      tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs,
-      error: errorMsg,
-    };
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, content: "", model, provider: "gemini", tokensIn: 0, tokensOut: 0, costUsd: 0, latencyMs, error: errorMsg };
   }
 }
 
@@ -275,7 +191,7 @@ async function callWithRetry(params: AICallParams, maxRetries = 3): Promise<AICa
   const delays = [1000, 4000, 16000]; // 1s, 4s, 16s
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await callGateway(params);
+    const result = await callGeminiApiKey(params);
 
     if (result.success) return result;
 
@@ -291,7 +207,7 @@ async function callWithRetry(params: AICallParams, maxRetries = 3): Promise<AICa
   }
 
   // Should not reach here, but safety net
-  return callGateway(params);
+  return callGeminiApiKey(params);
 }
 
 // ============================================================
@@ -305,7 +221,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { task, messages, temperature, maxTokens, tools, toolChoice } = body;
+    const { task, messages, temperature, maxTokens, tools, toolChoice, tenant_id, blog_id } = body;
 
     if (!task || !messages) {
       return new Response(
@@ -321,13 +237,64 @@ serve(async (req) => {
       );
     }
 
+    const supabaseAdmin = getAdminSupabaseClient();
+    if (!supabaseAdmin) {
+      return new Response(
+        JSON.stringify({ error: "Missing Supabase configuration: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Global Platform Mode: ignore tenant/blog key resolution.
+    const gemini = getGlobalKey("gemini");
+
+    // If SERP-related task: enrich context with Google Custom Search results (requires search integration)
+    let effectiveMessages = Array.isArray(messages) ? messages : [];
+    if (String(task).startsWith("serp_")) {
+      const lastUser = [...effectiveMessages].reverse().find((m: any) => m?.role === "user")?.content || "";
+      const quoted = typeof lastUser === "string" ? lastUser.match(/keyword\s+\"([^\"]+)\"/i) : null;
+      const q = quoted?.[1] ? `${quoted[1]}` : String(lastUser).slice(0, 160);
+
+      const raw = await fetchGoogleCustomSearchRaw({
+        supabaseAdmin: supabaseAdmin as any,
+        tenant_id: (typeof tenant_id === "string" ? tenant_id : "global"),
+        query: q,
+        hl: "en",
+        gl: "us",
+      });
+      if (!raw.ok) {
+        return new Response(
+          JSON.stringify({ error: `GOOGLE_SEARCH_FAILED:${raw.error}`, status: raw.status ?? null, raw: raw.raw ?? null }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const top10 = normalizeTop10Results(raw.data);
+      const serpCtx = [
+        `Google Custom Search (top ${top10.length}) for query="${q}":`,
+        ...top10.map((r) => `#${r.position} ${r.title}\n${r.url}\n${r.snippet}`),
+      ].join("\n\n");
+
+      effectiveMessages = [
+        ...effectiveMessages.slice(0, 1),
+        { role: "system", content: `Use ONLY the following SERP evidence for analysis (do not invent):\n\n${serpCtx}` },
+        ...effectiveMessages.slice(1),
+      ];
+    }
+
+    const wantsJson =
+      (typeof body?.responseFormat === "string" && body.responseFormat === "json") ||
+      effectiveMessages.some((m: any) => typeof m?.content === "string" && /ONLY valid JSON|Return ONLY valid JSON|JSON \(/i.test(m.content));
+
     const result = await callWithRetry({
       task: task as TaskType,
-      messages,
+      messages: effectiveMessages,
       temperature,
       maxTokens,
       tools,
       toolChoice,
+      apiKey: gemini.apiKey,
+      responseMimeType: wantsJson ? "application/json" : undefined,
     });
 
     const status = result.success ? 200 : (result.error?.includes('RATE_LIMITED') ? 429 : result.error?.includes('PAYMENT_REQUIRED') ? 402 : 500);

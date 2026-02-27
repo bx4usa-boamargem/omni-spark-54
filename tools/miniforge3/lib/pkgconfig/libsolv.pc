@@ -1,0 +1,8 @@
+libdir=/Users/severinobione/OMNISEEN_V3/tools/miniforge3/lib
+includedir=/Users/severinobione/OMNISEEN_V3/tools/miniforge3/include
+
+Name: libsolv
+Description: Library for solving packages
+Version: 0.7.35
+Libs: -L${libdir} -lsolv
+Cflags: -I${includedir}

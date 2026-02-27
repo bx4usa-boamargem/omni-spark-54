@@ -1,0 +1,13 @@
+prefix=/Users/severinobione/OMNISEEN_V3/tools/miniforge3
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libarchive
+Description: library that can create and read several streaming archive formats
+Version: 3.8.5
+Cflags: -I${includedir}
+Cflags.private: -DLIBARCHIVE_STATIC
+Libs: -L${libdir} -larchive
+Libs.private: -llzo2 -lzstd -llz4 -lbz2  -lz -liconv -L/Users/severinobione/OMNISEEN_V3/tools/miniforge3/lib -llzma -L/Users/severinobione/OMNISEEN_V3/tools/miniforge3/lib -lxml2
+Requires.private: 

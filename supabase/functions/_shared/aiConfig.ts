@@ -7,6 +7,8 @@
  * Todos os modelos, endpoints e chaves são definidos aqui.
  */
 
+import { getGeminiModel } from "./getGeminiModel.ts";
+
 export const AI_CONFIG = {
   writer: {
     primary: {
@@ -19,7 +21,7 @@ export const AI_CONFIG = {
     },
     fallback: {
       provider: 'google' as const,
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
       temperature: 0.4,
       maxOutputTokens: 8192
@@ -36,7 +38,7 @@ export const AI_CONFIG = {
     },
     fallback: {
       provider: 'google' as const,
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
       useGrounding: true,
       groundingSource: 'google_search'
@@ -46,7 +48,7 @@ export const AI_CONFIG = {
   qa: {
     primary: {
       provider: 'google' as const,
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
       temperature: 0.1,
       responseFormat: 'json'
@@ -102,8 +104,6 @@ export function getProviderApiKey(provider: SupportedProvider): string | undefin
   switch (provider) {
     case 'openai':
       return Deno.env.get('OPENAI_API_KEY');
-    case 'google':
-      return Deno.env.get('GOOGLE_AI_KEY');
     case 'perplexity':
       return Deno.env.get('PERPLEXITY_API_KEY');
     case 'lovable-gateway':
@@ -117,7 +117,8 @@ export function getProviderApiKey(provider: SupportedProvider): string | undefin
 
 // Check if all required API keys are configured
 export function validateAPIKeys(): { valid: boolean; missing: string[] } {
-  const required: SupportedProvider[] = ['openai', 'google', 'perplexity', 'lovable-gateway'];
+  // Google is configured per-tenant via api_integrations (not via env)
+  const required: SupportedProvider[] = ['openai', 'perplexity', 'lovable-gateway'];
   const missing: string[] = [];
   
   for (const provider of required) {

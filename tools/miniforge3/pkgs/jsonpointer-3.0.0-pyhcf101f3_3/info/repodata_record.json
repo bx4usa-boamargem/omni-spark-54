@@ -1,0 +1,21 @@
+{
+    "build": "pyhcf101f3_3",
+    "build_number": 3,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "python >=3.10",
+        "python"
+    ],
+    "fn": "jsonpointer-3.0.0-pyhcf101f3_3.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "md5": "cd2214824e36b0180141d422aba01938",
+    "name": "jsonpointer",
+    "noarch": "python",
+    "sha256": "1a1328476d14dfa8b84dbacb7f7cd7051c175498406dc513ca6c679dc44f3981",
+    "size": 13967,
+    "subdir": "noarch",
+    "timestamp": 1765026384757,
+    "url": "https://conda.anaconda.org/conda-forge/noarch/jsonpointer-3.0.0-pyhcf101f3_3.conda",
+    "version": "3.0.0"
+}

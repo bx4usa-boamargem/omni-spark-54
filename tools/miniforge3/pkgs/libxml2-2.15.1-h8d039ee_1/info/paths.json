@@ -1,0 +1,21 @@
+{
+  "paths": [
+    {
+      "_path": "bin/xmlcatalog",
+      "file_mode": "binary",
+      "path_type": "hardlink",
+      "prefix_placeholder": "/Users/runner/miniforge3/conda-bld/libxml2-split_1766326969360/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_place",
+      "sha256": "38d956f58de0b6d651b6b9b237f6d0cf1ea902cf875833dc0eb0f743518216d4",
+      "size_in_bytes": 53728
+    },
+    {
+      "_path": "bin/xmllint",
+      "file_mode": "binary",
+      "path_type": "hardlink",
+      "prefix_placeholder": "/Users/runner/miniforge3/conda-bld/libxml2-split_1766326969360/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_place",
+      "sha256": "46b611cd4441ff31bdd552d6ac25cdd8409e459f48226bebfb10de9a64ea90d8",
+      "size_in_bytes": 116368
+    }
+  ],
+  "paths_version": 1
+}

@@ -1,0 +1,77 @@
+{
+    "arch": "arm64",
+    "build": "h85b9800_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "libcxx >=19",
+        "__osx >=11.0",
+        "libmamba >=2.5.0,<2.6.0a0"
+    ],
+    "extracted_package_dir": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/libmamba-spdlog-2.5.0-h85b9800_0",
+    "files": [
+        "include/mamba/spdlog/logging_spdlog.hpp",
+        "include/mamba/spdlog/logging_spdlog_impl.hpp",
+        "lib/cmake/libmamba-spdlog/libmamba-spdlogConfig.cmake",
+        "lib/cmake/libmamba-spdlog/libmamba-spdlogTargets.cmake",
+        "lib/cmake/libmamba-spdlog/libmamba-spdlogVersion.cmake"
+    ],
+    "fn": "libmamba-spdlog-2.5.0-h85b9800_0.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "link": {
+        "source": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/libmamba-spdlog-2.5.0-h85b9800_0",
+        "type": 1
+    },
+    "md5": "6a3a2f6d6e90363288a96bc355b417c2",
+    "name": "libmamba-spdlog",
+    "package_tarball_full_path": "/Users/severinobione/OMNISEEN_V3/tools/miniforge3/pkgs/libmamba-spdlog-2.5.0-h85b9800_0.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "include/mamba/spdlog/logging_spdlog.hpp",
+                "path_type": "hardlink",
+                "sha256": "9e61807c65a0638718b5fb2d2e1cc06d7ff0f995ae83acec8780b5dbb8609309",
+                "sha256_in_prefix": "9e61807c65a0638718b5fb2d2e1cc06d7ff0f995ae83acec8780b5dbb8609309",
+                "size_in_bytes": 3862
+            },
+            {
+                "_path": "include/mamba/spdlog/logging_spdlog_impl.hpp",
+                "path_type": "hardlink",
+                "sha256": "f60e691cbe507dea1e91ef8ca4ff57b59eb954b1097497b13068327035c02187",
+                "sha256_in_prefix": "f60e691cbe507dea1e91ef8ca4ff57b59eb954b1097497b13068327035c02187",
+                "size_in_bytes": 7643
+            },
+            {
+                "_path": "lib/cmake/libmamba-spdlog/libmamba-spdlogConfig.cmake",
+                "path_type": "hardlink",
+                "sha256": "e5a4507e7a57091570af9900bc2dec5d4d5a7cc2b31e50457b9e5294eca062d2",
+                "sha256_in_prefix": "e5a4507e7a57091570af9900bc2dec5d4d5a7cc2b31e50457b9e5294eca062d2",
+                "size_in_bytes": 1052
+            },
+            {
+                "_path": "lib/cmake/libmamba-spdlog/libmamba-spdlogTargets.cmake",
+                "path_type": "hardlink",
+                "sha256": "a83ec6484e5b4975ff89e8fa8cc091139cf6574e1480de2e516972a7f78da542",
+                "sha256_in_prefix": "a83ec6484e5b4975ff89e8fa8cc091139cf6574e1480de2e516972a7f78da542",
+                "size_in_bytes": 4293
+            },
+            {
+                "_path": "lib/cmake/libmamba-spdlog/libmamba-spdlogVersion.cmake",
+                "path_type": "hardlink",
+                "sha256": "82ba3b0b0200e1332ceaec3bd2b350a7cc074ebcc4abf6b769a5ba65d76134e0",
+                "sha256_in_prefix": "82ba3b0b0200e1332ceaec3bd2b350a7cc074ebcc4abf6b769a5ba65d76134e0",
+                "size_in_bytes": 1859
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "libmamba-spdlog==2.5.0=h85b9800_0",
+    "sha256": "c0efbd9cf938a44fe98cfeb77d9bbb119f58bf0202ec5009b7d6621c6b96721c",
+    "size": 23068,
+    "subdir": "osx-arm64",
+    "timestamp": 1767884201476,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libmamba-spdlog-2.5.0-h85b9800_0.conda",
+    "version": "2.5.0"
+}

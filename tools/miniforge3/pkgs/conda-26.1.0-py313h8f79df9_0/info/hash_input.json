@@ -1,0 +1,6 @@
+{
+  "target_platform": "osx-arm64",
+  "channel_targets": "conda-forge main",
+  "python": "3.13.* *_cp313",
+  "build_platform": "osx-64"
+}

@@ -1,0 +1,17 @@
+{
+  "arch": "arm64",
+  "build": "py313h6688731_1",
+  "build_number": 1,
+  "depends": [
+    "python",
+    "python 3.13.* *_cp313",
+    "__osx >=11.0",
+    "python_abi 3.13.* *_cp313"
+  ],
+  "license": "MIT",
+  "name": "ruamel.yaml.clib",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1766159543218,
+  "version": "0.2.15"
+}

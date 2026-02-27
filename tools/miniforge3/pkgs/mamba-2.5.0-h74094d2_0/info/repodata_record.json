@@ -1,0 +1,27 @@
+{
+    "arch": "arm64",
+    "build": "h74094d2_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "libmamba ==2.5.0 h7950639_0",
+        "__osx >=11.0",
+        "libcxx >=19",
+        "zstd >=1.5.7,<1.6.0a0",
+        "libmamba >=2.5.0,<2.6.0a0",
+        "reproc-cpp >=14.2,<15.0a0",
+        "reproc >=14.2,<15.0a0"
+    ],
+    "fn": "mamba-2.5.0-h74094d2_0.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "md5": "c90f4a1e53f22b460c1964bd56100687",
+    "name": "mamba",
+    "platform": "osx",
+    "sha256": "9e22ee758918e31149cbf418897809fa094d43f5134a1b7a7517fcc17a6d7705",
+    "size": 475415,
+    "subdir": "osx-arm64",
+    "timestamp": 1767884201477,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/mamba-2.5.0-h74094d2_0.conda",
+    "version": "2.5.0"
+}

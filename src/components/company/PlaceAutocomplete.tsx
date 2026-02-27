@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, MapPin, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTenant } from "@/hooks/useTenant";
 
 interface PlacePrediction {
   place_id: string;
@@ -24,6 +25,7 @@ export function PlaceAutocomplete({
   placeholder = "Buscar localização no Google...",
   className
 }: PlaceAutocompleteProps) {
+  const { tenant } = useTenant();
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,7 @@ export function PlaceAutocomplete({
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('search-google-place', {
-        body: { query: searchQuery }
+        body: { query: searchQuery, tenant_id: tenant?.id }
       });
 
       if (fnError) throw fnError;

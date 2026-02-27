@@ -1,0 +1,20 @@
+{
+  "arch": "arm64",
+  "build": "py313h9734d34_1",
+  "build_number": 1,
+  "depends": [
+    "python",
+    "cffi >=1.11",
+    "zstd >=1.5.7,<1.5.8.0a0",
+    "__osx >=11.0",
+    "python 3.13.* *_cp313",
+    "zstd >=1.5.7,<1.6.0a0",
+    "python_abi 3.13.* *_cp313"
+  ],
+  "license": "BSD-3-Clause",
+  "name": "zstandard",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1762512722894,
+  "version": "0.25.0"
+}

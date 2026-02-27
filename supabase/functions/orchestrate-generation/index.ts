@@ -138,7 +138,17 @@ async function callAIRouter(
   serviceKey: string,
   task: string,
   messages: Array<{ role: string; content: string }>,
-  options?: { temperature?: number; maxTokens?: number }
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    tracking?: {
+      tenant_id?: string | null;
+      blog_id?: string | null;
+      user_id?: string | null;
+      article_id?: string | null;
+      job_id?: string | null;
+    };
+  }
 ): Promise<AIRouterResult> {
   const url = `${supabaseUrl}/functions/v1/ai-router`;
   const resp = await fetch(url, {
@@ -152,6 +162,9 @@ async function callAIRouter(
       messages,
       temperature: options?.temperature,
       maxTokens: options?.maxTokens,
+      // Required for tenant-scoped API integrations
+      tenant_id: options?.tracking?.tenant_id ?? null,
+      blog_id: options?.tracking?.blog_id ?? null,
     }),
   });
 
@@ -246,7 +259,15 @@ Keep it under 300 words. This will be used as context for article generation.`;
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'serp_summary', [
     { role: 'system', content: 'You are an SEO analyst. Provide concise competitive analysis.' },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    }
+  });
 
   if (!aiResult.success) throw new Error(`SERP_SUMMARY_FAILED: ${aiResult.error}`);
   return { output: { serp_summary: aiResult.content }, aiResult };
@@ -290,7 +311,15 @@ Return ONLY valid JSON (no markdown):
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'serp_gap_analysis', [
     { role: 'system', content: 'You are an SEO analyst. Return ONLY valid JSON with semantic_gaps and competitor_topics arrays.' },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    }
+  });
 
   if (!aiResult.success) throw new Error(`SERP_GAP_ANALYSIS_FAILED: ${aiResult.error}`);
   const parsed = parseAIJson(aiResult.content, 'SERP_GAP_ANALYSIS');
@@ -360,7 +389,15 @@ Return ONLY a valid JSON object in this exact format (no markdown, no code block
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'outline_gen', [
     { role: 'system', content: 'You are an SEO architect. Return ONLY valid JSON with an "outline" object. No other text.' },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    }
+  });
 
   if (!aiResult.success) throw new Error(`OUTLINE_GEN_FAILED: ${aiResult.error}`);
   const parsed = parseAIJson(aiResult.content, 'OUTLINE_GEN');
@@ -388,6 +425,7 @@ async function executeAutoSectionExpansion(
   outline: OutlineData,
   gapAnalysis: SerpGapResult,
   jobType: 'article' | 'super_page',
+  jobInput: Record<string, unknown>,
   supabaseUrl: string,
   serviceKey: string
 ): Promise<{ output: { outline: OutlineData }; aiResult: AIRouterResult }> {
@@ -409,7 +447,15 @@ Rules: Add only new H2 sections that address gaps. Each new H2 must have 2-3 H3 
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'section_expansion', [
     { role: 'system', content: 'Return ONLY valid JSON with an "outline" object. No markdown.' },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    }
+  });
 
   if (!aiResult.success) return { output: { outline }, aiResult };
   const parsed = parseAIJson(aiResult.content, 'AUTO_SECTION_EXPANSION');
@@ -467,7 +513,15 @@ Topics: main themes. Terms: key phrases to include. Places: locations if relevan
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'entity_extraction', [
     { role: 'system', content: 'You are an SEO analyst. Return ONLY valid JSON with topics, terms, and optionally places.' },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    }
+  });
 
   if (!aiResult.success) throw new Error(`ENTITY_EXTRACTION_FAILED: ${aiResult.error}`);
   const parsed = parseAIJson(aiResult.content, 'ENTITY_EXTRACTION');
@@ -586,7 +640,17 @@ OUTPUT FORMAT (STRICT JSON only):
   const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'article_gen_from_outline', [
     { role: 'system', content: `You are a premium SEO writer for ${niche} in ${language}. Return ONLY valid JSON. No markdown, no code blocks.` },
     { role: 'user', content: prompt },
-  ]);
+  ], {
+    tracking: {
+      tenant_id: (jobInput as any)?.tenant_id ?? null,
+      blog_id: (jobInput as any)?.blog_id ?? null,
+      user_id: (jobInput as any)?.user_id ?? null,
+      article_id: null,
+      job_id: (jobInput as any)?.job_id ?? null,
+    },
+    archetype: (jobInput as any)?.archetype || (jobType === 'super_page' ? 'super_page' : 'blog_authority'),
+    variation_seed: `${(jobInput as any)?.job_id || ''}:content_gen`,
+  });
 
   if (!aiResult.success) throw new Error(`CONTENT_GEN_FAILED: ${aiResult.error}`);
   const parsed = parseAIJson(aiResult.content, 'CONTENT_GEN');
@@ -669,7 +733,7 @@ async function executeSaveArticle(
   // Fetch CTA config from blog
   const { data: blogData } = await supabase
     .from('blogs')
-    .select('cta_type, cta_url, cta_text, header_cta_text, header_cta_url, city')
+    .select('cta_type, cta_url, cta_text, header_cta_text, header_cta_url, city, tenant_id')
     .eq('id', blogId)
     .single();
 
@@ -677,6 +741,7 @@ async function executeSaveArticle(
   const whatsapp = (jobInput.whatsapp as string) || '';
   const businessName = (jobInput.business_name as string) || '';
   const city = (jobInput.city as string) || blogData?.city || '';
+  const tenantId = (jobInput.tenant_id as string) || (blogData?.tenant_id as string) || '';
 
   let cta: Record<string, unknown> | null = null;
   if (whatsapp) {
@@ -713,31 +778,95 @@ async function executeSaveArticle(
     content_type: contentType,
     word_count_target: wordCountTarget,
   };
-  if (schemaJson) insertPayload.schema_json = schemaJson;
+
+  if (schemaJson) {
+    if (typeof schemaJson === "string") {
+      try {
+        insertPayload.schema_json = JSON.parse(schemaJson);
+      } catch (e) {
+        console.error("[SAVE_ARTICLE] Invalid schema_faq JSON string; dropping schema_json", {
+          job_id: jobId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        insertPayload.schema_json = null;
+      }
+    } else {
+      insertPayload.schema_json = schemaJson as unknown;
+    }
+  }
+
+  console.log("[SAVE_ARTICLE] Insert payload", {
+    job_id: jobId,
+    blog_id: blogId,
+    tenant_id: tenantId || null,
+    title,
+    slug,
+    content_len: finalHtml.length,
+    payload: insertPayload,
+  });
 
   // 3x retry insert
   let articleId: string | null = null;
+  let lastInsertError: any = null;
+  let payloadForInsert: Record<string, unknown> = { ...insertPayload };
+  if (tenantId) payloadForInsert.tenant_id = tenantId;
   for (let attempt = 1; attempt <= 3; attempt++) {
     const { data: article, error: articleError } = await supabase
-      .from('articles').insert(insertPayload).select('id').single();
+      .from('articles').insert(payloadForInsert).select('id').single();
     if (!articleError && article?.id) {
       articleId = article.id;
       break;
     }
-    console.error(`[SAVE_ARTICLE] Insert attempt ${attempt}/3 failed:`, articleError);
+    lastInsertError = articleError;
+
+    // If schema differs (column doesn't exist), drop the offending field and retry.
+    const errCode = (articleError as any)?.code ? String((articleError as any).code) : '';
+    const errMsg = (articleError as any)?.message ? String((articleError as any).message) : '';
+    const errDetails = (articleError as any)?.details ? String((articleError as any).details) : '';
+    const errBlob = `${errMsg} ${errDetails}`.toLowerCase();
+    const isUnknownColumn = errCode === 'PGRST204' || errBlob.includes('could not find') || errBlob.includes('column');
+    if (isUnknownColumn && ('tenant_id' in payloadForInsert) && errBlob.includes('tenant_id')) {
+      delete payloadForInsert.tenant_id;
+    }
+    if (isUnknownColumn && ('schema_json' in payloadForInsert) && errBlob.includes('schema_json')) {
+      delete payloadForInsert.schema_json;
+    }
+
+    console.error(`[SAVE_ARTICLE] Insert attempt ${attempt}/3 failed`, {
+      job_id: jobId,
+      blog_id: blogId,
+      attempt,
+      payload_keys: Object.keys(payloadForInsert),
+      error: articleError
+        ? {
+          code: (articleError as any).code,
+          message: (articleError as any).message,
+          details: (articleError as any).details,
+          hint: (articleError as any).hint,
+        }
+        : null,
+      returned_article: article ?? null,
+    });
     if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
   }
 
   if (!articleId) {
-    console.error(`[SAVE_ARTICLE] All 3 insert attempts failed. Storing fallback in job.`);
-    await supabase.from('generation_jobs').update({
-      output: {
-        fallback_html: htmlArticle.substring(0, 50000),
-        insert_failed: true,
-        title,
-        meta_description: metaDescription,
-      },
-    }).eq('id', jobId);
+    console.error("[SAVE_ARTICLE] All 3 insert attempts failed", {
+      job_id: jobId,
+      blog_id: blogId,
+      slug,
+      last_error: lastInsertError
+        ? {
+          code: (lastInsertError as any).code,
+          message: (lastInsertError as any).message,
+          details: (lastInsertError as any).details,
+          hint: (lastInsertError as any).hint,
+        }
+        : null,
+    });
+    throw new Error(
+      `SAVE_ARTICLE_INSERT_FAILED:${(lastInsertError as any)?.message || "unknown"}`,
+    );
   }
 
   // Update generation_jobs with article_id
@@ -1017,7 +1146,15 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
   }).eq('id', jobId);
   console.log('[ORCHESTRATOR_BOOT:V2]', jobId, 'job_type=', jobType);
 
-  const jobInput = { ...(job.input as Record<string, unknown> || {}), job_type: jobType };
+  const jobInput = {
+    ...(job.input as Record<string, unknown> || {}),
+    job_type: jobType,
+    // Ensure tracking context is always available to ai-router.
+    job_id: jobId,
+    blog_id: (job.blog_id as string) || (job.input as any)?.blog_id || null,
+    user_id: (job.user_id as string) || (job.input as any)?.user_id || null,
+    tenant_id: (job.input as any)?.tenant_id || null,
+  };
   console.log(`[ORCHESTRATOR:V2] job_id=${jobId} input=${JSON.stringify({ keyword: jobInput.keyword, city: jobInput.city, niche: jobInput.niche, job_type: jobType })}`);
 
   // Lock
@@ -1178,7 +1315,7 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     await supabase.from('generation_jobs').update({ current_step: 'AUTO_SECTION_EXPANSION' }).eq('id', jobId);
     try {
       const expStepId = await createStepOrFail(supabase, jobId, 'AUTO_SECTION_EXPANSION', { gaps: gapAnalysis.semantic_gaps?.length || 0 });
-      const expResult = await withTimeout(executeAutoSectionExpansion(outline, gapAnalysis, jobType, supabaseUrl, serviceKey), 35_000, 'AUTO_SECTION_EXPANSION');
+      const expResult = await withTimeout(executeAutoSectionExpansion(outline, gapAnalysis, jobType, jobInput, supabaseUrl, serviceKey), 35_000, 'AUTO_SECTION_EXPANSION');
       expandedOutline = expResult.output.outline;
       if (expResult.aiResult.success && expResult.aiResult.tokensOut) {
         totalApiCalls++;
@@ -1274,7 +1411,20 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
 
     const saveStepId = await createStepOrFail(supabase, jobId, 'SAVE_ARTICLE', { title: articleData!.title });
     const saveStart = Date.now();
-    const saveOutput = await executeSaveArticle(jobId, articleData!, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
+    let saveOutput: Record<string, unknown>;
+    try {
+      saveOutput = await executeSaveArticle(jobId, articleData!, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
+    } catch (saveErr) {
+      const saveErrMsg = saveErr instanceof Error ? saveErr.message : 'SAVE_ARTICLE failed';
+      await supabase.from('generation_steps').update({
+        status: 'failed',
+        error_message: saveErrMsg,
+        completed_at: new Date().toISOString(),
+        model_used: 'programmatic',
+        provider: 'programmatic',
+      }).eq('id', saveStepId);
+      throw saveErr;
+    }
     const saveLatency = Date.now() - saveStart;
     await supabase.from('generation_steps').update({
       status: 'completed', output: saveOutput, latency_ms: saveLatency,
@@ -1408,10 +1558,7 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
       .eq('id', jobId)
       .single();
 
-    const jobOutput = updatedJob?.output as Record<string, unknown> | null;
-    const hasFallbackHtml = jobOutput?.fallback_html || jobOutput?.insert_failed;
-
-    if (!updatedJob?.article_id && !hasFallbackHtml) {
+    if (!updatedJob?.article_id) {
       throw new Error('Pipeline completed but no article was saved.');
     }
 

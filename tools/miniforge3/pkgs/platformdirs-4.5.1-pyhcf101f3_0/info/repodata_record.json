@@ -1,0 +1,21 @@
+{
+    "build": "pyhcf101f3_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "python >=3.10",
+        "python"
+    ],
+    "fn": "platformdirs-4.5.1-pyhcf101f3_0.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "md5": "1bd2e65c8c7ef24f4639ae6e850dacc2",
+    "name": "platformdirs",
+    "noarch": "python",
+    "sha256": "04c64fb78c520e5c396b6e07bc9082735a5cc28175dbe23138201d0a9441800b",
+    "size": 23922,
+    "subdir": "noarch",
+    "timestamp": 1764950726246,
+    "url": "https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.5.1-pyhcf101f3_0.conda",
+    "version": "4.5.1"
+}

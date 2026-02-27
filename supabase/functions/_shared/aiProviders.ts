@@ -14,6 +14,7 @@ import {
   type AICallResult,
   type SupportedProvider 
 } from './aiConfig.ts';
+import { getAdminSupabaseClient, getIntegrationKey } from "./getIntegrationKey.ts";
 
 // ============================================================================
 // TYPES
@@ -32,6 +33,8 @@ export interface WriterRequest {
   };
   temperature?: number;
   maxTokens?: number;
+  tenantId?: string;
+  blogId?: string;
 }
 
 export interface WriterResponse {
@@ -51,6 +54,8 @@ export interface ResearchRequest {
   query: string;
   systemPrompt?: string;
   maxTokens?: number;
+  tenantId?: string;
+  blogId?: string;
 }
 
 export interface ResearchResponse {
@@ -64,6 +69,8 @@ export interface ResearchResponse {
 export interface QARequest {
   systemPrompt: string;
   userPrompt: string;
+  tenantId?: string;
+  blogId?: string;
 }
 
 export interface QAResponse {
@@ -186,13 +193,32 @@ async function callOpenAIWriter(request: WriterRequest): Promise<WriterResponse>
   };
 }
 
+async function resolveTenantIdForGoogle(input: { tenantId?: string; blogId?: string }): Promise<string> {
+  if (input.tenantId && input.tenantId.trim().length) return input.tenantId.trim();
+  const blogId = input.blogId && input.blogId.trim().length ? input.blogId.trim() : null;
+  if (!blogId) throw new Error("TENANT_CONTEXT_REQUIRED_FOR_GOOGLE: provide tenantId or blogId");
+
+  const supabaseAdmin = getAdminSupabaseClient();
+  if (!supabaseAdmin) throw new Error("Missing Supabase configuration");
+
+  const { data, error } = await supabaseAdmin.from("blogs").select("tenant_id").eq("id", blogId).maybeSingle();
+  if (error) throw new Error(`TENANT_LOOKUP_FAILED:${error.message}`);
+  const tenantId = (data as any)?.tenant_id || null;
+  if (!tenantId) throw new Error("TENANT_CONTEXT_REQUIRED_FOR_GOOGLE");
+  return String(tenantId);
+}
+
+async function getGoogleApiKeyForTenant(input: { tenantId?: string; blogId?: string }): Promise<string> {
+  const supabaseAdmin = getAdminSupabaseClient();
+  if (!supabaseAdmin) throw new Error("Missing Supabase configuration");
+  const tenant_id = await resolveTenantIdForGoogle(input);
+  const integration = await getIntegrationKey({ supabaseAdmin, tenant_id, provider: "gemini" });
+  return integration.api_key;
+}
+
 async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse> {
   const config = AI_CONFIG.writer.fallback;
-  const apiKey = getProviderApiKey('google');
-  
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_KEY not configured');
-  }
+  const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
   
   // Convert messages to Google format
   const contents = request.messages
@@ -204,7 +230,7 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
   
   const systemInstruction = request.messages.find(m => m.role === 'system')?.content;
   
-  const url = `${config.endpoint}/${config.model}:generateContent?key=${apiKey}`;
+  const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   
   const generationConfig: Record<string, unknown> = {
     temperature: request.temperature ?? config.temperature,
@@ -414,17 +440,13 @@ async function callPerplexityResearch(request: ResearchRequest): Promise<Researc
 
 async function callGoogleResearch(request: ResearchRequest): Promise<ResearchResponse> {
   const config = AI_CONFIG.research.fallback;
-  const apiKey = getProviderApiKey('google');
-  
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_KEY not configured');
-  }
+  const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
   
   const systemPrompt = request.systemPrompt || 
     `Você é um pesquisador. Retorne dados factuais em JSON: 
     {"facts": [...], "trends": [...], "sources": [...]}`;
   
-  const url = `${config.endpoint}/${config.model}:generateContent?key=${apiKey}`;
+  const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: request.query }] }],
@@ -530,13 +552,9 @@ export async function callResearch(request: ResearchRequest): Promise<AICallResu
 
 async function callGoogleQA(request: QARequest): Promise<QAResponse> {
   const config = AI_CONFIG.qa.primary;
-  const apiKey = getProviderApiKey('google');
+  const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
   
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_KEY not configured');
-  }
-  
-  const url = `${config.endpoint}/${config.model}:generateContent?key=${apiKey}`;
+  const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   
   const response = await fetchWithTimeout(url, {
     method: 'POST',

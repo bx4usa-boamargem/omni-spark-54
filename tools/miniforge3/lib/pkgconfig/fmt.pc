@@ -1,0 +1,11 @@
+prefix=/Users/severinobione/OMNISEEN_V3/tools/miniforge3
+exec_prefix=/Users/severinobione/OMNISEEN_V3/tools/miniforge3
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: fmt
+Description: A modern formatting library
+Version: 12.1.0
+Libs: -L${libdir} -lfmt
+Cflags: -I${includedir}
+

@@ -1,0 +1,22 @@
+{
+    "arch": null,
+    "build": "pyh145f28c_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "python >=3.13.0a0"
+    ],
+    "fn": "pip-26.0.1-pyh145f28c_0.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "md5": "09a970fbf75e8ed1aa633827ded6aa4f",
+    "name": "pip",
+    "noarch": "python",
+    "platform": null,
+    "sha256": "5f66ea31d62188c266c5a8752119b0cc90a5bf05963f665cf48a33e0ec58d39c",
+    "size": 1180743,
+    "subdir": "noarch",
+    "timestamp": 1770270312477,
+    "url": "https://conda.anaconda.org/conda-forge/noarch/pip-26.0.1-pyh145f28c_0.conda",
+    "version": "26.0.1"
+}

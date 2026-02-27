@@ -1,0 +1,20 @@
+{
+  "arch": "arm64",
+  "build": "h8d039ee_1",
+  "build_number": 1,
+  "depends": [
+    "__osx >=11.0",
+    "icu >=78.1,<79.0a0",
+    "libiconv >=1.18,<2.0a0",
+    "liblzma >=5.8.1,<6.0a0",
+    "libxml2-16 2.15.1 h5ef1a60_1",
+    "libzlib >=1.3.1,<2.0a0"
+  ],
+  "license": "MIT",
+  "license_family": "MIT",
+  "name": "libxml2",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1766327501392,
+  "version": "2.15.1"
+}

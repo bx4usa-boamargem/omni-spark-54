@@ -1,0 +1,21 @@
+{
+    "arch": null,
+    "build": "hbd8a1cb_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "__unix"
+    ],
+    "fn": "ca-certificates-2026.1.4-hbd8a1cb_0.conda",
+    "license": "ISC",
+    "md5": "bddacf101bb4dd0e51811cb69c7790e2",
+    "name": "ca-certificates",
+    "noarch": "generic",
+    "platform": null,
+    "sha256": "b5974ec9b50e3c514a382335efa81ed02b05906849827a34061c496f4defa0b2",
+    "size": 146519,
+    "subdir": "noarch",
+    "timestamp": 1767500828366,
+    "url": "https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-hbd8a1cb_0.conda",
+    "version": "2026.1.4"
+}

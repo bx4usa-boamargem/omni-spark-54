@@ -1,0 +1,11 @@
+prefix=/Users/severinobione/OMNISEEN_V3/tools/miniforge3
+exec_prefix=${prefix}
+includedir=/Users/severinobione/OMNISEEN_V3/tools/miniforge3/include
+libdir=/Users/severinobione/OMNISEEN_V3/tools/miniforge3/lib
+
+Name: Yaml-cpp
+Description: A YAML parser and emitter for C++
+Version: 0.8.0
+Requires:
+Libs: -L${libdir} -lyaml-cpp
+Cflags: -I${includedir}

@@ -1,0 +1,22 @@
+{
+    "arch": null,
+    "build": "pyh332efcf_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "python >=3.10"
+    ],
+    "fn": "setuptools-82.0.0-pyh332efcf_0.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "md5": "1d00d46c634177fc8ede8b99d6089239",
+    "name": "setuptools",
+    "noarch": "python",
+    "platform": null,
+    "sha256": "fd7201e38e38bf7f25818d624ca8da97b8998957ca9ae3fb7fdc9c17e6b25fcd",
+    "size": 637506,
+    "subdir": "noarch",
+    "timestamp": 1770634745653,
+    "url": "https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.0-pyh332efcf_0.conda",
+    "version": "82.0.0"
+}

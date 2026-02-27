@@ -1,0 +1,19 @@
+{
+  "arch": "arm64",
+  "build": "py313ha61f8ec_1",
+  "build_number": 1,
+  "depends": [
+    "__osx >=11.0",
+    "libcxx >=19",
+    "python >=3.13,<3.14.0a0",
+    "python >=3.13,<3.14.0a0 *_cp313",
+    "python_abi 3.13.* *_cp313"
+  ],
+  "license": "Apache-2.0",
+  "license_family": "Apache",
+  "name": "msgpack-python",
+  "platform": "osx",
+  "subdir": "osx-arm64",
+  "timestamp": 1762504404391,
+  "version": "1.1.2"
+}

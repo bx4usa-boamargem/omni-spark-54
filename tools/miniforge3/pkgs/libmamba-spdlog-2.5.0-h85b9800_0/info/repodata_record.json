@@ -1,0 +1,23 @@
+{
+    "arch": "arm64",
+    "build": "h85b9800_0",
+    "build_number": 0,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "libcxx >=19",
+        "__osx >=11.0",
+        "libmamba >=2.5.0,<2.6.0a0"
+    ],
+    "fn": "libmamba-spdlog-2.5.0-h85b9800_0.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "md5": "6a3a2f6d6e90363288a96bc355b417c2",
+    "name": "libmamba-spdlog",
+    "platform": "osx",
+    "sha256": "c0efbd9cf938a44fe98cfeb77d9bbb119f58bf0202ec5009b7d6621c6b96721c",
+    "size": 23068,
+    "subdir": "osx-arm64",
+    "timestamp": 1767884201476,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libmamba-spdlog-2.5.0-h85b9800_0.conda",
+    "version": "2.5.0"
+}

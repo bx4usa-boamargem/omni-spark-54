@@ -1,0 +1,21 @@
+{
+    "arch": "arm64",
+    "build": "h84a0fba_1",
+    "build_number": 1,
+    "channel": "https://conda.anaconda.org/conda-forge",
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "fn": "libmpdec-4.0.0-h84a0fba_1.conda",
+    "license": "BSD-2-Clause",
+    "license_family": "BSD",
+    "md5": "57c4be259f5e0b99a5983799a228ae55",
+    "name": "libmpdec",
+    "platform": "osx",
+    "sha256": "1089c7f15d5b62c622625ec6700732ece83be8b705da8c6607f4dabb0c4bd6d2",
+    "size": 73690,
+    "subdir": "osx-arm64",
+    "timestamp": 1769482560514,
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda",
+    "version": "4.0.0"
+}
