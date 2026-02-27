@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+
+# Supabase CLI temp/link artifacts (never commit)
+supabase/.temp/
+
+# Local auth helper (never commit)
+.git-askpass-gh.sh

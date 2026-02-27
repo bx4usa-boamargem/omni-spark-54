@@ -1,0 +1,16 @@
+/.git
+/.github
+/.vercel
+/dist
+/node_modules
+
+# Backend / infra (not needed for frontend build)
+/supabase
+/tools
+
+# Local env files
+/.env
+/.env.*
+
+# Misc
+*.log
