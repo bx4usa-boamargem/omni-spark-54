@@ -20,23 +20,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    let fired = false;
+    
+    // Auth initialization timeout (8000ms)
+    const timeout = setTimeout(() => {
+      if (!fired) {
+        console.error("[AUTH_INIT_TIMEOUT] Auth initialization timed out.");
+        setLoading(false);
+        fired = true;
+      }
+    }, 8000);
+
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!fired) {
+          clearTimeout(timeout);
+          fired = true;
+        }
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Initial session check
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (!fired) {
+          clearTimeout(timeout);
+          setSession(session);
+          setUser(session?.user ?? null);
+          fired = true;
+        }
+      } catch (error) {
+        console.error("[AUTH_INIT_ERROR]", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => subscription.unsubscribe();
+    initAuth();
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, fullName?: string) => {

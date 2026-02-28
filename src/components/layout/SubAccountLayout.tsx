@@ -53,7 +53,7 @@ export function SubAccountLayout({ children }: SubAccountLayoutProps) {
   return (
     <div className="min-h-screen client-bg flex">
       {/* Premium Sidebar - Desktop (lg: 1024px+) - Largura fixa 280px */}
-      <PremiumSidebar 
+      <PremiumSidebar
         isPlatformAdmin={isPlatformAdmin}
         onHelpClick={handleHelpClick}
       />

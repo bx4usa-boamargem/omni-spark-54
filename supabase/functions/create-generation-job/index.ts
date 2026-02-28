@@ -138,14 +138,17 @@ serve(async (req) => {
     console.log(`[CREATE_JOB] ✅ Job ${job.id} created for user ${user.id} | keyword: "${input.keyword}"`);
 
     // === FIRE-AND-FORGET: invoke orchestrator ===
+    // We do NOT await this, so we can return the response to the client immediately.
     supabase.functions.invoke(
       'orchestrate-generation',
       { body: { job_id: job.id } }
-    ).catch(err =>
-      console.error('[ENGINE_WAKE_ERROR]', err)
+    ).then(() => {
+      console.log(`[CREATE_JOB] Orquestrador invocado com sucesso para o job ${job.id}`);
+    }).catch(err =>
+      console.error('[ENGINE_WAKE_ERROR] Falha ao invocar orquestrador:', err)
     );
 
-    console.log(`[CREATE_JOB] ✅ Job ${job.id} created, orchestrator invoked.`);
+    console.log(`[CREATE_JOB] ✅ Job ${job.id} criado e orquestrador disparado.`);
 
     return new Response(
       JSON.stringify({

@@ -104,6 +104,7 @@ import GenerationDashboard from "./pages/client/GenerationDashboard";
 import GenerationNew from "./pages/client/GenerationNew";
 import GenerationDetail from "./pages/client/GenerationDetail";
 import WordPressCallback from "./pages/cms/WordPressCallback";
+import DebugGenerate from "./pages/DebugGenerate";
 
 const queryClient = new QueryClient();
 
@@ -140,7 +141,7 @@ const PlatformRoot = () => {
 // Redirect component for dynamic article routes
 const ArticleEditRedirect = () => {
   const { id } = useParams();
-  return <Navigate to={`/app/articles/${id}/edit`} replace />;
+  return <Navigate to={`/client/articles/${id}/edit`} replace />;
 };
 
 // Legacy blog redirects (avoid 404s on public content)
@@ -222,7 +223,7 @@ const AdminRoutes = () => (
 const ClientRoutes = () => (
   <SubAccountGuard>
     <SubAccountLayout>
-      <ErrorBoundary 
+      <ErrorBoundary
         FallbackComponent={PageErrorFallback}
         onReset={() => {
           // Limpa estados que podem estar causando o conflito de DOM
@@ -231,15 +232,15 @@ const ClientRoutes = () => (
       >
         <Routes>
           <Route path="dashboard" element={<ClientDashboard />} />
-          
+
           {/* Resultados & ROI */}
           <Route path="results" element={<ClientConsultantMetrics />} />
           <Route path="leads" element={<ClientLeads />} />
-          
+
           {/* Inteligência */}
           <Route path="radar" element={<ClientStrategy />} />
           <Route path="seo" element={<ClientSEO />} />
-          
+
           {/* Conteúdo */}
           <Route path="articles" element={<ClientArticles />} />
           <Route path="articles/generate" element={<ArticleGenerator />} />
@@ -249,20 +250,20 @@ const ClientRoutes = () => (
           <Route path="articles/:id/preview" element={<ArticleAdvancedPreview />} />
           <Route path="portal" element={<ClientSite />} />
           <Route path="landing-pages" element={<ClientLandingPages />} />
-          <Route 
-            path="landing-pages/new" 
-            element={<ClientLandingPageEditor key="lp-new" />} 
+          <Route
+            path="landing-pages/new"
+            element={<ClientLandingPageEditor key="lp-new" />}
           />
-          <Route 
-            path="landing-pages/:id" 
-            element={<ClientLandingPageEditor key="lp-edit" />} 
+          <Route
+            path="landing-pages/:id"
+            element={<ClientLandingPageEditor key="lp-edit" />}
           />
           <Route path="create" element={<Navigate to="/client/articles/engine/new" replace />} />
           <Route path="articles/:id/edit" element={<ClientArticleEditor />} />
           <Route path="review/:id" element={<ClientReviewCenter />} />
           <Route path="ebooks" element={<ClientEbooks />} />
           <Route path="ebooks/:id" element={<ClientEbookEditor />} />
-          
+
           {/* Operação */}
           <Route path="automation" element={<ClientAutomation />} />
           <Route path="profile" element={<ClientProfile />} />
@@ -271,13 +272,13 @@ const ClientRoutes = () => (
           <Route path="territories" element={<ClientTerritoryAnalytics />} />
           <Route path="domains" element={<ClientDomains />} />
           <Route path="settings" element={<ClientSettings />} />
-          
+
           {/* Ajuda */}
           <Route path="help" element={<ClientHelp />} />
           <Route path="help/category/:category" element={<ClientHelpCategory />} />
           <Route path="help/search" element={<ClientHelpSearch />} />
           <Route path="help/:slug" element={<ClientHelpArticle />} />
-          
+
           {/* Legacy redirects para compatibilidade */}
           <Route path="posts" element={<Navigate to="/client/articles" replace />} />
           <Route path="site" element={<Navigate to="/client/portal" replace />} />
@@ -287,7 +288,7 @@ const ClientRoutes = () => (
           <Route path="notifications" element={<Navigate to="/client/profile?tab=account" replace />} />
           <Route path="queue" element={<Navigate to="/client/automation?tab=queue" replace />} />
           <Route path="integrations/gsc" element={<Navigate to="/client/profile?tab=account" replace />} />
-          
+
           <Route path="*" element={<Navigate to="/client/dashboard" replace />} />
         </Routes>
       </ErrorBoundary>
@@ -300,6 +301,7 @@ const PlatformRoutes = () => (
   <Routes>
     {/* Root: dashboard when authed, otherwise login */}
     <Route path="/" element={<PlatformRoot />} />
+    <Route path="/debug-generate" element={<DebugGenerate />} />
 
     {/* New Auth routes */}
     <Route path="/login" element={<Login />} />
@@ -369,50 +371,26 @@ const PlatformRoutes = () => (
 
 /**
  * SubaccountRouteDecider: Para subdomínios {slug}.app.omniseen.app
- * 
+ *
  * ROTAS PRÓPRIAS DO SUBDOMÍNIO:
  * - Paths públicos (/, /:slug, /p/:slug) → BlogRoutes (sem auth)
  * - Paths /client/* → ClientRoutes diretamente (com SubAccountGuard)
  * - Paths de auth (/login, /signup) → Redireciona para app.omniseen.app
  * - Paths de admin (/admin) → Redireciona para app.omniseen.app/admin
  */
+/**
+ * SubaccountRouteDecider: Para subdomínios {slug}.app.omniseen.app
+ */
 const SubaccountRouteDecider = () => {
-  const pathname = window.location.pathname;
-  
-  console.log('[SubaccountRouteDecider] pathname:', pathname);
-  
-  // ROTAS PROTEGIDAS (/client/*) - renderiza ClientRoutes diretamente
-  if (pathname.startsWith('/client')) {
-    console.log('[SubaccountRouteDecider] → ClientRoutes');
-    return <ClientRoutes />;
-  }
-  
-  // ROTAS DE AUTH - redireciona para plataforma principal
-  const authPaths = ['/login', '/signup', '/reset-password', '/blocked', '/access-denied'];
-  if (authPaths.some(p => pathname.startsWith(p))) {
-    const targetUrl = `https://app.omniseen.app${pathname}`;
-    console.log('[SubaccountRouteDecider] → Redirect to platform:', targetUrl);
-    window.location.href = targetUrl;
-    return null;
-  }
-  
-  // ROTAS DE OAUTH/INVITE - redireciona para plataforma principal
-  if (pathname.startsWith('/oauth') || pathname.startsWith('/invite')) {
-    const targetUrl = `https://app.omniseen.app${pathname}${window.location.search}`;
-    console.log('[SubaccountRouteDecider] → Redirect to platform:', targetUrl);
-    window.location.href = targetUrl;
-    return null;
-  }
-  
-  // ROTAS DE ADMIN - redireciona para plataforma principal
-  if (pathname.startsWith('/admin') || pathname.startsWith('/app')) {
-    window.location.href = `https://app.omniseen.app${pathname}`;
-    return null;
-  }
-  
-  // ROTAS PÚBLICAS (/, /:articleSlug, /p/:pageSlug) - BlogRoutes
-  console.log('[SubaccountRouteDecider] → BlogRoutes (public)');
-  return <BlogRoutes />;
+  console.log('[SubaccountRouteDecider] Rendering routes');
+
+  return (
+    <Routes>
+      <Route path="/client/*" element={<ClientRoutes />} />
+      {/* Blog público */}
+      <Route path="*" element={<BlogRoutes />} />
+    </Routes>
+  );
 };
 
 /**
@@ -443,23 +421,49 @@ function isAppHost(host: string): boolean {
 }
 
 /**
- * AppRoutes: decisão por hostname. Primeiro branch = público.
+ * AppRoutes: decisão por hostname e estabilidade de SPA.
  */
 const AppRoutes = () => {
-  const host = typeof window !== 'undefined' ? window.location.hostname : 'ssr';
+  const host = window.location.hostname;
+  const path = window.location.pathname;
 
-  if (isPublicLandingHost(host)) {
-    return <LandingRoutes />;
-  }
+  console.log('[AppRoutes] Host detected:', host, 'Path:', path);
+
+  // PLATFORM HUB HOST (app.omniseen.app / localhost)
   if (isAppHost(host)) {
     return <PlatformRoutes />;
   }
+
+  // Se o caminho for interno (ex: /client/*, /login), forçamos PlatformRoutes
+  // Mesmo em hosts como omniseen.app (Vercel)
+  const isInternal =
+    path.startsWith('/client') ||
+    path.startsWith('/login') ||
+    path.startsWith('/signup') ||
+    path.startsWith('/app') ||
+    path.startsWith('/admin') ||
+    path.startsWith('/oauth') ||
+    path.startsWith('/invite') ||
+    path.startsWith('/cms');
+
+  if (isInternal) {
+    return <PlatformRoutes />;
+  }
+
+  // Hosts específicos
   if (isSubaccountHost()) {
     return <SubaccountRouteDecider />;
   }
+
   if (isCustomDomainHost()) {
     return <CustomDomainRouteDecider />;
   }
+
+  // Landing page como padrão para outros hosts
+  if (isPublicLandingHost(host)) {
+    return <LandingRoutes />;
+  }
+
   return <PlatformRoutes />;
 };
 
@@ -481,15 +485,15 @@ const handleErrorReset = () => {
 
 // Main App - with global ErrorBoundary for crash protection
 const App = () => (
-  <ErrorBoundary 
+  <ErrorBoundary
     FallbackComponent={GlobalErrorFallback}
     onReset={handleErrorReset}
     onError={(error) => console.error('[App] Global error caught:', error)}
   >
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider 
-        attribute="class" 
-        defaultTheme="system" 
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
         enableSystem
         disableTransitionOnChange
       >

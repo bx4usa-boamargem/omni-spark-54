@@ -37,10 +37,11 @@ const STEP_LABELS: Record<string, string> = {
   'SEO_SCORE': '📊 Score SEO',
   'QUALITY_GATE': '✅ Quality gate',
 };
-const ORDERED_STEPS = ['INPUT_VALIDATION','SERP_ANALYSIS','SERP_GAP_ANALYSIS','OUTLINE_GEN','AUTO_SECTION_EXPANSION','ENTITY_EXTRACTION','ENTITY_COVERAGE','CONTENT_GEN','SAVE_ARTICLE','IMAGE_GEN','INTERNAL_LINK_ENGINE','SEO_SCORE','QUALITY_GATE'] as const;
+const ORDERED_STEPS = ['INPUT_VALIDATION', 'SERP_ANALYSIS', 'SERP_GAP_ANALYSIS', 'OUTLINE_GEN', 'ENTITY_EXTRACTION', 'CONTENT_GEN', 'SAVE_ARTICLE', 'IMAGE_GEN', 'INTERNAL_LINK_ENGINE', 'QUALITY_GATE'] as const;
 
-const SEO_METRICS = ['topic_coverage','entity_coverage','intent_match','depth_score','eeat_signals','structure','readability'];
-const SEO_LABELS: Record<string,string> = { topic_coverage:'Cobertura', entity_coverage:'Entidades', intent_match:'Intenção', depth_score:'Profundidade', eeat_signals:'E-E-A-T', structure:'Estrutura', readability:'Legibilidade' };
+
+const SEO_METRICS = ['topic_coverage', 'entity_coverage', 'intent_match', 'depth_score', 'eeat_signals', 'structure', 'readability'];
+const SEO_LABELS: Record<string, string> = { topic_coverage: 'Cobertura', entity_coverage: 'Entidades', intent_match: 'Intenção', depth_score: 'Profundidade', eeat_signals: 'E-E-A-T', structure: 'Estrutura', readability: 'Legibilidade' };
 
 // ============================================================
 // CLIENT PIPELINE — 4 stages driven ENTIRELY by public_stage field
@@ -64,7 +65,8 @@ const CLIENT_STATUS_MSG: Record<string, { label: string; sub: string }> = {
   pending: { label: 'Iniciando geração do artigo...', sub: 'Aguarde um momento.' },
   running: { label: 'A IA está criando seu conteúdo.', sub: 'Acompanhe o progresso abaixo.' },
   completed: { label: 'Artigo pronto!', sub: 'Seu conteúdo foi gerado com sucesso.' },
-  failed: { label: 'Ocorreu um problema.', sub: 'Tente novamente.' },
+  failed: { label: 'Ocorreu um problema.', sub: 'O pipeline foi concluído, mas o artigo não pôde ser salvo. Verifique as configurações do blog e tente novamente.' },
+
 };
 
 const ZOMBIE_THRESHOLD_MS = 10 * 60 * 1000;
@@ -132,9 +134,9 @@ function ClientPipelineView({ publicStage, publicProgress, publicMessage, jobSta
                 status === 'pending' && "bg-muted text-muted-foreground"
               )}>
                 {status === 'completed' ? <CheckCircle className="h-4 w-4" /> :
-                 status === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> :
-                 status === 'failed' ? <XCircle className="h-4 w-4" /> :
-                 <Icon className="h-4 w-4" />}
+                  status === 'running' ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                    status === 'failed' ? <XCircle className="h-4 w-4" /> :
+                      <Icon className="h-4 w-4" />}
               </div>
               <span className={cn(
                 "text-sm font-medium",
@@ -326,16 +328,15 @@ export default function GenerationDetail() {
 
   const effectiveStatus = (job?.status === 'completed' && !job?.article_id) ? 'failed' : job?.status;
 
-  // Auto-redirect to editor when job completes (ONLY if article_id exists)
+  // Auto-redirect to editor when article exists (SAFE MODE: presence(article_id) rule)
   useEffect(() => {
-    if (!job) return;
-    if (job.status === 'completed' && job.article_id) {
-      const timer = setTimeout(() => {
-        navigate(`/client/articles/${job.article_id}/edit`, { replace: true });
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [job?.status, job?.article_id, navigate]);
+    if (!job || !job.article_id) return;
+
+    // Once we have an article_id, we can redirect immediately.
+    console.log('[SAFE_MODE:REDIRECT] Redirecting to editor with article_id:', job.article_id);
+    navigate(`/client/articles/${job.article_id}/edit`, { replace: true });
+
+  }, [job?.article_id, navigate]);
 
   // Auto-recovery for stalled pending jobs
   useEffect(() => {
@@ -455,6 +456,7 @@ export default function GenerationDetail() {
           <div className="border rounded-lg p-4 bg-green-500/10 border-green-500/30 text-center space-y-2">
             <CheckCircle className="w-8 h-8 text-green-600 mx-auto" />
             <p className="text-sm font-medium text-green-700">Artigo pronto! Redirecionando para o editor...</p>
+            <p className="text-xs text-green-600 opacity-80 italic italic">Artigo gerado em modo rascunho — otimização recomendada.</p>
             <Loader2 className="w-4 h-4 animate-spin mx-auto text-green-600" />
           </div>
         )}
@@ -510,8 +512,9 @@ export default function GenerationDetail() {
         </div>
         <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
           <div><span className="text-muted-foreground">SEO Score</span><p className="font-bold text-lg">{job.seo_score ?? '—'}/100</p></div>
-          <div><span className="text-muted-foreground">Tempo</span><p className="font-bold">{elapsed ? `${Math.floor(elapsed/60)}m ${elapsed%60}s` : '—'}</p></div>
-          <div><span className="text-muted-foreground">API Calls</span><p className="font-bold">{job.total_api_calls || 0}/5</p></div>
+          <div><span className="text-muted-foreground">Tempo</span><p className="font-bold">{elapsed ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : '—'}</p></div>
+          <div><span className="text-muted-foreground">API Calls</span><p className="font-bold">{job.total_api_calls || 0}/8</p></div>
+
           <div><span className="text-muted-foreground">Custo</span><p className="font-bold">${(job.cost_usd || 0).toFixed(4)}</p></div>
         </div>
       </div>

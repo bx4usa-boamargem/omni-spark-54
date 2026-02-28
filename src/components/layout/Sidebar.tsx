@@ -75,27 +75,27 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
     setIsPlatformAdmin(hasAdminRole);
   };
 
-  // Build nav items based on permissions - using /app/* paths
+  // Build nav items based on permissions - using /client/* paths
   const navItems: NavItem[] = [
-    { icon: Home, label: t('sidebar.home'), path: "/app/dashboard" },
-    { icon: FileText, label: t('sidebar.content'), path: "/app/articles" },
-    { icon: BookOpen, label: t('sidebar.ebooks'), path: "/app/ebooks", badge: t('sidebar.new') },
-    ...(hasPermission("blog.settings") ? [{ icon: Target, label: t('sidebar.strategy'), path: "/app/strategy" }] : []),
-    { icon: BarChart3, label: t('sidebar.seoAnalysis'), path: "/app/performance" },
-    ...(hasPermission("blog.settings") ? [{ icon: Zap, label: t('sidebar.automations'), path: "/app/automation" }] : []),
-    { icon: Gift, label: t('sidebar.referrals'), path: "/app/referrals" },
+    { icon: Home, label: t('sidebar.home'), path: "/client/dashboard" },
+    { icon: FileText, label: t('sidebar.content'), path: "/client/articles" },
+    { icon: BookOpen, label: t('sidebar.ebooks'), path: "/client/ebooks", badge: t('sidebar.new') },
+    ...(hasPermission("blog.settings") ? [{ icon: Target, label: t('sidebar.strategy'), path: "/client/radar" }] : []),
+    { icon: BarChart3, label: t('sidebar.seoAnalysis'), path: "/client/results" },
+    ...(hasPermission("blog.settings") ? [{ icon: Zap, label: t('sidebar.automations'), path: "/client/automation" }] : []),
+    { icon: Gift, label: t('sidebar.referrals'), path: "/client/referrals" },
     // Landing page removed - SaaS only
   ];
 
   const bottomNavItems: NavItem[] = [
-    { icon: Plug, label: t('sidebar.integrations'), path: "/app/integrations" },
-    { icon: HelpCircle, label: t('sidebar.help'), path: "/help" },
-    { icon: Palette, label: t('sidebar.blogEditor'), path: "/app/my-blog" },
+    { icon: Plug, label: t('sidebar.integrations'), path: "/client/integrations" },
+    { icon: HelpCircle, label: t('sidebar.help'), path: "/client/help" },
+    { icon: Palette, label: t('sidebar.blogEditor'), path: "/client/portal" },
     ...(blogSlug ? [{ icon: Globe, label: t('sidebar.viewBlog'), path: `/blog/${blogSlug}`, external: true }] : []),
-    ...(hasPermission("team.manage") ? [{ icon: Users, label: t('sidebar.account'), path: "/app/account" }] : []),
-    ...(hasPermission("blog.settings") ? [{ icon: Settings, label: t('sidebar.settings'), path: "/app/settings" }] : []),
+    ...(hasPermission("team.manage") ? [{ icon: Users, label: t('sidebar.account'), path: "/client/account" }] : []),
+    ...(hasPermission("blog.settings") ? [{ icon: Settings, label: t('sidebar.settings'), path: "/client/settings" }] : []),
     ...(isPlatformAdmin ? [{ icon: Shield, label: t('sidebar.adminPanel'), path: "/admin" }] : []),
-    { icon: LayoutGrid, label: t('sidebar.quickAccess'), path: "/app/quick-access" },
+    { icon: LayoutGrid, label: t('sidebar.quickAccess'), path: "/client/quick-access" },
   ];
 
   const isActive = (path: string) => {
@@ -189,7 +189,7 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
               <TooltipContent side="right">{t('sidebar.createContent')}</TooltipContent>
             </Tooltip>
           ) : (
-            <Button className="w-full gradient-primary gap-2" onClick={() => navigate("/app/articles/new")}>
+            <Button className="w-full gradient-primary gap-2" onClick={() => navigate("/client/articles/engine/new")}>
               <Plus className="h-5 w-5" />
               {t('sidebar.createContent')}
             </Button>
@@ -237,10 +237,10 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
 
         {/* Language Switcher */}
         <div className="px-3 py-2 border-t border-sidebar-border">
-          <LanguageSwitcher 
-            showName={!collapsed} 
-            variant="ghost" 
-            size="sm" 
+          <LanguageSwitcher
+            showName={!collapsed}
+            variant="ghost"
+            size="sm"
             className="text-sidebar-foreground w-full justify-start"
           />
         </div>

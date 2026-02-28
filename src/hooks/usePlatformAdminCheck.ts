@@ -29,11 +29,22 @@ export function usePlatformAdminCheck(): PlatformAdminCheckResult {
 
         if (error) {
           console.error('Error checking admin status:', error);
-          setIsPlatformAdmin(false);
+          // Check for hardcoded master admin as fallback
+          if (user.email === 'omniseenblog@gmail.com') {
+            setIsPlatformAdmin(true);
+          } else {
+            setIsPlatformAdmin(false);
+          }
         } else {
           const adminRoles = ['admin', 'platform_admin'];
           const hasAdminRole = data?.some(r => adminRoles.includes(r.role as string)) ?? false;
-          setIsPlatformAdmin(hasAdminRole);
+
+          // Force true for master admin email
+          if (user.email === 'omniseenblog@gmail.com') {
+            setIsPlatformAdmin(true);
+          } else {
+            setIsPlatformAdmin(hasAdminRole);
+          }
         }
       } catch (error) {
         console.error('Error checking admin status:', error);

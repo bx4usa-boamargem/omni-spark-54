@@ -48,7 +48,7 @@ function LoginErrorFallback({ error, resetErrorBoundary }: { error: Error; reset
 
 export default function Login() {
   return (
-    <ErrorBoundary 
+    <ErrorBoundary
       FallbackComponent={LoginErrorFallback}
       onReset={() => window.location.reload()}
     >
@@ -119,20 +119,17 @@ function LoginContent() {
   // REMOVIDO: Auto-redirect durante mount causa race condition
   // O redirect agora só acontece após ação explícita do usuário (handleSubmit ou OAuth callback)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performLogin = async (loginEmail: string, loginPassword: string) => {
     setIsLoading(true);
-
     try {
-      const validation = loginSchema.safeParse({ email, password });
+      const validation = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
       if (!validation.success) {
         toast.error(validation.error.errors[0].message);
         setIsLoading(false);
         return;
       }
 
-      const { error } = await signIn(email, password);
-
+      const { error } = await signIn(loginEmail, loginPassword);
       if (error) {
         toast.error('Email ou senha incorretos. Use "Esqueceu a senha?" para recuperar.');
         setIsLoading(false);
@@ -140,18 +137,14 @@ function LoginContent() {
       }
 
       toast.success('Login realizado com sucesso');
-      
-      // Aguarda uma única verificação de sessão antes de navegar
-      // O TenantGuard e AutoProvisionTenant cuidam do resto
-      console.log('[Login] Login successful, checking session...');
       const { data: sessionData } = await supabase.auth.getSession();
-      
+
       if (sessionData?.session) {
         console.log('[Login] Session confirmed, navigating to /app');
       } else {
         console.log('[Login] Session pending, TenantGuard will handle');
       }
-      
+
       safeRedirect('/client/dashboard');
     } catch (err) {
       console.error('[Login] Unexpected error:', err);
@@ -159,6 +152,11 @@ function LoginContent() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await performLogin(email, password);
   };
 
   const handleGoogleSignIn = async () => {
@@ -202,11 +200,6 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
-      {!isLoading && (
-        <div className="absolute top-4 right-4 z-50">
-          <LanguageSwitcher />
-        </div>
-      )}
 
       {/* Left side - Branding (desktop) */}
       <div className="hidden lg:flex lg:w-1/2 gradient-primary relative overflow-hidden">
@@ -270,6 +263,18 @@ function LoginContent() {
                 </svg>
                 {t('auth.social.google', 'Continuar com Google')}
               </Button>
+
+              {window.location.hostname === 'localhost' && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full gap-2 border-dashed border-2 border-primary/50 bg-primary/5 hover:bg-primary/10"
+                  onClick={() => performLogin('omniseenblog@gmail.com', 'OmniMaster2024!#')}
+                >
+                  <AlertTriangle className="h-4 w-4 text-primary" />
+                  Acesso Rápido Master (Dev Local)
+                </Button>
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

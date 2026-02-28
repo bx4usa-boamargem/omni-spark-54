@@ -46,7 +46,7 @@ interface UseBlogResult {
   refetch: () => Promise<void>;
 }
 
-const FETCH_TIMEOUT_MS = 8000; // 8 seconds timeout
+// [SAFE MODE] Resilient blog fetch with retries
 
 export function useBlog(): UseBlogResult {
   const [blog, setBlog] = useState<Blog | null>(null);
@@ -55,25 +55,19 @@ export function useBlog(): UseBlogResult {
   const [role, setRole] = useState<TeamRole | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-  const fetchBlog = async () => {
-    console.log('useBlog: Iniciando fetch');
+  const fetchBlog = async (retryCount = 0) => {
+    console.log(`useBlog: Iniciando fetch (tentativa ${retryCount + 1}/3)`);
     setLoading(true);
-    
-    // Set a timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.warn('useBlog: Timeout atingido após', FETCH_TIMEOUT_MS, 'ms');
-      setLoading(false);
-    }, FETCH_TIMEOUT_MS);
-    
+
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      console.log('useBlog: Usuário autenticado', { 
-        userId: user?.id, 
+
+      console.log('useBlog: Usuário autenticado', {
+        userId: user?.id,
         email: user?.email,
         error: userError ? userError.message : null
       });
-      
+
       if (!user) {
         console.warn('useBlog: Sem usuário autenticado');
         setLoading(false);
@@ -85,11 +79,6 @@ export function useBlog(): UseBlogResult {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
-
-      console.log('useBlog: Roles do usuário', { 
-        roles, 
-        error: rolesError ? rolesError.message : null 
-      });
 
       const adminRoles = ['admin', 'platform_admin'];
       const hasAdminRole = roles?.some(r => adminRoles.includes(r.role as string)) ?? false;
@@ -103,13 +92,6 @@ export function useBlog(): UseBlogResult {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
-
-      console.log('useBlog: Blog próprio', { 
-        blogId: ownedBlog?.id, 
-        blogName: ownedBlog?.name,
-        exists: !!ownedBlog,
-        error: blogError ? blogError.message : null
-      });
 
       if (ownedBlog) {
         setBlog(ownedBlog as Blog);
@@ -142,19 +124,14 @@ export function useBlog(): UseBlogResult {
         .eq("status", "active")
         .maybeSingle();
 
-      console.log('useBlog: Membership de equipe', { 
-        membership,
-        error: memberError ? memberError.message : null
-      });
-
       if (membership && membership.blogs) {
         const blogData = membership.blogs as unknown as Blog;
         setBlog(blogData);
         setRole(membership.role as TeamRole);
         setIsOwner(false);
-        console.log('useBlog: Blog carregado como membro', { 
-          blogId: blogData.id, 
-          role: membership.role 
+        console.log('useBlog: Blog carregado como membro', {
+          blogId: blogData.id,
+          role: membership.role
         });
         setLoading(false);
         return;
@@ -169,36 +146,37 @@ export function useBlog(): UseBlogResult {
           .limit(1)
           .maybeSingle();
 
-        console.log('useBlog: Blog admin fallback', { 
-          blogId: anyBlog?.id,
-          error: anyBlogError ? anyBlogError.message : null
-        });
-
         if (anyBlog) {
           setBlog(anyBlog as Blog);
-          setRole("owner"); // Admin has owner-level access
+          setRole("owner");
           setIsOwner(false);
         }
       }
 
-      console.log('useBlog: Fetch finalizado', { 
-        hasBlog: !!ownedBlog || !!membership?.blogs,
-        isAdmin: hasAdminRole
-      });
+      console.log('useBlog: Fetch finalizado com sucesso');
+      setLoading(false); // [SAFE MODE] Explicit success
     } catch (error) {
-      console.error("useBlog: Erro crítico", {
-        error,
-        message: error instanceof Error ? error.message : 'Erro desconhecido',
-      });
+      console.error("useBlog: Erro na tentativa", retryCount + 1, error);
+
+      if (retryCount < 2) {
+        console.log(`useBlog: Tentando novamente em 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchBlog(retryCount + 1);
+      }
     } finally {
-      clearTimeout(timeoutId);
-      setLoading(false);
+      // Only stop loading if we succeeded OR we've exhausted all retries
+      if (retryCount >= 2) {
+        setLoading(false);
+      }
     }
   };
+
+  // Wrapper to allow refetch without arguments in the result object
+  const handleRefetch = () => fetchBlog(0);
 
   useEffect(() => {
     fetchBlog();
   }, []);
 
-  return { blog, loading, isOwner, role, isPlatformAdmin, refetch: fetchBlog };
+  return { blog, loading, isOwner, role, isPlatformAdmin, refetch: handleRefetch };
 }

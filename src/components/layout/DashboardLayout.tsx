@@ -58,21 +58,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate("/auth");
+      navigate("/login");
     }
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (!blogLoading && user && !blog) {
-      navigate("/onboarding");
-    } else if (!blogLoading && blog && blog.onboarding_completed === false) {
-      navigate("/onboarding");
-    }
+    // Onboarding is now handled automatically by Guards
+    // Legacy redirects removed to prevent infinite loops
   }, [blog, blogLoading, user, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/auth");
+    navigate("/login");
   };
 
   const handleOpenPlanModal = () => {
@@ -106,7 +103,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex items-center justify-between p-4">
           <span className="font-display font-bold text-lg">OMNISEEN</span>
           <div className="flex items-center gap-2">
-            <Link to="/quick-access">
+            <Link to="/client/quick-access">
               <Button variant="ghost" size="icon">
                 <LayoutGrid className="h-5 w-5" />
               </Button>
@@ -135,8 +132,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <main className="flex-1 min-w-0 lg:pt-0 pt-16 overflow-auto flex flex-col">
         {/* Trial Banner - show only for users in active trial */}
         {isInActiveTrial && (
-          <TrialBanner 
-            daysRemaining={daysRemainingTrial} 
+          <TrialBanner
+            daysRemaining={daysRemainingTrial}
             onSubscribeClick={handleOpenPlanModal}
           />
         )}
@@ -154,7 +151,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         onOpenChange={setShowPlanModal}
         canClose={!isBlocked}
         title={isBlocked ? "Seu período de teste terminou" : "Escolha seu plano"}
-        description={isBlocked 
+        description={isBlocked
           ? "Para continuar usando a OMNISEEN, escolha um plano abaixo."
           : "Assine agora e aproveite todos os recursos"
         }

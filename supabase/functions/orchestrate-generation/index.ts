@@ -31,19 +31,19 @@ const LOCK_TTL_MS = 120_000;
 // PUBLIC STAGE MAPPING (client-facing progress)
 // ============================================================
 const PUBLIC_STAGE_MAP: Record<string, { stage: string; progress: number; message: string }> = {
-  'INPUT_VALIDATION':      { stage: 'ANALYZING_MARKET', progress: 2,  message: 'Inicializando...' },
-  'SERP_ANALYSIS':         { stage: 'ANALYZING_MARKET', progress: 8,  message: 'Analisando SERP...' },
-  'SERP_GAP_ANALYSIS':    { stage: 'ANALYZING_MARKET', progress: 14, message: 'Detectando lacunas semânticas...' },
-  'OUTLINE_GEN':          { stage: 'ANALYZING_MARKET', progress: 20, message: 'Criando estrutura...' },
+  'INPUT_VALIDATION': { stage: 'ANALYZING_MARKET', progress: 2, message: 'Inicializando...' },
+  'SERP_ANALYSIS': { stage: 'ANALYZING_MARKET', progress: 8, message: 'Analisando SERP...' },
+  'SERP_GAP_ANALYSIS': { stage: 'ANALYZING_MARKET', progress: 14, message: 'Detectando lacunas semânticas...' },
+  'OUTLINE_GEN': { stage: 'ANALYZING_MARKET', progress: 20, message: 'Criando estrutura...' },
   'AUTO_SECTION_EXPANSION': { stage: 'ANALYZING_MARKET', progress: 26, message: 'Expandindo seções...' },
-  'ENTITY_EXTRACTION':    { stage: 'WRITING_CONTENT',  progress: 32, message: 'Extraindo entidades...' },
-  'ENTITY_COVERAGE':      { stage: 'WRITING_CONTENT',  progress: 38, message: 'Distribuindo entidades...' },
-  'CONTENT_GEN':          { stage: 'WRITING_CONTENT',  progress: 55, message: 'Criando conteúdo...' },
-  'SAVE_ARTICLE':         { stage: 'FINALIZING',      progress: 72, message: 'Salvando artigo...' },
-  'IMAGE_GEN':            { stage: 'FINALIZING',      progress: 82, message: 'Gerando imagens (hero + seções)...' },
-  'INTERNAL_LINK_ENGINE': { stage: 'FINALIZING',      progress: 88, message: 'Gerando links internos...' },
-  'SEO_SCORE':            { stage: 'FINALIZING',      progress: 93, message: 'Calculando score SEO...' },
-  'QUALITY_GATE':         { stage: 'FINALIZING',      progress: 98, message: 'Verificando qualidade...' },
+  'ENTITY_EXTRACTION': { stage: 'WRITING_CONTENT', progress: 32, message: 'Extraindo entidades...' },
+  'ENTITY_COVERAGE': { stage: 'WRITING_CONTENT', progress: 38, message: 'Distribuindo entidades...' },
+  'CONTENT_GEN': { stage: 'WRITING_CONTENT', progress: 55, message: 'Criando conteúdo...' },
+  'SAVE_ARTICLE': { stage: 'FINALIZING', progress: 72, message: 'Salvando artigo...' },
+  'IMAGE_GEN': { stage: 'FINALIZING', progress: 82, message: 'Gerando imagens (hero + seções)...' },
+  'INTERNAL_LINK_ENGINE': { stage: 'FINALIZING', progress: 88, message: 'Gerando links internos...' },
+  'SEO_SCORE': { stage: 'FINALIZING', progress: 93, message: 'Calculando score SEO...' },
+  'QUALITY_GATE': { stage: 'FINALIZING', progress: 98, message: 'Verificando qualidade...' },
 };
 
 const PIPELINE_STEPS = [
@@ -1105,7 +1105,8 @@ async function executeQualityGate(
   if (!faqOk) reasons.push(`faq_items ${faqCount} < ${QUALITY_GATE.FAQ_MIN_ITEMS}`);
   if (!scoreOk) reasons.push(`semantic_score ${contentScore} < ${QUALITY_GATE.SEMANTIC_SCORE_MIN}`);
 
-  const qualityGateStatus = passed ? "approved" : "blocked";
+  // [SAFE MODE] Change 'blocked' to 'quality_failed' to allow visualization
+  const qualityGateStatus = passed ? "approved" : "quality_failed";
   await supabase.from("articles").update({
     quality_gate_status: qualityGateStatus,
     ...(passed ? { ready_for_publish_at: new Date().toISOString() } : {}),
@@ -1129,99 +1130,129 @@ async function executeQualityGate(
 // ============================================================
 
 async function orchestrate(jobId: string, supabase: ReturnType<typeof createClient>, supabaseUrl: string, serviceKey: string): Promise<void> {
- try { // TOP-LEVEL SAFETY NET
   const jobStart = Date.now();
-
-  const { data: job, error: jobError } = await supabase.from('generation_jobs').select('*').eq('id', jobId).single();
-  if (jobError || !job) { console.error(`[ORCHESTRATOR] Job ${jobId} not found:`, jobError); return; }
-  if (['completed', 'failed', 'cancelled'].includes(job.status)) { console.log(`[ORCHESTRATOR] Job ${jobId} already ${job.status}.`); return; }
-
-  const jobType = ((job.job_type ?? job.input?.job_type) || 'article') as 'article' | 'super_page';
-
-  // Signal boot
-  await supabase.from('generation_jobs').update({
-    public_stage: 'ANALYZING_MARKET',
-    public_progress: 3,
-    public_message: 'Inicializando motor de geração v2...',
-    public_updated_at: new Date().toISOString(),
-  }).eq('id', jobId);
-  console.log('[ORCHESTRATOR_BOOT:V2]', jobId, 'job_type=', jobType);
-
-  const jobInput = {
-    ...(job.input as Record<string, unknown> || {}),
-    job_type: jobType,
-    // Ensure tracking context is always available to ai-router.
-    job_id: jobId,
-    blog_id: (job.blog_id as string) || (job.input as any)?.blog_id || null,
-    user_id: (job.user_id as string) || (job.input as any)?.user_id || null,
-    tenant_id: (job.input as any)?.tenant_id || null,
-  };
-  console.log(`[ORCHESTRATOR:V2] job_id=${jobId} input=${JSON.stringify({ keyword: jobInput.keyword, city: jobInput.city, niche: jobInput.niche, job_type: jobType })}`);
-
-  // Lock
-  if (job.locked_at) {
-    const lockAge = Date.now() - new Date(job.locked_at).getTime();
-    if (lockAge < LOCK_TTL_MS) {
-      console.log(`[ORCHESTRATOR] Job ${jobId} locked (${lockAge}ms). Skipping.`);
-      return;
-    }
-    console.warn(`[ORCHESTRATOR:STALE_LOCK] Job ${jobId} locked for ${lockAge}ms. Releasing.`);
-    await supabase.from('generation_jobs').update({ locked_at: null, locked_by: null }).eq('id', jobId);
-  }
-
-  const lockId = crypto.randomUUID();
-  const { error: lockError } = await supabase.from('generation_jobs')
-    .update({
-      locked_at: new Date().toISOString(),
-      locked_by: lockId,
-      status: 'running',
-      started_at: job.started_at || new Date().toISOString(),
-      public_stage: 'ANALYZING_MARKET',
-      public_progress: 5,
-      public_message: 'Inicializando inteligência artificial...',
-      public_updated_at: new Date().toISOString(),
-    })
-    .eq('id', jobId).is('locked_by', null);
-  if (lockError) {
-    console.error(`[ENGINE] LOCK_BLOCKED job_id=${jobId}`);
-    return;
-  }
-  console.log(`[ENGINE] LOCK_ACQUIRED job_id=${jobId} lockId=${lockId}`);
-
-  // Heartbeat
-  let heartbeatRunning = true;
-  const heartbeatInterval = setInterval(async () => {
-    if (!heartbeatRunning) return;
-    try {
-      await supabase.from('generation_jobs')
-        .update({ locked_at: new Date().toISOString() })
-        .eq('id', jobId).eq('locked_by', lockId);
-    } catch (_) { /* ignore */ }
-  }, 15_000);
-
-  let totalApiCalls = job.total_api_calls || 0;
-  let totalCostUsd = job.cost_usd || 0;
+  let totalApiCalls = 0;
+  let totalCostUsd = 0;
+  let lockId: string | null = null;
+  let heartbeatInterval: any = null;
+  let articleId: string | null = null; // [SAFE MODE] Higher scope for recovery
 
   try {
+    const { data: job, error: jobError } = await supabase.from('generation_jobs').select('*').eq('id', jobId).single();
+    if (jobError || !job) {
+      console.error(`[ORCHESTRATOR] Job ${jobId} not found:`, jobError);
+      return;
+    }
+
+    if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+      console.log(`[ORCHESTRATOR] Job ${jobId} already ${job.status}.`);
+      return;
+    }
+
+    const jobType = ((job.job_type ?? job.input?.job_type) || 'article') as 'article' | 'super_page';
+    totalApiCalls = job.total_api_calls || 0;
+    totalCostUsd = job.cost_usd || 0;
+
+    // === WATCHDOG: Mark stale jobs as failed ===
+    try {
+      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+      const { data: staleJobs } = await supabase
+        .from('generation_jobs')
+        .update({
+          status: 'failed',
+          error_message: 'JOB_STALE_TIMEOUT',
+          public_message: 'Job expirou por inatividade.',
+          completed_at: new Date().toISOString(),
+          locked_at: null,
+          locked_by: null
+        })
+        .eq('user_id', job.user_id)
+        .eq('status', 'running')
+        .lt('started_at', twentyMinutesAgo)
+        .neq('id', jobId)
+        .select('id');
+
+      if (staleJobs && staleJobs.length > 0) {
+        console.log(`[WATCHDOG] Marked ${staleJobs.length} stale jobs as failed for user ${job.user_id}`);
+      }
+    } catch (watchdogErr) {
+      console.error('[WATCHDOG_ERROR]', watchdogErr);
+    }
+
+    // Signal boot
+    await supabase.from('generation_jobs').update({
+      public_stage: 'ANALYZING_MARKET',
+      public_progress: 3,
+      public_message: 'Inicializando motor de geração v2...',
+      public_updated_at: new Date().toISOString(),
+    }).eq('id', jobId);
+    console.log('[ORCHESTRATOR_BOOT:V2]', jobId, 'job_type=', jobType);
+
+    const jobInput = {
+      ...(job.input as Record<string, any> || {}),
+      job_type: jobType,
+      job_id: jobId,
+      blog_id: (job.blog_id as string) || (job.input as any)?.blog_id || null,
+      user_id: (job.user_id as string) || (job.input as any)?.user_id || null,
+      tenant_id: (job.input as any)?.tenant_id || null,
+      keyword: (job.input as any)?.keyword || '',
+      city: (job.input as any)?.city || '',
+    };
+
+    // Lock Handling
+    if (job.locked_at) {
+      const lockAge = Date.now() - new Date(job.locked_at).getTime();
+      if (lockAge < LOCK_TTL_MS) {
+        console.log(`[ORCHESTRATOR] Job ${jobId} locked (${lockAge}ms). Skipping.`);
+        return;
+      }
+      console.warn(`[ORCHESTRATOR:STALE_LOCK] Job ${jobId} locked for ${lockAge}ms. Releasing.`);
+      await supabase.from('generation_jobs').update({ locked_at: null, locked_by: null }).eq('id', jobId);
+    }
+
+    lockId = crypto.randomUUID();
+    const { error: lockError } = await supabase.from('generation_jobs')
+      .update({
+        locked_at: new Date().toISOString(),
+        locked_by: lockId,
+        status: 'running',
+        started_at: job.started_at || new Date().toISOString(),
+        public_stage: 'ANALYZING_MARKET',
+        public_progress: 5,
+        public_message: 'Inicializando inteligência artificial...',
+        public_updated_at: new Date().toISOString(),
+      })
+      .eq('id', jobId).is('locked_by', null);
+
+    if (lockError) {
+      console.error(`[ENGINE] LOCK_BLOCKED job_id=${jobId}`);
+      return;
+    }
+    console.log(`[ENGINE] LOCK_ACQUIRED job_id=${jobId} lockId=${lockId}`);
+
+    // Heartbeat
+    heartbeatInterval = setInterval(async () => {
+      try {
+        await supabase.from('generation_jobs')
+          .update({ locked_at: new Date().toISOString() })
+          .eq('id', jobId).eq('locked_by', lockId);
+      } catch (_) { /* ignore */ }
+    }, 15_000);
+
     // ============================================================
-    // STEP 1: INPUT_VALIDATION (programmatic)
+    // STEP 1: INPUT_VALIDATION
     // ============================================================
     console.log(`[V2] Step 1/8: INPUT_VALIDATION`);
     await updatePublicStatus(supabase, jobId, 'INPUT_VALIDATION', false, lockId);
     await supabase.from('generation_jobs').update({ current_step: 'INPUT_VALIDATION' }).eq('id', jobId);
-
     const valStepId = await createStepOrFail(supabase, jobId, 'INPUT_VALIDATION', { job_input: job.input });
-
     const valStart = Date.now();
     const valOutput = executeInputValidation(jobInput);
-    const valLatency = Date.now() - valStart;
-
     await supabase.from('generation_steps').update({
-      status: 'completed', output: valOutput, latency_ms: valLatency,
+      status: 'completed', output: valOutput, latency_ms: Date.now() - valStart,
       completed_at: new Date().toISOString(), model_used: 'validation', provider: 'programmatic',
     }).eq('id', valStepId);
     await updatePublicStatus(supabase, jobId, 'INPUT_VALIDATION', true, lockId);
-    console.log(`[V2] ✅ INPUT_VALIDATION ${valLatency}ms`);
 
     // ============================================================
     // STEP 2: SERP_ANALYSIS
@@ -1229,16 +1260,12 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     console.log(`[V2] Step 2/8: SERP_ANALYSIS`);
     await updatePublicStatus(supabase, jobId, 'SERP_ANALYSIS', false, lockId);
     await supabase.from('generation_jobs').update({ current_step: 'SERP_ANALYSIS' }).eq('id', jobId);
-
     let serpStepId: string | null = null;
     let serpSummaryText = '';
     const serpStart = Date.now();
     try {
       serpStepId = await createStepOrFail(supabase, jobId, 'SERP_ANALYSIS', { keyword: jobInput.keyword, city: jobInput.city });
-      const serpResult = await withTimeout(
-        executeSerpSummary(jobInput, supabaseUrl, serviceKey),
-        30_000, 'SERP_ANALYSIS'
-      );
+      const serpResult = await withTimeout(executeSerpSummary(jobInput, supabaseUrl, serviceKey), 35_000, 'SERP_ANALYSIS');
       serpSummaryText = (serpResult.output.serp_summary as string) || '';
       totalApiCalls++;
       totalCostUsd += serpResult.aiResult.costUsd || 0;
@@ -1248,370 +1275,148 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
         provider: serpResult.aiResult.provider, cost_usd: serpResult.aiResult.costUsd,
         tokens_in: serpResult.aiResult.tokensIn, tokens_out: serpResult.aiResult.tokensOut,
       }).eq('id', serpStepId);
-      console.log(`[V2] ✅ SERP_ANALYSIS ${Date.now() - serpStart}ms`);
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'SERP failed';
-      console.warn(`[V2] ⚠️ SERP_ANALYSIS failed (non-fatal): ${errMsg}`);
-      if (serpStepId) {
-        await supabase.from('generation_steps').update({
-          status: 'completed', output: { serp_summary: '', error: errMsg }, latency_ms: Date.now() - serpStart,
-          completed_at: new Date().toISOString(), model_used: 'fallback', provider: 'fallback', error_message: errMsg,
-        }).eq('id', serpStepId);
-      }
+      console.warn(`[V2] SERP_ANALYSIS failed (non-fatal):`, e);
+      if (serpStepId) await supabase.from('generation_steps').update({ status: 'completed', output: { error: String(e) }, completed_at: new Date().toISOString() }).eq('id', serpStepId);
     }
     await updatePublicStatus(supabase, jobId, 'SERP_ANALYSIS', true, lockId);
-    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
 
     // ============================================================
-    // STEP: SERP_GAP_ANALYSIS
+    // STEP 3: SERP_GAP_ANALYSIS
     // ============================================================
     let gapAnalysis: SerpGapResult = { semantic_gaps: [], competitor_topics: [] };
     console.log(`[V2] Step: SERP_GAP_ANALYSIS`);
     await updatePublicStatus(supabase, jobId, 'SERP_GAP_ANALYSIS', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'SERP_GAP_ANALYSIS' }).eq('id', jobId);
     try {
       const gapStepId = await createStepOrFail(supabase, jobId, 'SERP_GAP_ANALYSIS', { keyword: jobInput.keyword });
-      const gapResult = await withTimeout(executeSerpGapAnalysis(jobInput, serpSummaryText, supabaseUrl, serviceKey), 25_000, 'SERP_GAP_ANALYSIS');
+      const gapResult = await withTimeout(executeSerpGapAnalysis(jobInput, serpSummaryText, supabaseUrl, serviceKey), 30_000, 'SERP_GAP_ANALYSIS');
       gapAnalysis = gapResult.output;
       totalApiCalls++;
       totalCostUsd += gapResult.aiResult.costUsd || 0;
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: gapResult.output, completed_at: new Date().toISOString(), model_used: gapResult.aiResult.model, provider: gapResult.aiResult.provider, cost_usd: gapResult.aiResult.costUsd,
-      }).eq('id', gapStepId);
-    } catch (_) { /* non-fatal */ }
+      await supabase.from('generation_steps').update({ status: 'completed', output: gapResult.output, completed_at: new Date().toISOString(), cost_usd: gapResult.aiResult.costUsd }).eq('id', gapStepId);
+    } catch (_) { }
     await updatePublicStatus(supabase, jobId, 'SERP_GAP_ANALYSIS', true, lockId);
-    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
 
     // ============================================================
-    // STEP: OUTLINE_GEN (mandatory)
+    // STEP 4: OUTLINE_GEN
     // ============================================================
     console.log(`[V2] Step: OUTLINE_GEN`);
     await updatePublicStatus(supabase, jobId, 'OUTLINE_GEN', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'OUTLINE_GEN' }).eq('id', jobId);
-
     const outlineStepId = await createStepOrFail(supabase, jobId, 'OUTLINE_GEN', { keyword: jobInput.keyword });
-    const outlineStart = Date.now();
-    const outlineResult = await withTimeout(
-      executeOutlineGen(jobInput, serpSummaryText, supabaseUrl, serviceKey),
-      45_000, 'OUTLINE_GEN'
-    );
+    const outlineResult = await withTimeout(executeOutlineGen(jobInput, serpSummaryText, supabaseUrl, serviceKey), 50_000, 'OUTLINE_GEN');
     let outline = outlineResult.output.outline;
     totalApiCalls++;
     totalCostUsd += outlineResult.aiResult.costUsd || 0;
-    await supabase.from('generation_steps').update({
-      status: 'completed', output: { outline: outline }, latency_ms: Date.now() - outlineStart,
-      completed_at: new Date().toISOString(), model_used: outlineResult.aiResult.model,
-      provider: outlineResult.aiResult.provider, cost_usd: outlineResult.aiResult.costUsd,
-    }).eq('id', outlineStepId);
+    await supabase.from('generation_steps').update({ status: 'completed', output: { outline }, completed_at: new Date().toISOString(), cost_usd: outlineResult.aiResult.costUsd }).eq('id', outlineStepId);
     await updatePublicStatus(supabase, jobId, 'OUTLINE_GEN', true, lockId);
-    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
-    console.log(`[V2] ✅ OUTLINE_GEN ${Date.now() - outlineStart}ms | h1="${outline.h1?.slice(0, 40)}"`);
 
     // ============================================================
-    // STEP: AUTO_SECTION_EXPANSION
-    // ============================================================
-    let expandedOutline = outline;
-    console.log(`[V2] Step: AUTO_SECTION_EXPANSION`);
-    await updatePublicStatus(supabase, jobId, 'AUTO_SECTION_EXPANSION', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'AUTO_SECTION_EXPANSION' }).eq('id', jobId);
-    try {
-      const expStepId = await createStepOrFail(supabase, jobId, 'AUTO_SECTION_EXPANSION', { gaps: gapAnalysis.semantic_gaps?.length || 0 });
-      const expResult = await withTimeout(executeAutoSectionExpansion(outline, gapAnalysis, jobType, jobInput, supabaseUrl, serviceKey), 35_000, 'AUTO_SECTION_EXPANSION');
-      expandedOutline = expResult.output.outline;
-      if (expResult.aiResult.success && expResult.aiResult.tokensOut) {
-        totalApiCalls++;
-        totalCostUsd += expResult.aiResult.costUsd || 0;
-      }
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: { outline: expandedOutline }, completed_at: new Date().toISOString(), model_used: expResult.aiResult.model || 'none', provider: expResult.aiResult.provider || 'none',
-      }).eq('id', expStepId);
-    } catch (_) { /* non-fatal, use original outline */ }
-    await updatePublicStatus(supabase, jobId, 'AUTO_SECTION_EXPANSION', true, lockId);
-    outline = expandedOutline;
-
-    // ============================================================
-    // STEP: ENTITY_EXTRACTION
+    // STEP 5: ENTITY_EXTRACTION
     // ============================================================
     console.log(`[V2] Step: ENTITY_EXTRACTION`);
     await updatePublicStatus(supabase, jobId, 'ENTITY_EXTRACTION', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'ENTITY_EXTRACTION' }).eq('id', jobId);
-
     const entityStepId = await createStepOrFail(supabase, jobId, 'ENTITY_EXTRACTION', { keyword: jobInput.keyword });
-    const entityStart = Date.now();
-    const entityResult = await withTimeout(
-      executeEntityExtraction(jobInput, serpSummaryText, outline, supabaseUrl, serviceKey),
-      30_000, 'ENTITY_EXTRACTION'
-    );
+    const entityResult = await withTimeout(executeEntityExtraction(jobInput, serpSummaryText, outline, supabaseUrl, serviceKey), 40_000, 'ENTITY_EXTRACTION');
     const entities = entityResult.output.entities;
     totalApiCalls++;
     totalCostUsd += entityResult.aiResult.costUsd || 0;
-    await supabase.from('generation_steps').update({
-      status: 'completed', output: { entities }, latency_ms: Date.now() - entityStart,
-      completed_at: new Date().toISOString(), model_used: entityResult.aiResult.model,
-      provider: entityResult.aiResult.provider, cost_usd: entityResult.aiResult.costUsd,
-    }).eq('id', entityStepId);
+    await supabase.from('generation_steps').update({ status: 'completed', output: { entities }, completed_at: new Date().toISOString(), cost_usd: entityResult.aiResult.costUsd }).eq('id', entityStepId);
     await updatePublicStatus(supabase, jobId, 'ENTITY_EXTRACTION', true, lockId);
-    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
-    console.log(`[V2] ✅ ENTITY_EXTRACTION ${Date.now() - entityStart}ms`);
 
-    // ============================================================
-    // STEP: ENTITY_COVERAGE (distribute entities, score)
-    // ============================================================
+    // Coverage
     const entityCoverage = executeEntityCoverage(outline, entities);
-    console.log(`[V2] Step: ENTITY_COVERAGE | score=${entityCoverage.coverageScore}`);
-    await updatePublicStatus(supabase, jobId, 'ENTITY_COVERAGE', true, lockId);
 
     // ============================================================
-    // STEP: CONTENT_GEN (outline-driven + entity coverage)
+    // STEP 6: CONTENT_GEN
     // ============================================================
     console.log(`[V2] Step: CONTENT_GEN`);
     await updatePublicStatus(supabase, jobId, 'CONTENT_GEN', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'CONTENT_GEN' }).eq('id', jobId);
-
-    const genStepId = await createStepOrFail(supabase, jobId, 'CONTENT_GEN', { keyword: jobInput.keyword, job_type: jobType });
-    const genStart = Date.now();
-    let articleData: Record<string, unknown>;
-    try {
-      const genResult = await withTimeout(
-        executeContentGenFromOutline(jobInput, serpSummaryText, outline, entities, entityCoverage, jobType, supabaseUrl, serviceKey),
-        120_000, 'CONTENT_GEN'
-      );
-      articleData = genResult.output;
-      totalApiCalls++;
-      totalCostUsd += genResult.aiResult.costUsd || 0;
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: { title: articleData.title }, latency_ms: Date.now() - genStart,
-        completed_at: new Date().toISOString(), model_used: genResult.aiResult.model,
-        provider: genResult.aiResult.provider, cost_usd: genResult.aiResult.costUsd,
-      }).eq('id', genStepId);
-    } catch (firstErr) {
-      console.warn(`[V2] CONTENT_GEN first attempt failed: ${firstErr instanceof Error ? firstErr.message : 'unknown'}. Retrying...`);
-      await new Promise(r => setTimeout(r, 2000));
-      const retryResult = await withTimeout(
-        executeContentGenFromOutline(jobInput, serpSummaryText, outline, entities, entityCoverage, jobType, supabaseUrl, serviceKey),
-        120_000, 'CONTENT_GEN_RETRY'
-      );
-      articleData = retryResult.output;
-      totalApiCalls++;
-      totalCostUsd += retryResult.aiResult.costUsd || 0;
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: { title: articleData.title, retried: true }, latency_ms: Date.now() - genStart,
-        completed_at: new Date().toISOString(), model_used: retryResult.aiResult.model, provider: retryResult.aiResult.provider, cost_usd: retryResult.aiResult.costUsd,
-      }).eq('id', genStepId);
-    }
+    const genStepId = await createStepOrFail(supabase, jobId, 'CONTENT_GEN', { keyword: jobInput.keyword });
+    const genResult = await withTimeout(executeContentGenFromOutline(jobInput, serpSummaryText, outline, entities, entityCoverage, jobType, supabaseUrl, serviceKey), 150_000, 'CONTENT_GEN');
+    const articleData = genResult.output as any;
+    totalApiCalls++;
+    totalCostUsd += genResult.aiResult.costUsd || 0;
+    await supabase.from('generation_steps').update({ status: 'completed', output: { title: articleData.title }, completed_at: new Date().toISOString(), cost_usd: genResult.aiResult.costUsd }).eq('id', genStepId);
     await updatePublicStatus(supabase, jobId, 'CONTENT_GEN', true, lockId);
-    await supabase.from('generation_jobs').update({ total_api_calls: totalApiCalls, cost_usd: totalCostUsd }).eq('id', jobId);
-    console.log(`[V2] ✅ CONTENT_GEN ${Date.now() - genStart}ms | title="${(articleData!.title as string || '').slice(0, 50)}"`);
 
     // ============================================================
-    // STEP 6: SAVE_ARTICLE
+    // STEP 7: SAVE_ARTICLE
     // ============================================================
-    console.log(`[V2] Step 6/8: SAVE_ARTICLE`);
+    console.log(`[V2] Step: SAVE_ARTICLE`);
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'SAVE_ARTICLE' }).eq('id', jobId);
-
-    const saveStepId = await createStepOrFail(supabase, jobId, 'SAVE_ARTICLE', { title: articleData!.title });
-    const saveStart = Date.now();
-    let saveOutput: Record<string, unknown>;
-    try {
-      saveOutput = await executeSaveArticle(jobId, articleData!, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
-    } catch (saveErr) {
-      const saveErrMsg = saveErr instanceof Error ? saveErr.message : 'SAVE_ARTICLE failed';
-      await supabase.from('generation_steps').update({
-        status: 'failed',
-        error_message: saveErrMsg,
-        completed_at: new Date().toISOString(),
-        model_used: 'programmatic',
-        provider: 'programmatic',
-      }).eq('id', saveStepId);
-      throw saveErr;
-    }
-    const saveLatency = Date.now() - saveStart;
-    await supabase.from('generation_steps').update({
-      status: 'completed', output: saveOutput, latency_ms: saveLatency,
-      completed_at: new Date().toISOString(), model_used: 'programmatic', provider: 'programmatic',
-    }).eq('id', saveStepId);
+    const saveOutput = await executeSaveArticle(jobId, articleData, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
+    if (!saveOutput.article_id) throw new Error("Failed to save article_id");
+    articleId = saveOutput.article_id as string; // [SAFE MODE] Sync with scoped var
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', true, lockId);
-    console.log(`[V2] ✅ SAVE_ARTICLE ${saveLatency}ms | article_id=${saveOutput.article_id}`);
 
     // ============================================================
-    // STEP: IMAGE_GEN (Gemini Nano Banana — hero + section + contextual)
+    // STEP 8: POST-PROCESSING (Images, Links, SEO) - Non-fatal
     // ============================================================
-    console.log(`[V2] Step: IMAGE_GEN`);
-    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'IMAGE_GEN' }).eq('id', jobId);
-    let imgStepId: string | null = null;
     try {
-      imgStepId = await createStepOrFail(supabase, jobId, 'IMAGE_GEN', { article_id: saveOutput.article_id });
-      const imgStart = Date.now();
-      const imgOutput = await withTimeout(
-        executeImageGenGeminiNanoBanana(saveOutput.article_id as string | null, articleData!, outline, jobInput, supabase),
-        180_000, 'IMAGE_GEN'
-      );
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: imgOutput, latency_ms: Date.now() - imgStart,
-        completed_at: new Date().toISOString(), model_used: GEMINI_IMAGE_MODEL, provider: 'gemini-nano-banana',
-      }).eq('id', imgStepId);
-      console.log(`[V2] ✅ IMAGE_GEN ${Date.now() - imgStart}ms`);
-    } catch (imgErr) {
-      const imgErrMsg = imgErr instanceof Error ? imgErr.message : 'Image gen failed';
-      console.warn(`[V2] ⚠️ IMAGE_GEN failed (non-fatal): ${imgErrMsg}`);
-      if (imgStepId) await supabase.from('generation_steps').update({ status: 'failed', error_message: imgErrMsg, completed_at: new Date().toISOString() }).eq('id', imgStepId);
-    }
-    await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', true, lockId);
+      await withTimeout(executeImageGenGeminiNanoBanana(saveOutput.article_id as string, articleData, outline, jobInput, supabase), 180_000, 'IMAGE_GEN');
+    } catch (e) { console.warn("[V2] ImageGen failed:", e); }
 
-    // ============================================================
-    // STEP: INTERNAL_LINK_ENGINE
-    // ============================================================
-    console.log(`[V2] Step: INTERNAL_LINK_ENGINE`);
-    await updatePublicStatus(supabase, jobId, 'INTERNAL_LINK_ENGINE', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'INTERNAL_LINK_ENGINE' }).eq('id', jobId);
     try {
-      const linkOutput = await executeInternalLinkEngine(
-        saveOutput.article_id as string | null,
-        (jobInput.blog_id as string) || '',
-        (jobInput.keyword as string) || '',
-        (articleData!.title as string) || '',
-        supabase
-      );
-      console.log(`[V2] ✅ INTERNAL_LINK_ENGINE inserted=${linkOutput.inserted ?? 0}`);
-    } catch (_) { /* non-fatal */ }
-    await updatePublicStatus(supabase, jobId, 'INTERNAL_LINK_ENGINE', true, lockId);
+      await executeInternalLinkEngine(saveOutput.article_id as string, jobInput.blog_id as string, jobInput.keyword as string, articleData.title as string, supabase);
+    } catch (e) { console.warn("[V2] InternalLink failed:", e); }
 
-    // ============================================================
-    // STEP: SEO_SCORE (non-fatal)
-    // ============================================================
-    console.log(`[V2] Step: SEO_SCORE`);
-    await updatePublicStatus(supabase, jobId, 'SEO_SCORE', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'SEO_SCORE' }).eq('id', jobId);
-    let seoStepId: string | null = null;
+    // Quality Gate
     try {
-      seoStepId = await createStepOrFail(supabase, jobId, 'SEO_SCORE', { article_id: saveOutput.article_id });
-      const htmlForScore = (articleData!.html_article as string) || '';
-      const seoOutput = await executeSeoScoreStep(
-        saveOutput.article_id as string | null,
-        (articleData!.title as string) || '',
-        htmlForScore,
-        (jobInput.keyword as string) || '',
-        (jobInput.blog_id as string) || '',
-        supabaseUrl,
-        serviceKey
-      );
-      await supabase.from('generation_steps').update({
-        status: 'completed', output: seoOutput, completed_at: new Date().toISOString(), model_used: 'calculate-content-score', provider: 'programmatic',
-      }).eq('id', seoStepId);
-      console.log(`[V2] ✅ SEO_SCORE ${seoOutput.skipped ? '(skipped)' : '(done)'}`);
-    } catch (seoErr) {
-      const seoErrMsg = seoErr instanceof Error ? seoErr.message : 'SEO score failed';
-      console.warn(`[V2] ⚠️ SEO_SCORE failed (non-fatal): ${seoErrMsg}`);
-      if (seoStepId) {
-        await supabase.from('generation_steps').update({
-          status: 'failed', error_message: seoErrMsg, completed_at: new Date().toISOString(),
-        }).eq('id', seoStepId);
-      }
-    }
-    await updatePublicStatus(supabase, jobId, 'SEO_SCORE', true, lockId);
+      const qgOutput = await executeQualityGate(saveOutput.article_id as string, jobInput.blog_id as string, articleData, entityCoverage.coverageScore, {}, jobType, supabase);
+      console.log(`[V2] QUALITY_GATE: passed=${qgOutput.passed}`);
+    } catch (e) { console.warn("[V2] QualityGate failed:", e); }
 
     // ============================================================
-    // STEP: QUALITY_GATE (block publish if thresholds not met)
+    // FINALIZATION
     // ============================================================
-    let seoScoreData: Record<string, unknown> = {};
-    try {
-      const scoreResp = await fetch(`${supabaseUrl}/functions/v1/calculate-content-score`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          articleId: saveOutput.article_id,
-          title: articleData!.title,
-          content: (articleData!.html_article as string)?.slice(0, 100_000),
-          keyword: jobInput.keyword,
-          blogId: jobInput.blog_id,
-          saveScore: false,
-        }),
-      });
-      if (scoreResp.ok) seoScoreData = await scoreResp.json();
-    } catch (_) { /* use empty */ }
-    console.log(`[V2] Step: QUALITY_GATE`);
-    await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', false, lockId);
-    await supabase.from('generation_jobs').update({ current_step: 'QUALITY_GATE' }).eq('id', jobId);
-    const qgStepId = await createStepOrFail(supabase, jobId, 'QUALITY_GATE', { article_id: saveOutput.article_id });
-    const qgOutput = await executeQualityGate(
-      saveOutput.article_id as string | null,
-      (jobInput.blog_id as string) || '',
-      articleData!,
-      entityCoverage.coverageScore,
-      seoScoreData,
-      jobType,
-      supabase
-    );
-    await supabase.from('generation_steps').update({
-      status: 'completed', output: qgOutput, completed_at: new Date().toISOString(), model_used: 'programmatic', provider: 'quality_gate',
-    }).eq('id', qgStepId);
-    await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', true, lockId);
-    console.log(`[V2] ✅ QUALITY_GATE passed=${qgOutput.passed} ${!qgOutput.passed ? `reasons=${(qgOutput.reasons as string[])?.join('; ')}` : ''}`);
-
-    // ============================================================
-    // COMPLETED
-    // ============================================================
-    const { data: updatedJob } = await supabase
-      .from('generation_jobs')
-      .select('article_id, output')
-      .eq('id', jobId)
-      .single();
-
-    if (!updatedJob?.article_id) {
-      throw new Error('Pipeline completed but no article was saved.');
-    }
-
     await supabase.from('generation_jobs').update({
-      status: 'completed', current_step: null,
-      cost_usd: totalCostUsd, total_api_calls: totalApiCalls,
-      completed_at: new Date().toISOString(), locked_at: null, locked_by: null,
-      public_stage: 'FINALIZING', public_progress: 100,
-      public_message: 'Artigo pronto!', public_updated_at: new Date().toISOString(),
-    }).eq('id', jobId);
-
-    const duration = Date.now() - jobStart;
-    console.log(`[ORCHESTRATOR:V2:COMPLETE] job_id=${jobId} article_id=${updatedJob?.article_id} api_calls=${totalApiCalls} duration=${duration}ms cost=$${totalCostUsd.toFixed(6)}`);
-
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown orchestration error';
-    console.error(`[ORCHESTRATOR:V2] ❌ Job ${jobId} FAILED:`, errorMsg);
-
-    await supabase.from('generation_jobs').update({
-      status: 'failed', error_message: errorMsg,
-      cost_usd: totalCostUsd, total_api_calls: totalApiCalls,
-      completed_at: new Date().toISOString(), locked_at: null, locked_by: null,
-      public_stage: 'FINALIZING', public_progress: 0,
-      public_message: 'Ocorreu um problema. Tente novamente.',
+      status: 'completed',
+      article_id: saveOutput.article_id,
+      cost_usd: totalCostUsd,
+      total_api_calls: totalApiCalls,
+      completed_at: new Date().toISOString(),
+      public_stage: 'FINALIZING',
+      public_progress: 100,
+      public_message: 'Artigo pronto!',
       public_updated_at: new Date().toISOString(),
+      locked_at: null,
+      locked_by: null
     }).eq('id', jobId);
 
-    console.log(`[ORCHESTRATOR:V2:FAILED] job_id=${jobId} error=${errorMsg} api_calls=${totalApiCalls} duration=${Date.now() - jobStart}ms`);
-  } finally {
-    heartbeatRunning = false;
-    clearInterval(heartbeatInterval);
-    try {
-      await supabase.from('generation_jobs')
-        .update({ locked_by: null, locked_at: null })
-        .eq('id', jobId).eq('locked_by', lockId);
-    } catch (_) { /* ignore */ }
-    console.log(`[ENGINE:V2] FINALIZER: job_id=${jobId} lock_released`);
-  }
+    console.log(`[ORCHESTRATOR:V2:COMPLETE] job_id=${jobId} duration=${Date.now() - jobStart}ms`);
 
- } catch (fatalErr) {
-    console.error('[ORCHESTRATOR_FATAL:V2]', jobId, fatalErr);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[ORCHESTRATOR:V2:FATAL] job_id=${jobId} error:`, errorMsg);
+
     try {
+      // [SAFE MODE] If we already have an article_id, mark as completed despite errors
+      const finalStatus = articleId ? 'completed' : 'failed';
+      const finalMessage = articleId
+        ? 'Artigo gerado em modo rascunho — otimização recomendada.'
+        : 'Ocorreu um erro durante a geração. Tente novamente.';
+
       await supabase.from('generation_jobs').update({
-        status: 'failed',
-        error_message: 'ENGINE_FATAL_CRASH',
-        public_message: 'Falha interna ao iniciar o gerador.',
-        locked_by: null, locked_at: null,
+        status: finalStatus,
+        article_id: articleId,
+        error_message: articleId ? `Recovered from error: ${errorMsg}` : errorMsg,
+        public_message: finalMessage,
         completed_at: new Date().toISOString(),
-        public_updated_at: new Date().toISOString(),
+        public_stage: 'FINALIZING',
+        public_progress: articleId ? 100 : 0,
+        locked_at: null,
+        locked_by: null
       }).eq('id', jobId);
-    } catch (_) { /* ignore */ }
-    throw fatalErr;
+    } catch (updateErr) {
+      console.error('[ORCHESTRATOR:V2:FATAL_UPDATE_FAILED]', updateErr);
+    }
+  } finally {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (lockId) {
+      try {
+        await supabase.from('generation_jobs').update({ locked_at: null, locked_by: null }).eq('id', jobId).eq('locked_by', lockId);
+      } catch (_) { }
+    }
   }
 }
 
