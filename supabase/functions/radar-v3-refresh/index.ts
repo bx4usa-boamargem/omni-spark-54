@@ -1,6 +1,6 @@
 // deno-lint-ignore-file
 /**
- * RADAR V3 MINIMAL — Edge Function
+ * RADAR V3 MINIMAL — Edge Function (Hardened)
  *
  * Lightweight Discovery Engine (< 3 seconds, ZERO AI calls).
  *
@@ -16,10 +16,10 @@
  * SCORING:
  *   confidence = freshness(0.4) + coverage_gap(0.4) + local_relevance(0.2)
  *
- * SECURITY:
- *   - Validates blog ownership via tenant_id
- *   - All writes use service role
- *   - Structured status (running/completed/failed)
+ * HARDENING:
+ *   - Always produces >= 3 opportunities (fallback guaranteed)
+ *   - Detailed phase logging for remote diagnostics
+ *   - Graceful Google Search failure handling
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -31,7 +31,8 @@ import { generateAutoKeywords } from "../_shared/keywordGenerator.ts";
 // ============================================================================
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers":
+        "authorization, x-client-info, apikey, content-type",
 };
 
 // ============================================================================
@@ -66,20 +67,29 @@ Deno.serve(async (req: Request) => {
         // ─── 2. Ownership validation ─────────────────────────────────────
         const { data: blog, error: blogErr } = await supabase
             .from("blogs")
-            .select("id, city, niche_profile_id, niche_profiles(name, description), sub_accounts(tenant_id)")
+            .select(
+                "id, city, niche_profile_id, niche_profiles(name, description), sub_accounts(tenant_id)"
+            )
             .eq("id", blogId)
             .maybeSingle();
 
-        if (blogErr || !blog) return jsonRes({ error: "Blog not found" }, 403);
+        if (blogErr || !blog)
+            return jsonRes({ error: "Blog not found", detail: blogErr?.message }, 403);
 
-        const sa = Array.isArray(blog.sub_accounts) ? blog.sub_accounts[0] : blog.sub_accounts;
+        const sa = Array.isArray(blog.sub_accounts)
+            ? blog.sub_accounts[0]
+            : blog.sub_accounts;
         const tenantId = (sa as any)?.tenant_id;
         if (!tenantId) return jsonRes({ error: "Tenant validation failed" }, 403);
 
-        const np = Array.isArray(blog.niche_profiles) ? blog.niche_profiles[0] : blog.niche_profiles;
+        const np = Array.isArray(blog.niche_profiles)
+            ? blog.niche_profiles[0]
+            : blog.niche_profiles;
         const niche = (np as any)?.name || "general";
         const nicheDesc = (np as any)?.description || "";
         const city = blog.city || "";
+
+        console.log(`[radar-v3] Blog=${blogId} Niche=${niche} City=${city} Tenant=${tenantId}`);
 
         // ─── 3. Create run ───────────────────────────────────────────────
         const { data: run, error: runErr } = await supabase
@@ -95,6 +105,7 @@ Deno.serve(async (req: Request) => {
 
         if (runErr || !run) throw new Error(`Run creation failed: ${runErr?.message}`);
         runId = run.id;
+        console.log(`[radar-v3] Run created: ${runId}`);
 
         // ─── 4. Fetch existing articles (for coverage gap) ───────────────
         const { data: existingArticles } = await supabase
@@ -103,70 +114,95 @@ Deno.serve(async (req: Request) => {
             .eq("blog_id", blogId)
             .limit(100);
 
-        const existingTitles = (existingArticles || []).map((a: any) =>
-            normalizeText(a.title || a.primary_keyword || "")
-        ).filter(Boolean);
+        const existingTitles = (existingArticles || [])
+            .map((a: any) => normalizeText(a.title || a.primary_keyword || ""))
+            .filter(Boolean);
+
+        console.log(`[radar-v3] Existing articles: ${existingTitles.length}`);
 
         // ─── 5. Generate keyword seeds ───────────────────────────────────
         const seeds = generateAutoKeywords(niche, { niche, city });
         const allSeeds = [seeds.primary, ...seeds.secondary].filter(Boolean);
+        console.log(`[radar-v3] Seeds generated: ${allSeeds.length} → ${allSeeds.join(", ")}`);
 
         // ─── 6. Google signals (parallel: Custom Search + Autocomplete) ──
         const primaryQuery = city ? `${niche} ${city}` : niche;
 
-        const [searchResult, autocompleteResults] = await Promise.all([
-            fetchGoogleCustomSearchRaw({
-                supabaseAdmin: supabase,
-                tenant_id: tenantId,
-                query: primaryQuery,
-                hl: "pt-BR",
-                gl: "br",
-                timeoutMs: 2000,
-            }),
-            fetchAutocomplete(primaryQuery),
-        ]);
+        let searchResult: any = { ok: false, error: "not_attempted" };
+        let autocompleteResults: string[] = [];
+
+        try {
+            [searchResult, autocompleteResults] = await Promise.all([
+                fetchGoogleCustomSearchRaw({
+                    supabaseAdmin: supabase,
+                    tenant_id: tenantId,
+                    query: primaryQuery,
+                    hl: "pt-BR",
+                    gl: "br",
+                    timeoutMs: 2000,
+                }),
+                fetchAutocomplete(primaryQuery),
+            ]);
+        } catch (googleErr) {
+            console.error(`[radar-v3] Google signals failed:`, googleErr);
+            await logToDb(supabase, runId, "warn", "Google signals failed, using seeds only", {
+                error: String(googleErr),
+            });
+        }
 
         // Extract signals from Google Custom Search
         let serpTitles: string[] = [];
         let serpSnippets: string[] = [];
         let relatedSearches: string[] = [];
 
-        if (searchResult.ok) {
+        if (searchResult?.ok) {
             const top10 = normalizeTop10Results(searchResult.data);
-            serpTitles = top10.map((r) => r.title);
-            serpSnippets = top10.map((r) => r.snippet);
+            serpTitles = top10.map((r: any) => r.title);
+            serpSnippets = top10.map((r: any) => r.snippet);
 
-            // Extract "related searches" from spelling suggestions
-            if (searchResult.data.spelling?.correctedQuery) {
+            if (searchResult.data?.spelling?.correctedQuery) {
                 relatedSearches.push(searchResult.data.spelling.correctedQuery);
             }
 
-            // Extract PAA-like signals from snippets (questions)
             const paaSignals = extractQuestionsFromSnippets(serpSnippets);
             relatedSearches.push(...paaSignals);
+
+            console.log(`[radar-v3] Google Search OK: ${serpTitles.length} titles, ${paaSignals.length} PAA`);
+        } else {
+            console.warn(`[radar-v3] Google Search FAILED: ${searchResult?.error || "unknown"}`);
+            await logToDb(supabase, runId, "warn", "Google Custom Search failed", {
+                error: searchResult?.error,
+                status: searchResult?.status,
+            });
         }
 
-        // Merge autocomplete suggestions
+        // Merge autocomplete
         relatedSearches.push(...autocompleteResults);
+        relatedSearches = [
+            ...new Set(relatedSearches.map((s) => s.toLowerCase().trim())),
+        ].filter(Boolean);
 
-        // Deduplicate
-        relatedSearches = [...new Set(relatedSearches.map((s) => s.toLowerCase().trim()))].filter(Boolean);
+        console.log(`[radar-v3] Autocomplete: ${autocompleteResults.length}, Related total: ${relatedSearches.length}`);
 
         // ─── 7. Build opportunities ──────────────────────────────────────
         const candidateKeywords = buildCandidateKeywords(
-            allSeeds, serpTitles, relatedSearches, niche, city
+            allSeeds,
+            serpTitles,
+            relatedSearches,
+            niche,
+            city
         );
 
-        const opportunities = candidateKeywords
+        console.log(`[radar-v3] Candidate keywords: ${candidateKeywords.length}`);
+
+        let opportunities = candidateKeywords
             .map((kw) => {
                 const gapScore = computeCoverageGap(kw.keyword, existingTitles);
                 const freshnessScore = computeFreshness(kw.keyword, serpTitles, serpSnippets);
                 const localScore = computeLocalRelevance(kw.keyword, city);
 
                 const confidence = Math.round(
-                    freshnessScore * 0.4 +
-                    gapScore * 0.4 +
-                    localScore * 0.2
+                    freshnessScore * 0.4 + gapScore * 0.4 + localScore * 0.2
                 );
 
                 return {
@@ -178,31 +214,66 @@ Deno.serve(async (req: Request) => {
                     source_signal: kw.source,
                 };
             })
-            .filter((o) => o.confidence_score >= 30)
+            .filter((o) => o.confidence_score >= 15) // lowered from 30
             .sort((a, b) => b.confidence_score - a.confidence_score)
-            .slice(0, 10);
+            .slice(0, 12);
+
+        console.log(`[radar-v3] Opportunities after scoring: ${opportunities.length}`);
+
+        // ─── 7b. FALLBACK: always deliver at least 3 ─────────────────────
+        if (opportunities.length < 3) {
+            console.log(`[radar-v3] Activating fallback (${opportunities.length} < 3)`);
+            await logToDb(supabase, runId, "warn", `Only ${opportunities.length} scored opportunities, adding fallback`, {
+                candidates_count: candidateKeywords.length,
+                google_ok: searchResult?.ok || false,
+                autocomplete_count: autocompleteResults.length,
+            });
+
+            const fallback = generateFallbackOpportunities(niche, city);
+            const existingKws = new Set(opportunities.map((o) => o.keyword));
+            for (const fb of fallback) {
+                if (!existingKws.has(fb.keyword) && opportunities.length < 5) {
+                    opportunities.push(fb);
+                    existingKws.add(fb.keyword);
+                }
+            }
+        }
 
         // ─── 8. Insert opportunities ─────────────────────────────────────
-        if (opportunities.length > 0) {
-            const rows = opportunities.map((opp) => ({
-                run_id: runId,
-                blog_id: blogId,
-                tenant_id: tenantId,
-                keyword: opp.keyword,
-                title: opp.title_suggestion,
-                confidence_score: opp.confidence_score,
-                why_now: opp.why_now,
-                status: "pending",
-                source: opp.source,
-                metadata: { source_signal: opp.source_signal },
-            }));
+        const rows = opportunities.map((opp) => ({
+            run_id: runId,
+            blog_id: blogId,
+            tenant_id: tenantId,
+            keyword: opp.keyword,
+            title: opp.title_suggestion,
+            confidence_score: opp.confidence_score,
+            why_now: opp.why_now,
+            status: "pending",
+            source: opp.source,
+            metadata: { source_signal: opp.source_signal },
+        }));
 
-            const { error: insertErr } = await supabase
-                .from("radar_v3_opportunities")
-                .insert(rows);
+        console.log(`[radar-v3] Inserting ${rows.length} opportunities...`);
 
-            if (insertErr) throw new Error(`Insert failed: ${insertErr.message}`);
+        const { data: insertData, error: insertErr } = await supabase
+            .from("radar_v3_opportunities")
+            .insert(rows)
+            .select("id");
+
+        if (insertErr) {
+            console.error(`[radar-v3] INSERT FAILED:`, JSON.stringify(insertErr));
+            await logToDb(supabase, runId, "error", `Insert failed: ${insertErr.message}`, {
+                code: insertErr.code,
+                details: insertErr.details,
+                hint: insertErr.hint,
+                rows_attempted: rows.length,
+                sample_row: rows[0],
+            });
+            throw new Error(`Insert failed: ${insertErr.message} | code=${insertErr.code} | hint=${insertErr.hint}`);
         }
+
+        const insertedCount = insertData?.length || rows.length;
+        console.log(`[radar-v3] INSERT OK: ${insertedCount} rows`);
 
         // ─── 9. Complete run ─────────────────────────────────────────────
         const elapsed = Date.now() - t0;
@@ -212,37 +283,39 @@ Deno.serve(async (req: Request) => {
             .update({
                 status: "completed",
                 finished_at: new Date().toISOString(),
-                opportunities_count: opportunities.length,
-                metadata: { niche, city, trigger: body.mode || "manual", elapsed_ms: elapsed },
+                opportunities_count: insertedCount,
+                metadata: {
+                    niche,
+                    city,
+                    trigger: body.mode || "manual",
+                    elapsed_ms: elapsed,
+                    google_search_ok: searchResult?.ok || false,
+                    autocomplete_count: autocompleteResults.length,
+                    candidates_count: candidateKeywords.length,
+                    fallback_used: opportunities.length > candidateKeywords.filter((k) => true).length,
+                },
             })
             .eq("id", runId);
 
-        // Log
-        await supabase
-            .from("radar_v3_logs")
-            .insert({
-                run_id: runId,
-                level: "info",
-                message: `Radar V3 completed in ${elapsed}ms — ${opportunities.length} opportunities`,
-                metadata: {
-                    elapsed_ms: elapsed,
-                    serp_count: serpTitles.length,
-                    autocomplete_count: autocompleteResults.length,
-                    related_count: relatedSearches.length,
-                    existing_articles: existingTitles.length,
-                },
-            })
-            .catch(() => { });
+        await logToDb(supabase, runId, "info", `Radar V3 completed in ${elapsed}ms — ${insertedCount} opportunities`, {
+            elapsed_ms: elapsed,
+            serp_count: serpTitles.length,
+            autocomplete_count: autocompleteResults.length,
+            related_count: relatedSearches.length,
+            existing_articles: existingTitles.length,
+            candidates: candidateKeywords.length,
+            inserted: insertedCount,
+        });
 
         return jsonRes({
             success: true,
             run_id: runId,
-            opportunities_count: opportunities.length,
+            opportunities_count: insertedCount,
             elapsed_ms: elapsed,
         });
     } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error("[radar-v3-refresh] Error:", errorMsg);
+        console.error("[radar-v3] FATAL:", errorMsg);
 
         if (runId) {
             await supabase
@@ -255,15 +328,62 @@ Deno.serve(async (req: Request) => {
                 .eq("id", runId)
                 .catch(() => { });
 
-            await supabase
-                .from("radar_v3_logs")
-                .insert({ run_id: runId, level: "error", message: errorMsg.substring(0, 500) })
-                .catch(() => { });
+            await logToDb(supabase, runId, "error", `Fatal: ${errorMsg}`).catch(() => { });
         }
 
         return jsonRes({ error: errorMsg }, 500);
     }
 });
+
+
+// ============================================================================
+// FALLBACK: guaranteed opportunities when signals fail
+// ============================================================================
+function generateFallbackOpportunities(niche: string, city: string) {
+    const cityLabel = city || "sua cidade";
+    return [
+        {
+            keyword: `${niche.toLowerCase()} ${cityLabel.toLowerCase()}`,
+            title_suggestion: `${capitalizeFirst(niche)} em ${capitalizeFirst(cityLabel)}: Guia Completo`,
+            why_now: "Termo evergreen com busca constante",
+            confidence_score: 65,
+            source: "radar_v3_minimal" as const,
+            source_signal: "fallback",
+        },
+        {
+            keyword: `quanto custa ${niche.toLowerCase()} ${cityLabel.toLowerCase()}`,
+            title_suggestion: `Quanto Custa ${capitalizeFirst(niche)} em ${capitalizeFirst(cityLabel)}?`,
+            why_now: "Busca transacional com alta conversão",
+            confidence_score: 70,
+            source: "radar_v3_minimal" as const,
+            source_signal: "fallback",
+        },
+        {
+            keyword: `melhor ${niche.toLowerCase()} ${cityLabel.toLowerCase()}`,
+            title_suggestion: `Melhor ${capitalizeFirst(niche)} em ${capitalizeFirst(cityLabel)}: Como Escolher`,
+            why_now: "Busca commercial com intenção de decisão",
+            confidence_score: 60,
+            source: "radar_v3_minimal" as const,
+            source_signal: "fallback",
+        },
+        {
+            keyword: `como escolher ${niche.toLowerCase()}`,
+            title_suggestion: `Como Escolher ${capitalizeFirst(niche)}: Guia Prático`,
+            why_now: "Conteúdo informacional com alto engajamento",
+            confidence_score: 55,
+            source: "radar_v3_minimal" as const,
+            source_signal: "fallback",
+        },
+        {
+            keyword: `dicas ${niche.toLowerCase()} ${cityLabel.toLowerCase()}`,
+            title_suggestion: `Dicas de ${capitalizeFirst(niche)} em ${capitalizeFirst(cityLabel)}`,
+            why_now: "Conteúdo educacional de alto valor",
+            confidence_score: 50,
+            source: "radar_v3_minimal" as const,
+            source_signal: "fallback",
+        },
+    ];
+}
 
 
 // ============================================================================
@@ -281,7 +401,6 @@ async function fetchAutocomplete(query: string): Promise<string[]> {
         if (!res.ok) return [];
 
         const data = await res.json();
-        // Format: [query, [suggestions]]
         return Array.isArray(data?.[1]) ? data[1].slice(0, 8) : [];
     } catch {
         return [];
@@ -335,11 +454,21 @@ function buildCandidateKeywords(
     const seen = new Set<string>();
     const candidates: CandidateKeyword[] = [];
 
-    const add = (kw: string, title: string, why: string, source: string) => {
+    const add = (
+        kw: string,
+        title: string,
+        why: string,
+        source: string
+    ) => {
         const norm = kw.toLowerCase().trim();
         if (norm.length < 5 || seen.has(norm)) return;
         seen.add(norm);
-        candidates.push({ keyword: norm, titleSuggestion: title, whyNow: why, source });
+        candidates.push({
+            keyword: norm,
+            titleSuggestion: title,
+            whyNow: why,
+            source,
+        });
     };
 
     // From keyword seeds
@@ -401,12 +530,8 @@ function buildCandidateKeywords(
 // SCORING FUNCTIONS
 // ============================================================================
 
-/**
- * Fuzzy coverage gap: token overlap between keyword and existing articles.
- * Returns 0-100 (100 = completely new topic, 0 = fully covered).
- */
 function computeCoverageGap(keyword: string, existingTitles: string[]): number {
-    if (existingTitles.length === 0) return 100; // No articles = everything is a gap
+    if (existingTitles.length === 0) return 100;
 
     const kwTokens = tokenize(keyword);
     if (kwTokens.length === 0) return 100;
@@ -417,7 +542,6 @@ function computeCoverageGap(keyword: string, existingTitles: string[]): number {
         const titleTokens = tokenize(title);
         if (titleTokens.length === 0) continue;
 
-        // Jaccard-like overlap
         const intersection = kwTokens.filter((t) => titleTokens.includes(t)).length;
         const union = new Set([...kwTokens, ...titleTokens]).size;
         const overlap = union > 0 ? intersection / union : 0;
@@ -425,67 +549,77 @@ function computeCoverageGap(keyword: string, existingTitles: string[]): number {
         maxOverlap = Math.max(maxOverlap, overlap);
     }
 
-    // Higher overlap = lower gap score
     return Math.round((1 - maxOverlap) * 100);
 }
 
-/**
- * Freshness signal: detects year mentions and recency hints in SERP.
- * Returns 0-100 (100 = very fresh/timely topic).
- */
-function computeFreshness(keyword: string, serpTitles: string[], serpSnippets: string[]): number {
+function computeFreshness(
+    keyword: string,
+    serpTitles: string[],
+    serpSnippets: string[]
+): number {
     const currentYear = new Date().getFullYear();
     const allText = [...serpTitles, ...serpSnippets].join(" ").toLowerCase();
     const kwLower = keyword.toLowerCase();
 
-    let score = 50; // baseline
+    let score = 50;
 
-    // Year mentions in SERP
     const yearPattern = new RegExp(`(${currentYear}|${currentYear - 1})`, "g");
     const yearMatches = allText.match(yearPattern);
     if (yearMatches && yearMatches.length >= 3) score += 25;
     else if (yearMatches && yearMatches.length >= 1) score += 15;
 
-    // Freshness keywords in SERP
-    const freshnessTerms = ["novo", "atualizado", "recente", "lançamento", "tendência", "2026", "2025"];
+    const freshnessTerms = [
+        "novo", "atualizado", "recente", "lançamento", "tendência",
+        String(currentYear), String(currentYear - 1),
+    ];
     const freshnessHits = freshnessTerms.filter((t) => allText.includes(t)).length;
     score += Math.min(freshnessHits * 5, 20);
 
-    // Keyword itself has temporal signal
     if (/\b(202[5-9]|novo|atualizado)\b/i.test(kwLower)) score += 10;
+
+    // If no SERP data at all, give neutral score
+    if (serpTitles.length === 0) score = 60;
 
     return Math.min(100, Math.max(0, score));
 }
 
-/**
- * Local relevance: how locally-relevant is this keyword?
- * Returns 0-100 (100 = highly local).
- */
 function computeLocalRelevance(keyword: string, city: string): number {
-    if (!city) return 50; // No city context = neutral
+    if (!city) return 50;
 
     const kwLower = keyword.toLowerCase();
     const cityLower = city.toLowerCase();
 
-    // Direct city mention
     if (kwLower.includes(cityLower)) return 100;
 
-    // Partial match (city fragments)
     const cityParts = cityLower.split(/\s+/);
-    const partialMatch = cityParts.some((p) => p.length > 3 && kwLower.includes(p));
+    const partialMatch = cityParts.some(
+        (p) => p.length > 3 && kwLower.includes(p)
+    );
     if (partialMatch) return 75;
 
-    // Local intent signals
     const localSignals = ["perto", "região", "local", "em ", "na ", "no ", "bairro"];
     if (localSignals.some((s) => kwLower.includes(s))) return 60;
 
-    return 30; // Generic
+    return 30;
 }
 
 
 // ============================================================================
-// TEXT UTILS
+// HELPERS
 // ============================================================================
+
+async function logToDb(
+    supabase: any,
+    runId: string,
+    level: "info" | "warn" | "error",
+    message: string,
+    metadata: Record<string, unknown> = {}
+) {
+    await supabase
+        .from("radar_v3_logs")
+        .insert({ run_id: runId, level, message: message.substring(0, 500), metadata })
+        .catch((err: unknown) => console.error("[radar-v3-log] Insert failed:", err));
+}
 
 const STOP_WORDS = new Set([
     "a", "o", "e", "de", "da", "do", "em", "um", "uma", "para", "com", "por",
@@ -504,7 +638,11 @@ function tokenize(text: string): string[] {
 }
 
 function normalizeText(text: string): string {
-    return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    return text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
 }
 
 function capitalizeFirst(text: string): string {
