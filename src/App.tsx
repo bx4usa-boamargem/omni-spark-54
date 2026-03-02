@@ -85,6 +85,7 @@ import ClientSEO from "./pages/client/ClientSEO";
 import ClientArticles from "./pages/client/ClientArticles";
 import ClientReviewCenter from "./pages/client/ClientReviewCenter";
 import ClientStrategy from "./pages/client/ClientStrategy";
+import RadarV3Page from "./pages/client/RadarV3Page";
 import ClientConsultantMetrics from "./pages/client/ClientConsultantMetrics";
 import ClientNotificationSettings from "./pages/client/ClientNotificationSettings";
 import ClientPosts from "./pages/client/ClientPosts";
@@ -189,10 +190,13 @@ function GlobalErrorFallback({ error, resetErrorBoundary }: { error: Error; rese
 // Componente de fallback local para evitar desmontar o App inteiro
 function PageErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
-    <div className="p-6 border-2 border-destructive/20 bg-destructive/5 rounded-xl text-center">
+    <div className="p-6 border-2 border-destructive/20 bg-destructive/5 rounded-xl text-center my-8 mx-4 shadow-sm animate-in fade-in duration-300">
       <h2 className="text-lg font-bold text-destructive mb-2">Erro de Renderização Local</h2>
-      <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
-      <Button onClick={resetErrorBoundary} variant="outline" size="sm">Tentar Recuperar Bloco</Button>
+      <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">{error.message}</p>
+      <div className="flex gap-3 justify-center">
+        <Button onClick={resetErrorBoundary} variant="outline" size="sm">Tentar Recuperar</Button>
+        <Button onClick={() => window.location.reload()} variant="ghost" size="sm">Recarregar</Button>
+      </div>
     </div>
   );
 }
@@ -238,7 +242,8 @@ const ClientRoutes = () => (
           <Route path="leads" element={<ClientLeads />} />
 
           {/* Inteligência */}
-          <Route path="radar" element={<ClientStrategy />} />
+          <Route path="radar" element={<RadarV3Page />} />
+          <Route path="strategy" element={<ClientStrategy />} />
           <Route path="seo" element={<ClientSEO />} />
 
           {/* Conteúdo */}
@@ -282,7 +287,6 @@ const ClientRoutes = () => (
           {/* Legacy redirects para compatibilidade */}
           <Route path="posts" element={<Navigate to="/client/articles" replace />} />
           <Route path="site" element={<Navigate to="/client/portal" replace />} />
-          <Route path="strategy" element={<Navigate to="/client/radar" replace />} />
           <Route path="consultant" element={<Navigate to="/client/results" replace />} />
           <Route path="performance" element={<Navigate to="/client/results?tab=performance" replace />} />
           <Route path="notifications" element={<Navigate to="/client/profile?tab=account" replace />} />
