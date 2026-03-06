@@ -52,7 +52,12 @@ export function PremiumSidebar({ isPlatformAdmin, onHelpClick }: PremiumSidebarP
 
   const handleNavigate = useCallback(
     (path: string) => {
+      // Fechamento imediato de estados que afetam o DOM flutuante
       setMobileOpen(false);
+      setIsExpanded(false);
+
+      // Navegação direta. O React Router gerencia a transição.
+      // Removido requestAnimationFrame que causava atrasos e possíveis race conditions.
       navigate(path);
     },
     [navigate]
@@ -70,8 +75,8 @@ export function PremiumSidebar({ isPlatformAdmin, onHelpClick }: PremiumSidebarP
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
         className={cn(
-          'hidden lg:flex fixed left-0 top-0 h-screen z-[100]',
-          'flex-col bg-white dark:bg-gray-900',
+          'flex flex-col fixed left-0 top-0 h-screen z-[100]',
+          'bg-white dark:bg-gray-900',
           'border-r border-[#E5E7EB] dark:border-gray-700',
           'transition-all duration-300 overflow-hidden',
           isExpanded ? 'w-60 shadow-lg' : 'w-16'
