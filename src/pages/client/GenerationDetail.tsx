@@ -33,11 +33,11 @@ const STEP_LABELS: Record<string, string> = {
   'SAVE_ARTICLE': '💾 Salvando artigo',
   'IMAGE_GEN': '🖼️ Imagens (hero + seções)',
   'IMAGE_GEN_ASYNC': '🖼️ Gerando imagem contextual',
-  'INTERNAL_LINK_ENGINE': '🔗 Links internos',
+
   'SEO_SCORE': '📊 Score SEO',
   'QUALITY_GATE': '✅ Quality gate',
 };
-const ORDERED_STEPS = ['INPUT_VALIDATION', 'SERP_ANALYSIS', 'SERP_GAP_ANALYSIS', 'OUTLINE_GEN', 'ENTITY_EXTRACTION', 'CONTENT_GEN', 'SAVE_ARTICLE', 'IMAGE_GEN', 'INTERNAL_LINK_ENGINE', 'QUALITY_GATE'] as const;
+const ORDERED_STEPS = ['INPUT_VALIDATION', 'SERP_ANALYSIS', 'SERP_GAP_ANALYSIS', 'OUTLINE_GEN', 'ENTITY_EXTRACTION', 'CONTENT_GEN', 'SAVE_ARTICLE', 'IMAGE_GEN', 'QUALITY_GATE'] as const;
 
 
 const SEO_METRICS = ['topic_coverage', 'entity_coverage', 'intent_match', 'depth_score', 'eeat_signals', 'structure', 'readability'];
@@ -270,6 +270,27 @@ export default function GenerationDetail() {
     return () => { supabase.removeChannel(channel); };
   }, [jobId, roleLoading, isClient, jobSelect]);
 
+  // Fallback Polling: In case Realtime fails or article_id is delayed
+  useEffect(() => {
+    if (!jobId || !job || job.status === 'failed') return;
+    if (job.status === 'completed' && job.article_id) return;
+
+    const fallbackInterval = setInterval(async () => {
+      console.log('[DEBUG:FALLBACK_POLL] Checking job status...');
+      const { data, error } = await supabase.from('generation_jobs').select(jobSelect).eq('id', jobId).single() as { data: any, error: any };
+
+      if (data && !error) {
+        // Only update if something meaningful changed or we got the article_id
+        if (data.status !== job.status || data.article_id !== job.article_id || data.public_progress !== job.public_progress) {
+          console.log('[DEBUG:FALLBACK_POLL] Update detected:', { status: data.status, article_id: data.article_id });
+          setJob(data);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(fallbackInterval);
+  }, [jobId, job?.status, job?.article_id, jobSelect]);
+
   // Zombie detection
   useEffect(() => {
     if (!job || job.status !== 'running') { setIsZombie(false); return; }
@@ -326,7 +347,8 @@ export default function GenerationDetail() {
     return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
   }, [job?.status, job?.public_progress, realProgress, isClient]);
 
-  const effectiveStatus = (job?.status === 'completed' && !job?.article_id) ? 'failed' : job?.status;
+  // Relax status: if completed but no article_id, keep it "running" for the UI to avoid "failed" flash
+  const effectiveStatus = (job?.status === 'completed' && !job?.article_id) ? 'running' : job?.status;
 
   // Auto-redirect to editor when article exists (SAFE MODE: presence(article_id) rule)
   useEffect(() => {
