@@ -9,11 +9,10 @@ import { ArticleSEOList, ArticleSEOItem } from '@/components/seo/ArticleSEOList'
 import { SEOAnalysisModal } from '@/components/seo/SEOAnalysisModal';
 import { SEOTrendChart } from '@/components/seo/SEOTrendChart';
 import { SEOTrendStats } from '@/components/seo/SEOTrendStats';
-import { BatchInternalLinksButton } from '@/components/seo/BatchInternalLinksButton';
 import { useSEOTrends } from '@/hooks/useSEOTrends';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
+import {
   Lightbulb,
   AlertTriangle,
   CheckCircle2,
@@ -74,9 +73,9 @@ export default function ClientSEO() {
 
       if (data && data.length > 0) {
         setArticleCount(data.length);
-        
+
         // Calcular scores para dicas
-        const scores = data.map(article => 
+        const scores = data.map(article =>
           calculateSEOScore({
             title: article.title,
             metaDescription: article.meta_description || '',
@@ -106,7 +105,7 @@ export default function ClientSEO() {
           return wordCount < 800;
         }).length;
         const articlesWithoutKeywords = data.filter(a => !a.keywords || a.keywords.length === 0).length;
-        
+
         // Verificar presença de CTA
         const articlesWithoutCTA = data.filter(a => {
           const content = (a.content || '').toLowerCase();
@@ -118,11 +117,6 @@ export default function ClientSEO() {
         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
         const recentArticles = data.filter(a => new Date(a.created_at) >= oneMonthAgo).length;
 
-        // Verificar links internos (simplificado - procura por links no conteúdo)
-        const articlesWithInternalLinks = data.filter(a => {
-          const content = a.content || '';
-          return content.includes('href="') || content.includes('](/');
-        }).length;
 
         const getStatus = (percentage: number, inverted = false): 'good' | 'warning' | 'critical' => {
           const value = inverted ? 100 - percentage : percentage;
@@ -138,7 +132,7 @@ export default function ClientSEO() {
             icon: <Type className="h-5 w-5" />,
             score: Math.round(((data.length - articlesWithBadMeta) / data.length) * 100),
             status: getStatus(((data.length - articlesWithBadMeta) / data.length) * 100),
-            description: articlesWithBadMeta > 0 
+            description: articlesWithBadMeta > 0
               ? `${articlesWithBadMeta} artigos precisam de meta descriptions melhores`
               : 'Todos os artigos têm meta descriptions adequadas'
           },
@@ -148,7 +142,7 @@ export default function ClientSEO() {
             icon: <FileText className="h-5 w-5" />,
             score: Math.round(((data.length - articlesWithShortContent) / data.length) * 100),
             status: getStatus(((data.length - articlesWithShortContent) / data.length) * 100),
-            description: articlesWithShortContent > 0 
+            description: articlesWithShortContent > 0
               ? `${articlesWithShortContent} artigos podem ter mais conteúdo`
               : 'Todos os artigos têm tamanho ideal'
           },
@@ -158,7 +152,7 @@ export default function ClientSEO() {
             icon: <Target className="h-5 w-5" />,
             score: Math.round(((data.length - articlesWithoutKeywords) / data.length) * 100),
             status: getStatus(((data.length - articlesWithoutKeywords) / data.length) * 100),
-            description: articlesWithoutKeywords > 0 
+            description: articlesWithoutKeywords > 0
               ? `${articlesWithoutKeywords} artigos sem palavras-chave definidas`
               : 'Todos os artigos têm palavras-chave'
           },
@@ -168,7 +162,7 @@ export default function ClientSEO() {
             icon: <Image className="h-5 w-5" />,
             score: Math.round(((data.length - articlesWithoutImage) / data.length) * 100),
             status: getStatus(((data.length - articlesWithoutImage) / data.length) * 100),
-            description: articlesWithoutImage > 0 
+            description: articlesWithoutImage > 0
               ? `${articlesWithoutImage} artigos sem imagem de capa`
               : 'Todos os artigos têm imagens'
           },
@@ -181,20 +175,12 @@ export default function ClientSEO() {
             description: `${recentArticles} artigos publicados no último mês`
           },
           {
-            id: 'links',
-            label: 'Links Internos',
-            icon: <Link2 className="h-5 w-5" />,
-            score: Math.round((articlesWithInternalLinks / data.length) * 100),
-            status: getStatus((articlesWithInternalLinks / data.length) * 100),
-            description: `${articlesWithInternalLinks} de ${data.length} artigos têm links internos`
-          },
-          {
             id: 'cta',
             label: 'CTAs (Chamadas para Ação)',
             icon: <Target className="h-5 w-5" />,
             score: Math.round(((data.length - articlesWithoutCTA) / data.length) * 100),
             status: getStatus(((data.length - articlesWithoutCTA) / data.length) * 100),
-            description: articlesWithoutCTA > 0 
+            description: articlesWithoutCTA > 0
               ? `${articlesWithoutCTA} artigos sem CTA claro`
               : 'Todos os artigos têm CTAs'
           }
@@ -203,7 +189,7 @@ export default function ClientSEO() {
 
         // Gerar dicas contextuais
         const newTips: SEOTip[] = [];
-        
+
         if (articlesWithBadMeta > 0) {
           newTips.push({
             icon: <AlertTriangle className="h-4 w-4 text-yellow-500" />,
@@ -331,7 +317,7 @@ export default function ClientSEO() {
           <h1 className="text-2xl font-bold text-foreground">Análise de SEO</h1>
           <p className="text-muted-foreground text-sm">Saúde do seu Blog</p>
         </div>
-        
+
         {/* Narrativa + CTA Principal */}
         <div className="client-card client-card-glow p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -343,7 +329,7 @@ export default function ClientSEO() {
                 A OmniSeen analisa seus artigos como um especialista em SEO faria e mostra exatamente o que precisa ser ajustado para você ganhar mais visibilidade.
               </p>
             </div>
-            <Button 
+            <Button
               onClick={handleOptimizeNow}
               className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
             >
@@ -366,13 +352,13 @@ export default function ClientSEO() {
           </div>
           <div className="flex-1 space-y-4">
             <p className="text-lg text-foreground font-medium">
-              {aggregatedScore >= 80 
+              {aggregatedScore >= 80
                 ? 'Seu blog está tecnicamente pronto para crescer no Google! 🚀'
                 : aggregatedScore >= 60
-                ? 'Seu blog está saudável, mas algumas melhorias podem acelerar seu crescimento. ✨'
-                : aggregatedScore >= 40
-                ? 'Seu blog precisa de atenção. Vamos melhorar juntos!'
-                : 'Seu blog precisa de otimização urgente para performar no Google.'
+                  ? 'Seu blog está saudável, mas algumas melhorias podem acelerar seu crescimento. ✨'
+                  : aggregatedScore >= 40
+                    ? 'Seu blog precisa de atenção. Vamos melhorar juntos!'
+                    : 'Seu blog precisa de otimização urgente para performar no Google.'
               }
             </p>
             <p className="text-muted-foreground text-sm">
@@ -414,17 +400,7 @@ export default function ClientSEO() {
                   <span className="text-2xl font-bold text-foreground">{dim.score}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">{dim.description}</p>
-                
-                {/* Botão de Links Internos com IA */}
-                {dim.id === 'links' && dim.status !== 'good' && blog?.id && (
-                  <div className="mt-4 pt-3 border-t border-border">
-                    <BatchInternalLinksButton 
-                      blogId={blog.id} 
-                      onComplete={handleArticleUpdated}
-                      variant="compact"
-                    />
-                  </div>
-                )}
+
               </div>
             ))}
           </div>
@@ -485,13 +461,13 @@ export default function ClientSEO() {
           </div>
           <ul className="space-y-3">
             {tips.map((tip, index) => (
-              <li 
+              <li
                 key={index}
                 className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
               >
                 <div className={cn('p-2 rounded-lg',
                   tip.priority === 'high' ? 'bg-red-500/20' :
-                  tip.priority === 'medium' ? 'bg-yellow-500/20' : 'bg-blue-500/20'
+                    tip.priority === 'medium' ? 'bg-yellow-500/20' : 'bg-blue-500/20'
                 )}>
                   {tip.icon}
                 </div>

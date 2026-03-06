@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { 
-  ANTI_FUTURISTIC_IMAGE_RULES, 
+import {
+  ANTI_FUTURISTIC_IMAGE_RULES,
   getNicheImageInstructions,
   logBlockedAttempt,
   isMarketingNiche
@@ -37,7 +37,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: ambientes domésticos, quintais, proteção do lar, inspeção técnica, casas antigas.
     Evitar: tecnologia, circuitos, escritórios, dashboards, rostos em close.
   `,
-  
+
   // SALÕES DE BELEZA E ESTÉTICA
   'salão|beleza|cabelo|cabeleireiro|manicure|pedicure|estética|spa|massagem|depilação|sobrancelha': `
     Cores: rosa, dourado, branco, tons pastel, nude.
@@ -45,7 +45,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: espelhos, escovas, produtos de beleza, ambiente aconchegante e sofisticado.
     Evitar: close de rostos, tecnologia, escritórios.
   `,
-  
+
   // PET SHOPS E VETERINÁRIAS
   'pet|veterinár|animal|cachorro|gato|banho|tosa|ração|clínica veterinária': `
     Cores: azul claro, verde, laranja alegre, branco.
@@ -53,7 +53,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: patinhas, produtos pet, ambiente limpo e colorido, consultório veterinário.
     Evitar: rostos humanos, tecnologia, escritórios.
   `,
-  
+
   // ACADEMIAS E FITNESS
   'academia|fitness|musculação|treino|personal|crossfit|pilates|yoga|funcional': `
     Cores: preto, laranja, vermelho energético, cinza.
@@ -61,7 +61,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: halteres, esteiras, ambiente de treino, motivação, superação.
     Evitar: rostos em close, poses de stock photo.
   `,
-  
+
   // IMOBILIÁRIAS
   'imobiliár|imóv|casa|apartamento|aluguel|venda|corretor|loteamento|condomínio': `
     Cores: azul confiança, branco, dourado, verde.
@@ -69,7 +69,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: casas, apartamentos, salas de estar, jardins, varandas.
     Evitar: rostos, tecnologia excessiva.
   `,
-  
+
   // CONTABILIDADE E FINANCEIRO
   'contabil|contador|fiscal|tributár|financeiro|imposto|assessoria contábil': `
     Cores: azul escuro, cinza, verde (dinheiro), branco.
@@ -77,15 +77,35 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: mesas organizadas, papéis, gráficos, profissionalismo, escritório.
     Evitar: rostos em close, tecnologia futurista.
   `,
-  
-  // ADVOCACIA E JURÍDICO
-  'advogad|advocacia|jurídico|direito|tribunal|lei|escritório de advocacia': `
-    Cores: azul escuro, dourado, cinza, bordô.
-    Foco: livros jurídicos, martelo de juiz, documentos, biblioteca.
-    Mostrar: ambiente de escritório tradicional, confiança, autoridade.
-    Evitar: tecnologia excessiva, rostos.
+
+  // ADVOCACIA E JURÍDICO — legal_authority profile v2 (IMAGE_CALIBRATION_PATCH)
+  'advogad|advocacia|jurídico|direito|tribunal|lei|escritório de advocacia|previdenciár': `
+    Cores: azul escuro (#1e3a5f), dourado (#b8922a), cinza elegante, bordô.
+    Foco: livros jurídicos, martelo de juiz dourado, documentos oficiais, biblioteca jurídica.
+    Mostrar: ambiente de escritório colonial/histórico, confiança, autoridade institucional.
+
+    ## IDENTITY_CALIBRATION_RULES — legal_authority (OBRIGATÓRIO):
+
+    ROLE_CONTRAST — quando a cena tiver duas pessoas:
+    ✅ Advogado: postura controlada, roupa profissional (terno/paletó escuro), mãos firmes
+    ✅ Cliente: postura receptiva, roupa civil, mãos em posição de escuta ou preocupação
+    ❌ PROIBIDO: duas pessoas com mesma estrutura corporal, mesma postura ou mesmo vestuário
+
+    ANATOMICAL_DISTINCTNESS — quando mãos aparecerem:
+    ✅ OBRIGATÓRIO: diferença visível na idade das mãos (uma jovem, uma mais envelhecida)
+    ✅ OBRIGATÓRIO: variação de tom de pele entre os indivíduos (um mais claro, um mais escuro)
+    ✅ OBRIGATÓRIO: estrutura de pulso diferente (um mais fino, um mais largo)
+    ❌ PROIBIDO: mãos anatomicamente idênticas ou simétricas em uma mesma cena
+    ❌ PROIBIDO: clonagem de textura de pele, veias ou articulações entre indivíduos
+
+    IDENTITY_SIMILARITY_THRESHOLD:
+    ✅ Similaridade visual entre pessoas na mesma imagem: máximo 30%
+    ❌ REJEITAR render se similaridade > 70% entre qualquer par de indivíduos
+
+    PREFERÊNCIA MÁXIMA: cenas sem pessoas — foco em objetos, ambiente, documentos.
+    Evitar: tecnologia excessiva, rostos em close, poses genéricas de stock photo.
   `,
-  
+
   // SAÚDE E CLÍNICAS
   'saúde|clínica|médico|odonto|dentista|fisioterapeuta|nutri|hospital|consultório': `
     Cores: branco, azul claro, verde suave, menta.
@@ -93,7 +113,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: consultórios, profissionais de jaleco (de costas), bem-estar.
     Evitar: close de rostos, imagens perturbadoras.
   `,
-  
+
   // RESTAURANTES E GASTRONOMIA
   'restaurante|culinária|gastronomia|buffet|chef|comida|pizzaria|lanchonete|cafeteria|padaria': `
     Cores: vermelho, laranja, dourado, marrom.
@@ -101,7 +121,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: mesas postas, cozinha, ingredientes, ambiente de restaurante.
     Evitar: rostos, tecnologia.
   `,
-  
+
   // CONSTRUÇÃO E REFORMAS
   'construção|reforma|arquitetura|engenharia|pedreiro|obra|empreiteira|projeto': `
     Cores: laranja, amarelo, cinza, azul.
@@ -109,7 +129,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: projetos, edificações, transformação, trabalho manual, capacetes.
     Evitar: rostos em close.
   `,
-  
+
   // EDUCAÇÃO E CURSOS
   'educação|curso|escola|professor|ensino|aula|treinamento|coaching|mentoria': `
     Cores: azul, verde, laranja alegre, amarelo.
@@ -117,7 +137,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: ambiente educacional, materiais didáticos, progresso, conhecimento.
     Evitar: rostos em close de alunos.
   `,
-  
+
   // LIMPEZA E CONSERVAÇÃO
   'limpeza|faxina|conservação|higienização|lavanderia|passadoria': `
     Cores: azul claro, branco, verde água.
@@ -125,7 +145,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: casas limpas, produtos, equipamentos, resultado do trabalho.
     Evitar: rostos, tecnologia.
   `,
-  
+
   // JARDINAGEM E PAISAGISMO
   'jardim|jardinagem|paisagismo|poda|grama|plantas|floricul': `
     Cores: verde, marrom terra, amarelo, flores coloridas.
@@ -133,7 +153,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: jardins, vasos, ferramentas de jardinagem, paisagens verdes.
     Evitar: rostos, tecnologia.
   `,
-  
+
   // OFICINAS E MECÂNICAS
   'oficina|mecânica|carro|moto|veículo|funilaria|auto center': `
     Cores: vermelho, preto, cinza, laranja.
@@ -141,7 +161,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: carros, peças, chaves, ambiente de oficina.
     Evitar: rostos em close.
   `,
-  
+
   // FOTOGRAFIA E VÍDEO
   'fotograf|vídeo|filmagem|ensaio|casamento|eventos': `
     Cores: preto, branco, dourado, cores vibrantes.
@@ -149,7 +169,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: equipamentos fotográficos, cenários, luz, criatividade.
     Evitar: rostos em close.
   `,
-  
+
   // SEGURANÇA E VIGILÂNCIA
   'segurança|vigilância|alarme|câmera|monitoramento|portaria': `
     Cores: azul escuro, preto, cinza, verde.
@@ -157,7 +177,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
     Mostrar: câmeras, cercas, proteção residencial, tranquilidade.
     Evitar: rostos.
   `,
-  
+
   // TECNOLOGIA (para empresas realmente tech)
   'tecnologia|software|app|sistema|ti|desenvolvimento|programação|startup|saas': `
     Cores: azul, roxo, ciano, neon.
@@ -179,7 +199,7 @@ const NICHE_VISUAL_PROFILES: Record<string, string> = {
 function getVisualProfileFromNiche(niche: string, services: string, title: string): string {
   // Combinar contexto do negócio para análise
   const businessContext = `${niche} ${services}`.toLowerCase();
-  
+
   // Primeiro: tentar match pelo nicho/serviços da empresa
   for (const [pattern, profile] of Object.entries(NICHE_VISUAL_PROFILES)) {
     if (new RegExp(pattern, 'i').test(businessContext)) {
@@ -187,7 +207,7 @@ function getVisualProfileFromNiche(niche: string, services: string, title: strin
       return profile;
     }
   }
-  
+
   // Segundo: tentar match pelo título do artigo (fallback)
   const titleLower = title.toLowerCase();
   for (const [pattern, profile] of Object.entries(NICHE_VISUAL_PROFILES)) {
@@ -196,7 +216,7 @@ function getVisualProfileFromNiche(niche: string, services: string, title: strin
       return profile;
     }
   }
-  
+
   // Fallback genérico (NÃO tecnológico)
   console.log('Visual profile: using GENERIC fallback (non-tech)');
   return `
@@ -215,7 +235,7 @@ function generateHash(text: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/[^\w\s]/g, '');
-  
+
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
     const char = normalized.charCodeAt(i);
@@ -266,24 +286,24 @@ serve(async (req) => {
     const effectiveTitle = articleTitle || articleTheme || '';
     const effectiveContext = context || 'cover';
 
-    console.log(`[${requestId}] Request params:`, { 
-      hasPrompt: !!prompt, 
+    console.log(`[${requestId}] Request params:`, {
+      hasPrompt: !!prompt,
       hasTitle: !!articleTitle,
       hasTheme: !!articleTheme,
       effectiveTitle: effectiveTitle.substring(0, 50),
-      context: effectiveContext, 
+      context: effectiveContext,
       blog_id,
       forceRegenerate: !!forceRegenerate
     });
 
     // Auto-generate prompt if missing - LÓGICA RESILIENTE
     let finalPrompt = prompt;
-    
+
     if (!prompt || prompt.trim().length === 0) {
       if (!effectiveTitle || effectiveTitle.trim().length === 0) {
         console.error(`[${requestId}] Missing prompt, articleTitle and articleTheme`);
         return new Response(
-          JSON.stringify({ 
+          JSON.stringify({
             error: 'Não foi possível gerar a imagem',
             details: 'O artigo precisa ter um título antes de gerar imagem.',
             action: 'Adicione um título ao artigo e tente novamente.',
@@ -293,7 +313,7 @@ serve(async (req) => {
           { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
+
       // Gerar prompt automaticamente a partir do título
       finalPrompt = buildFallbackPrompt(effectiveTitle, effectiveContext);
       console.log(`[${requestId}] Auto-generated prompt from title "${effectiveTitle}": ${finalPrompt.substring(0, 100)}...`);
@@ -307,7 +327,7 @@ serve(async (req) => {
         .select('ai_model_image')
         .eq('blog_id', blog_id)
         .maybeSingle();
-      
+
       if (prefs?.ai_model_image) {
         imageModel = prefs.ai_model_image;
         console.log(`Using configured image model: ${imageModel}`);
@@ -328,7 +348,7 @@ serve(async (req) => {
         .select('niche, services, city, company_name')
         .eq('blog_id', blog_id)
         .maybeSingle();
-      
+
       if (profile) {
         businessNiche = profile.niche || '';
         businessServices = profile.services || '';
@@ -343,10 +363,10 @@ serve(async (req) => {
     // Padrão: Estilo Forbes / Harvard Business Review
     // SISTEMA ANTI-CLONE V2.0 - Cada imagem é única
     // ============================================================================
-    
+
     // Generate unique visual seed for this request
     const visualSeed = crypto.randomUUID().substring(0, 8);
-    
+
     const contextInstructions: Record<string, string> = {
       hero: 'Representar o tema principal do artigo de forma impactante e memorável.',
       cover: 'Representar o tema principal do artigo como uma capa editorial premium.',
@@ -372,7 +392,7 @@ serve(async (req) => {
 
     // Obter instruções visuais específicas do nicho
     const nicheImageInstructions = getNicheImageInstructions(nicheProfile?.name || 'default');
-    
+
     // Determinar se é nicho de marketing (pode ter elementos tech)
     const allowTechElements = isMarketingNiche(nicheProfile?.name);
 
@@ -468,7 +488,7 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
 
       if (cacheHit) {
         console.log(`CACHE HIT for image: ${context}`);
-        
+
         // Increment hit counter
         await supabase
           .from("ai_content_cache")
@@ -494,7 +514,7 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
         return new Response(
           JSON.stringify({
             success: true,
-            imageBase64: (cacheHit.response_data as {imageBase64?: string})?.imageBase64,
+            imageBase64: (cacheHit.response_data as { imageBase64?: string })?.imageBase64,
             context: effectiveContext,
             from_cache: true
           }),
@@ -528,8 +548,8 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
             messages: [
               {
                 role: 'user',
-                content: attempt === 1 
-                  ? enhancedPrompt 
+                content: attempt === 1
+                  ? enhancedPrompt
                   : `IMPORTANTE: Você DEVE gerar uma imagem. Não responda com texto, apenas gere a imagem.\n\n${enhancedPrompt}`
               }
             ],
@@ -540,21 +560,21 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Image generation error (attempt ${attempt}):`, response.status, errorText);
-          
+
           if (response.status === 429) {
             return new Response(
               JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
               { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
-          
+
           if (response.status === 402) {
             return new Response(
               JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }),
               { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
-          
+
           lastError = `API error: ${response.status}`;
           continue;
         }
@@ -568,7 +588,7 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
         } else {
           lastError = `No image in response (attempt ${attempt}): ${JSON.stringify(data).substring(0, 200)}`;
           console.warn(lastError);
-          
+
           // Wait a bit before retrying
           if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -590,14 +610,14 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
     // === UPLOAD TO STORAGE AND PERSIST ===
     let publicUrl: string | null = null;
     let storagePath: string | null = null;
-    
+
     // Upload to storage if we have an article_id or just generate a unique filename
     try {
       const timestamp = Date.now();
-      const fileName = article_id 
+      const fileName = article_id
         ? `${effectiveContext}-${article_id}-${timestamp}.png`
         : `${effectiveContext}-${blog_id || 'standalone'}-${timestamp}.png`;
-      
+
       // Decode base64 and upload - extract pure base64 from Data URI if needed
       let base64Pure = imageData;
       if (imageData.startsWith('data:')) {
@@ -607,7 +627,7 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
         }
       }
       const imageBytes = Uint8Array.from(atob(base64Pure), c => c.charCodeAt(0));
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('article-images')
         .upload(fileName, imageBytes, {
@@ -636,7 +656,7 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
           // Persist cover image
           const { error: updateError } = await supabase
             .from('articles')
-            .update({ 
+            .update({
               featured_image_url: publicUrl,
               updated_at: new Date().toISOString()
             })
@@ -654,9 +674,9 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
             .select('content_images')
             .eq('id', article_id)
             .single();
-          
+
           const currentImages = (article?.content_images as any[]) || [];
-          
+
           // Determine after_section based on context
           const sectionMap: Record<string, number> = {
             'problem': 1,
@@ -664,25 +684,25 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
             'solution': 2,
             'result': 3
           };
-          
+
           const newImage = {
             context: effectiveContext,
             url: publicUrl,
             after_section: sectionMap[effectiveContext] || currentImages.length + 1
           };
-          
+
           // Avoid duplicates by context
           const filteredImages = currentImages.filter(img => img.context !== effectiveContext);
           const updatedImages = [...filteredImages, newImage];
-          
+
           const { error: updateError } = await supabase
             .from('articles')
-            .update({ 
+            .update({
               content_images: updatedImages,
               updated_at: new Date().toISOString()
             })
             .eq('id', article_id);
-          
+
           if (updateError) {
             console.error(`[${requestId}] Content images update failed:`, updateError);
           } else {

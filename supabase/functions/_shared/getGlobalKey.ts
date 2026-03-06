@@ -8,7 +8,7 @@ export function getGlobalKey(
 
   if (!globalKey) {
     throw new Error(
-      `CONFIG_ERROR: GOOGLE_GLOBAL_API_KEY não configurada.`,
+      `CONFIG_ERROR: GOOGLE_GLOBAL_API_KEY não configurada no Supabase Secrets (necessário para o Radar V3).`,
     );
   }
 

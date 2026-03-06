@@ -7,12 +7,12 @@
  * Qualquer novo uso de IA obrigatoriamente passa por este provider layer.
  */
 
-import { 
-  AI_CONFIG, 
-  getProviderApiKey, 
+import {
+  AI_CONFIG,
+  getProviderApiKey,
   logAICall,
   type AICallResult,
-  type SupportedProvider 
+  type SupportedProvider
 } from './aiConfig.ts';
 import { getAdminSupabaseClient, getIntegrationKey } from "./getIntegrationKey.ts";
 
@@ -102,7 +102,7 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -121,18 +121,18 @@ async function fetchWithTimeout(
 async function callOpenAIWriter(request: WriterRequest): Promise<WriterResponse> {
   const config = AI_CONFIG.writer.primary;
   const apiKey = getProviderApiKey('openai');
-  
+
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY not configured');
   }
-  
+
   const body: Record<string, unknown> = {
     model: config.model,
     messages: request.messages,
     temperature: request.temperature ?? config.temperature,
     max_tokens: request.maxTokens ?? config.maxTokens,
   };
-  
+
   // Add tool if provided - OpenAI requires 'description' field
   if (request.tool) {
     body.tools = [{
@@ -147,7 +147,7 @@ async function callOpenAIWriter(request: WriterRequest): Promise<WriterResponse>
   } else {
     body.response_format = config.responseFormat;
   }
-  
+
   const response = await fetchWithTimeout(
     config.endpoint,
     {
@@ -160,14 +160,14 @@ async function callOpenAIWriter(request: WriterRequest): Promise<WriterResponse>
     },
     60000 // 60s timeout for writer
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`OpenAI error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
-  
+
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
   if (toolCall) {
     return {
@@ -182,7 +182,7 @@ async function callOpenAIWriter(request: WriterRequest): Promise<WriterResponse>
       }
     };
   }
-  
+
   return {
     content: data.choices?.[0]?.message?.content || '',
     usage: {
@@ -219,7 +219,7 @@ async function getGoogleApiKeyForTenant(input: { tenantId?: string; blogId?: str
 async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse> {
   const config = AI_CONFIG.writer.fallback;
   const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
-  
+
   // Convert messages to Google format
   const contents = request.messages
     .filter(m => m.role !== 'system')
@@ -227,16 +227,16 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
-  
+
   const systemInstruction = request.messages.find(m => m.role === 'system')?.content;
-  
+
   const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  
+
   const generationConfig: Record<string, unknown> = {
     temperature: request.temperature ?? config.temperature,
     maxOutputTokens: request.maxTokens ?? config.maxOutputTokens,
   };
-  
+
   // Only set responseMimeType when NOT using tool/function calling
   // Google API rejects combining forced function calling (ANY mode) with responseMimeType: 'application/json'
   if (!request.tool) {
@@ -247,22 +247,22 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
     contents,
     generationConfig
   };
-  
+
   if (systemInstruction) {
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
-  
+
   // Add tool if provided - Google requires specific schema format
   if (request.tool) {
     // Google API requires type: "object" at root level, not "function"
     const cleanSchema = { ...request.tool.schema };
-    
+
     if (cleanSchema.type === 'function' || !cleanSchema.type) {
       cleanSchema.type = 'object';
     }
-    
+
     delete cleanSchema.additionalProperties;
-    
+
     body.tools = [{
       functionDeclarations: [{
         name: request.tool.name,
@@ -277,20 +277,20 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
       }
     };
   }
-  
+
   const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }, 60000);
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`Google error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
-  
+
   const functionCall = data.candidates?.[0]?.content?.parts?.[0]?.functionCall;
   if (functionCall) {
     return {
@@ -303,7 +303,7 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
       }
     };
   }
-  
+
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return {
     content: text,
@@ -320,14 +320,14 @@ async function callGoogleWriter(request: WriterRequest): Promise<WriterResponse>
  */
 export async function callWriter(request: WriterRequest): Promise<AICallResult<WriterResponse>> {
   const start = Date.now();
-  
+
   // Try OpenAI first
   try {
     console.log('[AI_CONFIG] Writer: Calling OpenAI GPT-4o...');
     const result = await callOpenAIWriter(request);
     const duration = Date.now() - start;
     logAICall('writer', 'openai', true, duration);
-    
+
     return {
       success: true,
       data: result,
@@ -340,13 +340,13 @@ export async function callWriter(request: WriterRequest): Promise<AICallResult<W
     const errorMsg = openaiError instanceof Error ? openaiError.message : 'Unknown error';
     console.warn(`[AI_CONFIG] Writer: OpenAI failed - ${errorMsg}`);
     console.log('[AI_CONFIG] Writer: Falling back to Google Gemini...');
-    
+
     // Fallback to Google
     try {
       const result = await callGoogleWriter(request);
       const duration = Date.now() - start;
       logAICall('writer', 'google', true, duration, true);
-      
+
       return {
         success: true,
         data: result,
@@ -360,7 +360,7 @@ export async function callWriter(request: WriterRequest): Promise<AICallResult<W
       const duration = Date.now() - start;
       const fallbackError = googleError instanceof Error ? googleError.message : 'Unknown error';
       logAICall('writer', 'google', false, duration, true, fallbackError);
-      
+
       return {
         success: false,
         provider: 'google',
@@ -379,15 +379,15 @@ export async function callWriter(request: WriterRequest): Promise<AICallResult<W
 async function callPerplexityResearch(request: ResearchRequest): Promise<ResearchResponse> {
   const config = AI_CONFIG.research.primary;
   const apiKey = getProviderApiKey('perplexity');
-  
+
   if (!apiKey) {
     throw new Error('PERPLEXITY_API_KEY not configured');
   }
-  
-  const systemPrompt = request.systemPrompt || 
+
+  const systemPrompt = request.systemPrompt ||
     `Você é um pesquisador especializado. Retorne dados factuais em JSON: 
     {"facts": [...], "trends": [...], "sources": [...]}`;
-  
+
   const response = await fetchWithTimeout(
     config.endpoint,
     {
@@ -408,16 +408,16 @@ async function callPerplexityResearch(request: ResearchRequest): Promise<Researc
     },
     20000 // V4.1: 20s timeout for research (fail-fast)
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`Perplexity error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
   const citations = data.citations || [];
-  
+
   // Try to parse JSON from content
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
@@ -434,20 +434,20 @@ async function callPerplexityResearch(request: ResearchRequest): Promise<Researc
       // Return raw content if JSON parsing fails
     }
   }
-  
+
   return { content, citations };
 }
 
 async function callGoogleResearch(request: ResearchRequest): Promise<ResearchResponse> {
   const config = AI_CONFIG.research.fallback;
   const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
-  
-  const systemPrompt = request.systemPrompt || 
+
+  const systemPrompt = request.systemPrompt ||
     `Você é um pesquisador. Retorne dados factuais em JSON: 
     {"facts": [...], "trends": [...], "sources": [...]}`;
-  
+
   const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  
+
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: request.query }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -457,32 +457,32 @@ async function callGoogleResearch(request: ResearchRequest): Promise<ResearchRes
       responseMimeType: 'application/json'
     }
   };
-  
+
   // Add grounding if configured
-  if (config.useGrounding) {
+  if (config.provider === 'google' && (config as any).useGrounding) {
     body.tools = [{
       googleSearch: {}
     }];
   }
-  
+
   const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }, 45000);
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`Google error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  
+
   // Extract grounding sources if available
   const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
   const sources = groundingMetadata?.webSearchQueries || [];
-  
+
   // Try to parse JSON
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
@@ -498,7 +498,7 @@ async function callGoogleResearch(request: ResearchRequest): Promise<ResearchRes
       // Return raw content
     }
   }
-  
+
   return { content: text, sources };
 }
 
@@ -509,40 +509,54 @@ async function callGoogleResearch(request: ResearchRequest): Promise<ResearchRes
  */
 export async function callResearch(request: ResearchRequest): Promise<AICallResult<ResearchResponse>> {
   const start = Date.now();
-  
-  // Try Perplexity first
+
+  // Try Google Gemini first (Primary per AI_CONFIG)
   try {
-    console.log('[AI_CONFIG] Research: Calling Perplexity Sonar-Pro...');
-    const result = await callPerplexityResearch(request);
+    console.log('[AI_CONFIG] Research: Calling Google Gemini...');
+    const result = await callGoogleResearch(request);
     const duration = Date.now() - start;
-    logAICall('research', 'perplexity', true, duration);
-    
+    logAICall('research', 'google', true, duration);
+
     return {
       success: true,
       data: result,
-      provider: 'perplexity',
+      provider: 'google',
       usedFallback: false,
       durationMs: duration
     };
-  } catch (perplexityError) {
-    // V4.1: FAIL-FAST - NO Gemini fallback for research
-    // This eliminates +45s of potential stacking timeouts
-    const errorMsg = perplexityError instanceof Error ? perplexityError.message : 'Unknown error';
+  } catch (googleError) {
+    const errorMsg = googleError instanceof Error ? googleError.message : 'Unknown error';
     const duration = Date.now() - start;
-    
-    console.warn(`[AI_CONFIG] Research: Perplexity failed (${duration}ms) - ${errorMsg}`);
-    console.log('[AI_CONFIG] Research: ❌ NO FALLBACK - using minimal package (V4.1: fail-fast)');
-    
-    logAICall('research', 'perplexity', false, duration, false, errorMsg);
-    
-    // Return failure immediately - caller will use minimal package
-    return {
-      success: false,
-      provider: 'perplexity',
-      usedFallback: false,
-      fallbackReason: errorMsg,
-      durationMs: duration
-    };
+
+    console.warn(`[AI_CONFIG] Research: Google failed (${duration}ms) - ${errorMsg}`);
+    console.log('[AI_CONFIG] Research: Falling back to Perplexity Sonar-Pro...');
+
+    try {
+      const result = await callPerplexityResearch(request);
+      const finalDuration = Date.now() - start;
+      logAICall('research', 'perplexity', true, finalDuration, true);
+
+      return {
+        success: true,
+        data: result,
+        provider: 'perplexity',
+        usedFallback: true,
+        fallbackReason: errorMsg,
+        durationMs: finalDuration
+      };
+    } catch (perplexityError) {
+      const finalDuration = Date.now() - start;
+      const fallbackError = perplexityError instanceof Error ? perplexityError.message : 'Unknown error';
+      logAICall('research', 'perplexity', false, finalDuration, true, fallbackError);
+
+      return {
+        success: false,
+        provider: 'perplexity',
+        usedFallback: true,
+        fallbackReason: `Primary: ${errorMsg}, Fallback: ${fallbackError}`,
+        durationMs: finalDuration
+      };
+    }
   }
 }
 
@@ -553,9 +567,9 @@ export async function callResearch(request: ResearchRequest): Promise<AICallResu
 async function callGoogleQA(request: QARequest): Promise<QAResponse> {
   const config = AI_CONFIG.qa.primary;
   const apiKey = await getGoogleApiKeyForTenant({ tenantId: request.tenantId, blogId: request.blogId });
-  
+
   const url = `${config.endpoint}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  
+
   const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -568,17 +582,17 @@ async function callGoogleQA(request: QARequest): Promise<QAResponse> {
       }
     })
   }, 30000);
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`Google error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  
+
   const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
-  
+
   return {
     approved: !!parsed.approved,
     score: typeof parsed.score === 'number' ? parsed.score : 0,
@@ -589,11 +603,11 @@ async function callGoogleQA(request: QARequest): Promise<QAResponse> {
 async function callOpenAIQA(request: QARequest): Promise<QAResponse> {
   const config = AI_CONFIG.qa.fallback;
   const apiKey = getProviderApiKey('openai');
-  
+
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY not configured');
   }
-  
+
   const response = await fetchWithTimeout(
     config.endpoint,
     {
@@ -614,16 +628,16 @@ async function callOpenAIQA(request: QARequest): Promise<QAResponse> {
     },
     30000
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`OpenAI error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '{}';
   const parsed = JSON.parse(content);
-  
+
   return {
     approved: !!parsed.approved,
     score: typeof parsed.score === 'number' ? parsed.score : 0,
@@ -638,14 +652,14 @@ async function callOpenAIQA(request: QARequest): Promise<QAResponse> {
  */
 export async function callQA(request: QARequest): Promise<AICallResult<QAResponse>> {
   const start = Date.now();
-  
+
   // Try Google first
   try {
     console.log('[AI_CONFIG] QA: Calling Google Gemini...');
     const result = await callGoogleQA(request);
     const duration = Date.now() - start;
     logAICall('qa', 'google', true, duration);
-    
+
     return {
       success: true,
       data: result,
@@ -657,13 +671,13 @@ export async function callQA(request: QARequest): Promise<AICallResult<QARespons
     const errorMsg = googleError instanceof Error ? googleError.message : 'Unknown error';
     console.warn(`[AI_CONFIG] QA: Google failed - ${errorMsg}`);
     console.log('[AI_CONFIG] QA: Falling back to OpenAI GPT-4o...');
-    
+
     // Fallback to OpenAI
     try {
       const result = await callOpenAIQA(request);
       const duration = Date.now() - start;
       logAICall('qa', 'openai', true, duration, true);
-      
+
       return {
         success: true,
         data: result,
@@ -676,7 +690,7 @@ export async function callQA(request: QARequest): Promise<AICallResult<QARespons
       const duration = Date.now() - start;
       const fallbackError = openaiError instanceof Error ? openaiError.message : 'Unknown error';
       logAICall('qa', 'openai', false, duration, true, fallbackError);
-      
+
       return {
         success: false,
         provider: 'openai',
@@ -695,18 +709,18 @@ export async function callQA(request: QARequest): Promise<AICallResult<QARespons
 async function callLovableGatewayImage(request: ImageRequest): Promise<ImageResponse> {
   const config = AI_CONFIG.images.primary;
   const apiKey = getProviderApiKey('lovable-gateway');
-  
+
   if (!apiKey) {
     throw new Error('LOVABLE_API_KEY not configured');
   }
-  
+
   const enhancedPrompt = `Professional business photography: ${request.prompt}. 
 Context: ${request.context} service in ${request.city}, Brazil. 
 Industry: ${request.niche}.
 Style: High-quality, photorealistic, modern, professional lighting. 
 ${config.aspectRatio} aspect ratio for web.
 No text, no watermarks, no logos.`;
-  
+
   const response = await fetchWithTimeout(
     config.gateway,
     {
@@ -723,19 +737,19 @@ No text, no watermarks, no logos.`;
     },
     30000
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
     throw new Error(`Lovable Gateway error ${response.status}: ${errorText.substring(0, 200)}`);
   }
-  
+
   const data = await response.json();
   const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  
+
   if (!imageUrl) {
     throw new Error('No image URL in Lovable Gateway response');
   }
-  
+
   return { url: imageUrl, generatedBy: 'gemini_image' };
 }
 
@@ -750,15 +764,15 @@ export function generateUnsplashFallback(request: ImageRequest): ImageResponse {
     'real_estate': 'real estate,house,property,home',
     'technology': 'technology,software,computer,office'
   };
-  
+
   const nicheQuery = nicheKeywords[request.niche] || request.niche || 'professional,business';
   const keywords = [nicheQuery, 'professional', request.context || 'service']
     .filter(Boolean)
     .join(',');
-  
+
   const config = AI_CONFIG.images.fallback;
   const url = `${config.apiUrl}/${config.size}/?${encodeURIComponent(keywords)}&sig=${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  
+
   return { url, generatedBy: 'unsplash_fallback' };
 }
 
@@ -769,14 +783,14 @@ export function generateUnsplashFallback(request: ImageRequest): ImageResponse {
  */
 export async function callImageGeneration(request: ImageRequest): Promise<AICallResult<ImageResponse>> {
   const start = Date.now();
-  
+
   // Try Lovable Gateway first
   try {
     console.log('[AI_CONFIG] Images: Calling Lovable Gateway...');
     const result = await callLovableGatewayImage(request);
     const duration = Date.now() - start;
     logAICall('images', 'lovable-gateway', true, duration);
-    
+
     return {
       success: true,
       data: result,
@@ -788,12 +802,12 @@ export async function callImageGeneration(request: ImageRequest): Promise<AICall
     const errorMsg = gatewayError instanceof Error ? gatewayError.message : 'Unknown error';
     console.warn(`[AI_CONFIG] Images: Lovable Gateway failed - ${errorMsg}`);
     console.log('[AI_CONFIG] Images: Falling back to Unsplash...');
-    
+
     // Fallback to Unsplash (always succeeds)
     const result = generateUnsplashFallback(request);
     const duration = Date.now() - start;
     logAICall('images', 'unsplash', true, duration, true);
-    
+
     return {
       success: true,
       data: result,
@@ -814,27 +828,27 @@ export async function generateArticleImagesViaProvider(
   article: any,
   niche: string,
   city: string
-// deno-lint-ignore no-explicit-any
+  // deno-lint-ignore no-explicit-any
 ): Promise<any> {
   if (!Array.isArray(article.image_prompts) || article.image_prompts.length === 0) {
     console.log('[AI_CONFIG] Images: No image prompts to generate');
     return article;
   }
-  
+
   console.log(`[AI_CONFIG] Images: Starting generation for ${article.image_prompts.length} images...`);
-  
+
   for (let i = 0; i < article.image_prompts.length; i++) {
     const imgPrompt = article.image_prompts[i];
-    
+
     console.log(`[AI_CONFIG] Images: Generating ${i + 1}/${article.image_prompts.length}...`);
-    
+
     const result = await callImageGeneration({
       prompt: imgPrompt.prompt || `Professional ${imgPrompt.context || 'business'} image`,
       context: imgPrompt.context || 'business',
       niche,
       city
     });
-    
+
     if (result.success && result.data) {
       imgPrompt.url = result.data.url;
       imgPrompt.generated_by = result.data.generatedBy;
@@ -844,20 +858,20 @@ export async function generateArticleImagesViaProvider(
       imgPrompt.url = fallback.url;
       imgPrompt.generated_by = fallback.generatedBy;
     }
-    
+
     // Small delay between requests
     if (i < article.image_prompts.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
-  
+
   // Set featured image
   if (!article.featured_image_url && article.image_prompts[0]) {
     article.featured_image_url = article.image_prompts[0].url;
     console.log('[AI_CONFIG] Images: Featured image set from first image prompt');
   }
-  
+
   console.log(`[AI_CONFIG] Images: ✅ All ${article.image_prompts.length} images have URLs`);
-  
+
   return article;
 }

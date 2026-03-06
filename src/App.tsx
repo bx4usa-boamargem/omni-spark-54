@@ -99,7 +99,8 @@ import ClientEbooks from "./pages/client/ClientEbooks";
 import ClientEbookEditor from "./pages/client/ClientEbookEditor";
 import ClientDomains from "./pages/client/ClientDomains";
 import ClientSettings from "./pages/client/ClientSettings";
-import ArticleGenerator from "./pages/client/ArticleGenerator";
+import ClientConnectors from "./pages/client/ClientConnectors";
+import SuperPageBuilder from "./pages/client/SuperPageBuilder";
 import ArticleAdvancedPreview from "./pages/client/ArticleAdvancedPreview";
 import GenerationDashboard from "./pages/client/GenerationDashboard";
 import GenerationNew from "./pages/client/GenerationNew";
@@ -248,7 +249,7 @@ const ClientRoutes = () => (
 
           {/* Conteúdo */}
           <Route path="articles" element={<ClientArticles />} />
-          <Route path="articles/generate" element={<ArticleGenerator />} />
+          <Route path="articles/generate" element={<SuperPageBuilder />} />
           <Route path="articles/engine" element={<GenerationDashboard />} />
           <Route path="articles/engine/new" element={<GenerationNew />} />
           <Route path="articles/engine/:jobId" element={<GenerationDetail />} />
@@ -277,6 +278,7 @@ const ClientRoutes = () => (
           <Route path="territories" element={<ClientTerritoryAnalytics />} />
           <Route path="domains" element={<ClientDomains />} />
           <Route path="settings" element={<ClientSettings />} />
+          <Route path="connectors" element={<ClientConnectors />} />
 
           {/* Ajuda */}
           <Route path="help" element={<ClientHelp />} />

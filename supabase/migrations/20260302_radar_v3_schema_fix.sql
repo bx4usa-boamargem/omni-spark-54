@@ -9,18 +9,6 @@ DROP TABLE IF EXISTS public.radar_v3_logs CASCADE;
 DROP TABLE IF EXISTS public.radar_v3_opportunities CASCADE;
 DROP TABLE IF EXISTS public.radar_v3_runs CASCADE;
 
--- Drop policies que podem estar órfãs
-DROP POLICY IF EXISTS "rv3_runs_select" ON public.radar_v3_runs;
-DROP POLICY IF EXISTS "rv3_runs_service_insert" ON public.radar_v3_runs;
-DROP POLICY IF EXISTS "rv3_runs_service_update" ON public.radar_v3_runs;
-DROP POLICY IF EXISTS "rv3_runs_service_delete" ON public.radar_v3_runs;
-DROP POLICY IF EXISTS "rv3_opps_select" ON public.radar_v3_opportunities;
-DROP POLICY IF EXISTS "rv3_opps_service_insert" ON public.radar_v3_opportunities;
-DROP POLICY IF EXISTS "rv3_opps_service_update" ON public.radar_v3_opportunities;
-DROP POLICY IF EXISTS "rv3_opps_service_delete" ON public.radar_v3_opportunities;
-DROP POLICY IF EXISTS "rv3_logs_select" ON public.radar_v3_logs;
-DROP POLICY IF EXISTS "rv3_logs_service_insert" ON public.radar_v3_logs;
-DROP POLICY IF EXISTS "rv3_logs_service_delete" ON public.radar_v3_logs;
 
 -- ============================================================================
 -- 1. radar_v3_runs
@@ -48,24 +36,16 @@ CREATE POLICY "rv3_runs_select" ON public.radar_v3_runs FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM public.blogs b
-      JOIN public.sub_accounts sa ON sa.id = b.sub_account_id
       WHERE b.id = radar_v3_runs.blog_id
-        AND sa.tenant_id = radar_v3_runs.tenant_id
-        AND (
-          b.user_id = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM public.team_members tm
-            WHERE tm.tenant_id = radar_v3_runs.tenant_id
-              AND tm.user_id = auth.uid() AND tm.status = 'active'
-          )
-        )
+        AND b.user_id = auth.uid()
     )
   );
 
 CREATE POLICY "rv3_runs_service_insert" ON public.radar_v3_runs FOR INSERT
   WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "rv3_runs_service_update" ON public.radar_v3_runs FOR UPDATE
-  USING (auth.role() = 'service_role');
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "rv3_runs_service_delete" ON public.radar_v3_runs FOR DELETE
   USING (auth.role() = 'service_role');
 
@@ -99,17 +79,8 @@ CREATE POLICY "rv3_opps_select" ON public.radar_v3_opportunities FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM public.blogs b
-      JOIN public.sub_accounts sa ON sa.id = b.sub_account_id
       WHERE b.id = radar_v3_opportunities.blog_id
-        AND sa.tenant_id = radar_v3_opportunities.tenant_id
-        AND (
-          b.user_id = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM public.team_members tm
-            WHERE tm.tenant_id = radar_v3_opportunities.tenant_id
-              AND tm.user_id = auth.uid() AND tm.status = 'active'
-          )
-        )
+        AND b.user_id = auth.uid()
     )
   );
 
@@ -117,6 +88,14 @@ CREATE POLICY "rv3_opps_service_insert" ON public.radar_v3_opportunities FOR INS
   WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "rv3_opps_service_update" ON public.radar_v3_opportunities FOR UPDATE
   USING (auth.role() = 'service_role');
+CREATE POLICY "rv3_opps_update_from_ui" ON public.radar_v3_opportunities FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.blogs b
+      WHERE b.id = radar_v3_opportunities.blog_id
+        AND b.user_id = auth.uid()
+    )
+  );
 CREATE POLICY "rv3_opps_service_delete" ON public.radar_v3_opportunities FOR DELETE
   USING (auth.role() = 'service_role');
 
@@ -142,16 +121,8 @@ CREATE POLICY "rv3_logs_select" ON public.radar_v3_logs FOR SELECT
     EXISTS (
       SELECT 1 FROM public.radar_v3_runs r
       JOIN public.blogs b ON b.id = r.blog_id
-      JOIN public.sub_accounts sa ON sa.id = b.sub_account_id
       WHERE r.id = radar_v3_logs.run_id
-        AND (
-          b.user_id = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM public.team_members tm
-            WHERE tm.tenant_id = r.tenant_id
-              AND tm.user_id = auth.uid() AND tm.status = 'active'
-          )
-        )
+        AND b.user_id = auth.uid()
     )
   );
 

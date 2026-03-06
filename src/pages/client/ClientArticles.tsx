@@ -27,9 +27,9 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  Plus, 
+import {
+  FileText,
+  Plus,
   AlertTriangle,
   Loader2,
   Archive
@@ -43,10 +43,10 @@ import { ArticleFilters, useArticleFilters } from '@/components/client/articles/
 export default function ClientArticles() {
   const navigate = useNavigate();
   const { blog } = useBlog();
-  
+
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<Article[]>([]);
-  
+
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function ClientArticles() {
 
   const fetchArticles = async () => {
     if (!blog?.id) return;
-    
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -94,7 +94,7 @@ export default function ClientArticles() {
   };
 
   const detectDuplicates = (articles: Article[]) => {
-    const normalizeTitle = (title: string) => 
+    const normalizeTitle = (title: string) =>
       title.toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -102,7 +102,7 @@ export default function ClientArticles() {
         .trim();
 
     const titleMap = new Map<string, Article[]>();
-    
+
     articles.forEach(article => {
       const normalized = normalizeTitle(article.title);
       const existing = titleMap.get(normalized) || [];
@@ -123,6 +123,31 @@ export default function ClientArticles() {
 
   useEffect(() => {
     fetchArticles();
+
+    if (!blog?.id) return;
+
+    // Realtime subscription for articles
+    const channel = supabase
+      .channel(`articles-realtime-${blog.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'articles',
+          filter: `blog_id=eq.${blog.id}`
+        },
+        (payload) => {
+          console.log('[REALTIME:ARTICLES] Change detected:', payload.eventType);
+          // Re-fetch all to ensure order and filtering are correct, or optimize by updating local state
+          fetchArticles();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [blog?.id]);
 
   // Action handlers
@@ -132,7 +157,7 @@ export default function ClientArticles() {
 
   const handleView = (article: Article) => {
     if (!blog) return;
-    
+
     // Clean custom_domain of protocol and trailing slash
     let cleanDomain = blog.custom_domain;
     if (cleanDomain) {
@@ -140,14 +165,14 @@ export default function ClientArticles() {
         .replace(/^https?:\/\//, '')
         .replace(/\/$/, '');
     }
-    
+
     const url = getArticleUrl({
       slug: blog.slug,
       custom_domain: cleanDomain,
       domain_verified: blog.domain_verified,
       platform_subdomain: (blog as { platform_subdomain?: string }).platform_subdomain || null
     }, article.slug);
-    
+
     window.open(url, '_blank');
   };
 
@@ -187,7 +212,7 @@ export default function ClientArticles() {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       toast.success('Artigo arquivado');
       fetchArticles();
     } catch (error) {
@@ -204,7 +229,7 @@ export default function ClientArticles() {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       toast.success('Artigo restaurado como rascunho');
       fetchArticles();
     } catch (error) {
@@ -220,7 +245,7 @@ export default function ClientArticles() {
 
   const handleDelete = async () => {
     if (!articleToDelete) return;
-    
+
     setIsDeleting(true);
     try {
       const { error } = await supabase
@@ -229,7 +254,7 @@ export default function ClientArticles() {
         .eq('id', articleToDelete);
 
       if (error) throw error;
-      
+
       toast.success('Artigo excluído');
       setDeleteDialogOpen(false);
       setArticleToDelete(null);
@@ -245,7 +270,7 @@ export default function ClientArticles() {
   // Resolve duplicates
   const handleResolveDuplicates = async () => {
     const toArchive: string[] = [];
-    
+
     duplicates.forEach((group, normalizedTitle) => {
       const keepId = selectedToKeep.get(normalizedTitle) || group[0].id;
       group.forEach(article => {
@@ -254,12 +279,12 @@ export default function ClientArticles() {
         }
       });
     });
-    
+
     if (toArchive.length === 0) {
       setShowDuplicatesModal(false);
       return;
     }
-    
+
     setIsResolvingDuplicates(true);
     try {
       const { error } = await supabase
@@ -268,7 +293,7 @@ export default function ClientArticles() {
         .in('id', toArchive);
 
       if (error) throw error;
-      
+
       toast.success(`${toArchive.length} artigos duplicados arquivados`);
       setShowDuplicatesModal(false);
       setSelectedToKeep(new Map());
@@ -321,7 +346,7 @@ export default function ClientArticles() {
             Gerencie todos os seus artigos em um só lugar
           </p>
         </div>
-        <Button 
+        <Button
           onClick={() => smartNavigate(navigate, getClientArticleCreatePath())}
           className="gap-2 w-full sm:w-auto"
         >
@@ -342,8 +367,8 @@ export default function ClientArticles() {
               Alguns artigos possuem títulos semelhantes
             </p>
           </div>
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             variant="outline"
             onClick={() => setShowDuplicatesModal(true)}
             className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10 flex-shrink-0"
@@ -374,8 +399,8 @@ export default function ClientArticles() {
         <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-xl">
           <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
           <p className="text-muted-foreground mb-2">Nenhum artigo encontrado</p>
-          <Button 
-            variant="link" 
+          <Button
+            variant="link"
             onClick={() => smartNavigate(navigate, getClientArticleCreatePath())}
           >
             Criar seu primeiro artigo
@@ -409,8 +434,8 @@ export default function ClientArticles() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
+            <AlertDialogAction
+              onClick={handleDelete}
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90"
             >
@@ -429,11 +454,11 @@ export default function ClientArticles() {
               Escolha qual artigo manter de cada grupo. Os outros serão arquivados.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             {Array.from(duplicates.entries()).map(([normalizedTitle, group]) => (
               <div key={normalizedTitle} className="p-4 border border-border rounded-lg bg-muted/30">
-                <RadioGroup 
+                <RadioGroup
                   value={selectedToKeep.get(normalizedTitle) || group[0].id}
                   onValueChange={(v) => {
                     const newMap = new Map(selectedToKeep);
@@ -459,16 +484,16 @@ export default function ClientArticles() {
               </div>
             ))}
           </div>
-          
+
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowDuplicatesModal(false)}
               disabled={isResolvingDuplicates}
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleResolveDuplicates}
               disabled={isResolvingDuplicates}
             >

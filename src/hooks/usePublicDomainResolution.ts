@@ -29,7 +29,7 @@ export function usePublicDomainResolution(): PublicDomainResolution {
 
     const resolve = async () => {
       const hostname = getCurrentHostname();
-      
+
       if (!hostname) {
         if (mounted) {
           setError('No hostname');
@@ -38,12 +38,35 @@ export function usePublicDomainResolution(): PublicDomainResolution {
         return;
       }
 
+      // ==========================================
+      // DEV_TENANT_ROUTING_PATCH_V2
+      // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
+      // NUNCA vai para produção (variável não existe na Vercel)
+      // ==========================================
+      const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
+      const isLocal =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.');
+
+      if (isDEVMode && isLocal) {
+        console.log('[DEV_TENANT_ROUTING_PATCH_V2] VITE_DEV_PREVIEW_MODE ativo. Forcing Bione...', hostname);
+        if (mounted) {
+          setBlogId('44c4f7cd-05b0-4229-9828-2eb822d38bfd');
+          setError(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+      // ==========================================
+
       console.log('[usePublicDomainResolution] Resolving via content-api:', hostname);
 
       try {
         // Faz uma chamada mínima à content-api para obter tenant info
         const result = await fetchContentApi<{ total: number }>("blog.home", { limit: 1 }, hostname);
-        
+
         if (!mounted) return;
 
         if (result?.tenant?.blog_id) {

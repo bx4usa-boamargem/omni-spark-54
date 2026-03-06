@@ -14,7 +14,7 @@
 /**
  * Tipos de nicho suportados pelo motor
  */
-export type NicheType = 
+export type NicheType =
   | 'pest_control'
   | 'plumbing'
   | 'roofing'
@@ -33,7 +33,7 @@ export type NicheType =
 /**
  * Templates estruturais disponíveis
  */
-export type TemplateType = 
+export type TemplateType =
   | 'complete_guide'
   | 'qa_format'
   | 'comparative'
@@ -43,7 +43,7 @@ export type TemplateType =
 /**
  * Variantes de template para evitar padrão
  */
-export type TemplateVariant = 
+export type TemplateVariant =
   // complete_guide
   | 'chronological'
   | 'importance_based'
@@ -101,20 +101,20 @@ export interface NicheRuleset {
   id: NicheType;
   name: string;
   displayName: string;
-  
+
   // Vocabulário
   lsiKeywords: string[];
   seedKeywords: string[];
-  
+
   // Estrutura obrigatória
   mandatoryBlocks: string[];
-  
+
   // Compliance
   complianceAlerts: string[];
-  
+
   // Conversão
   typicalCtas: string[];
-  
+
   // Visual
   imageKeywords: string[];
 }
@@ -134,23 +134,23 @@ export interface SubaccountProfile {
   businessPhone: string;
   businessWhatsapp?: string;
   businessWebsite?: string;
-  
+
   // Posicionamento
   primaryService: string;
   secondaryServices: string[];
   niche: NicheType;
-  
+
   // Diferencial
   yearsInBusiness?: number;
   uniqueSellingPoint: string;
   certifications?: string[];
-  
+
   // Tom de voz
   tone: ToneType;
-  
+
   // Ofertas
   offers: string[];
-  
+
   // CTA preferencial
   preferredCta: CtaType;
 }
@@ -272,15 +272,6 @@ export interface ArticleImage {
   url?: string;
 }
 
-/**
- * Link interno
- */
-export interface InternalLink {
-  anchor: string;
-  url: string;
-  position: string;
-  context: string;
-}
 
 /**
  * FAQ item
@@ -335,27 +326,26 @@ export interface GeneratedArticle {
   urlSlug: string;
   metaTitle: string;
   metaDescription: string;
-  
+
   // Conteúdo
   tldr: TldrSummary;
   content: string;
   faq: FaqItem[];
-  
+
   // Estrutura
   template: TemplateType;
   variant: TemplateVariant;
   h2Count: number;
   wordCount: number;
-  
+
   // Visual
   images: ArticleImage[];
-  internalLinks: InternalLink[];
-  
+
   // Contexto
   brief: ArticleBrief;
   niche: NicheType;
   mode: ArticleMode;
-  
+
   // Validação
   validation: ValidationResult;
 }

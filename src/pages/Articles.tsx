@@ -8,11 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Settings, Calendar, Lightbulb, Link2, Users, Target } from "lucide-react";
+import { Loader2, Plus, Pencil, Settings, Calendar, Lightbulb, Users, Target } from "lucide-react";
 import { ContentCalendarTab } from "@/components/content/ContentCalendarTab";
 import { OpportunitiesTab } from "@/components/content/OpportunitiesTab";
 import { PreferencesTab } from "@/components/content/PreferencesTab";
-import { InternalLinkingTab } from "@/components/content/InternalLinkingTab";
 import { ClientAreaTab } from "@/components/content/ClientAreaTab";
 import { SalesFunnelTab } from "@/components/content/SalesFunnelTab";
 import { PermissionGate } from "@/components/auth/PermissionGate";
@@ -23,7 +22,7 @@ export default function Articles() {
   const { user, loading: authLoading } = useAuth();
   const { blog, loading: blogLoading } = useBlog();
   const { hasPermission, loading: roleLoading } = useCurrentUserRole();
-  
+
   const [opportunitiesCount, setOpportunitiesCount] = useState(0);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
@@ -95,7 +94,7 @@ export default function Articles() {
 
         {/* Tabs */}
         <Tabs defaultValue="calendar" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
             <TabsTrigger value="calendar" className="gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Conteúdos</span>
@@ -116,10 +115,6 @@ export default function Articles() {
             <TabsTrigger value="preferences" className="gap-2">
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Preferências</span>
-            </TabsTrigger>
-            <TabsTrigger value="linking" className="gap-2">
-              <Link2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Linkagem Interna</span>
             </TabsTrigger>
             <TabsTrigger value="client" className="gap-2">
               <Users className="h-4 w-4" />
@@ -144,10 +139,6 @@ export default function Articles() {
 
           <TabsContent value="preferences">
             <PreferencesTab blogId={blogId} />
-          </TabsContent>
-
-          <TabsContent value="linking">
-            <InternalLinkingTab blogId={blogId} />
           </TabsContent>
 
           <TabsContent value="client">

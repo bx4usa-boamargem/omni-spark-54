@@ -14,7 +14,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 // TIPOS
 // ============================================================================
 
-export type ChangeSource = 
+export type ChangeSource =
   | 'user_generate'    // Clicou "Gerar"
   | 'user_rewrite'     // Clicou "Reescrever"
   | 'user_edit'        // Salvou manualmente
@@ -22,7 +22,6 @@ export type ChangeSource =
   | 'user_fix'         // Clicou "Corrigir automaticamente"
   | 'seo_optimize'     // Otimização SEO automática
   | 'auto_fix'         // Quality Gate auto-fix
-  | 'internal_links'   // Inserção de links internos
   | 'polish_final'     // Polish pré-save
   | 'background_job';  // Job em background
 

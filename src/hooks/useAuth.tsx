@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let fired = false;
-    
+
     // Auth initialization timeout (8000ms)
     const timeout = setTimeout(() => {
       if (!fired) {
@@ -48,8 +48,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+
+        // ==========================================
+        // DEV_ACCESS_OVERRIDE — LOCAL SESSION MOCK
+        // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
+        // NUNCA vai para produção (variável não existe na Vercel)
+        // ==========================================
+        const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
+        const hostname = window.location.hostname;
+        const isLocal =
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          hostname.startsWith('192.168.') ||
+          hostname.startsWith('10.');
+
+        if (isDEVMode && isLocal && (!session || !session.user)) {
+          console.log('[DEV_ACCESS_OVERRIDE] VITE_DEV_PREVIEW_MODE ativo. Injecting DEV_OPERATOR...');
+          const devUser = {
+            id: 'dev-operator-uuid-0000000',
+            app_metadata: {},
+            user_metadata: { full_name: 'Dev Operator (Bypass)' },
+            aud: 'authenticated',
+            created_at: new Date().toISOString()
+          } as unknown as User;
+
+          const devSession = {
+            access_token: 'dev-fake-token',
+            refresh_token: 'dev-fake-token',
+            expires_in: 3600,
+            token_type: 'bearer',
+            user: devUser
+          } as Session;
+
+          if (!fired) {
+            clearTimeout(timeout);
+            setSession(devSession);
+            setUser(devUser);
+            fired = true;
+          }
+          return;
+        }
+        // ==========================================
+
         if (error) throw error;
-        
+
         if (!fired) {
           clearTimeout(timeout);
           setSession(session);
@@ -73,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -84,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     });
-    
+
     return { error: error as Error | null };
   };
 
@@ -93,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
     });
-    
+
     return { error: error as Error | null };
   };
 
@@ -106,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // O return_to codifica a origem para redirecionamento final
     const returnTo = encodeURIComponent(window.location.origin + '/client/dashboard');
     const redirectTo = `https://app.omniseen.app/oauth/callback?return_to=${returnTo}`;
-    
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -117,19 +159,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     });
-    
+
     if (error) {
       console.error('Google OAuth error:', error);
       // Check for provider not enabled error
-      if (error.message?.toLowerCase().includes('provider') || 
-          error.message?.toLowerCase().includes('enabled') ||
-          error.message?.toLowerCase().includes('not enabled')) {
-        return { 
-          error: new Error('Login com Google não está habilitado. Configure nas configurações do backend.') 
+      if (error.message?.toLowerCase().includes('provider') ||
+        error.message?.toLowerCase().includes('enabled') ||
+        error.message?.toLowerCase().includes('not enabled')) {
+        return {
+          error: new Error('Login com Google não está habilitado. Configure nas configurações do backend.')
         };
       }
     }
-    
+
     return { error: error as Error | null };
   };
 

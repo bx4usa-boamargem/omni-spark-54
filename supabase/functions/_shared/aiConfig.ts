@@ -27,24 +27,24 @@ export const AI_CONFIG = {
       maxOutputTokens: 8192
     }
   },
-  
+
   research: {
     primary: {
-      provider: 'perplexity' as const,
-      model: 'sonar-pro',
-      endpoint: 'https://api.perplexity.ai/chat/completions',
-      searchMode: 'web',
-      citations: true
-    },
-    fallback: {
       provider: 'google' as const,
       model: getGeminiModel(),
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
       useGrounding: true,
       groundingSource: 'google_search'
+    },
+    fallback: {
+      provider: 'perplexity' as const,
+      model: 'sonar-pro',
+      endpoint: 'https://api.perplexity.ai/chat/completions',
+      searchMode: 'web',
+      citations: true
     }
   },
-  
+
   qa: {
     primary: {
       provider: 'google' as const,
@@ -61,7 +61,7 @@ export const AI_CONFIG = {
       responseFormat: { type: 'json_object' }
     }
   },
-  
+
   images: {
     primary: {
       provider: 'lovable-gateway' as const,
@@ -120,14 +120,14 @@ export function validateAPIKeys(): { valid: boolean; missing: string[] } {
   // Google is configured per-tenant via api_integrations (not via env)
   const required: SupportedProvider[] = ['openai', 'perplexity', 'lovable-gateway'];
   const missing: string[] = [];
-  
+
   for (const provider of required) {
     const key = getProviderApiKey(provider);
     if (!key) {
       missing.push(provider);
     }
   }
-  
+
   return { valid: missing.length === 0, missing };
 }
 

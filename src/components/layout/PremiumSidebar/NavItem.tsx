@@ -106,10 +106,10 @@ export function NavItem({
     >
       {/* Faixa lateral ativa (roxo → laranja) */}
       {isActive && !isSecondary && (
-        <div 
+        <div
           className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
-          style={{ 
-            background: 'linear-gradient(to bottom, #7C3AED, #F97316)' 
+          style={{
+            background: 'linear-gradient(to bottom, #7C3AED, #F97316)'
           }}
         />
       )}
@@ -161,14 +161,12 @@ export function NavItem({
   // Tooltip quando recolhido
   if (!isExpanded) {
     return (
-      <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
-          <TooltipContent side="right" className="font-medium">
-            {label}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
+        <TooltipContent side="right" className="font-medium z-[150]">
+          {label}
+        </TooltipContent>
+      </Tooltip>
     );
   }
 

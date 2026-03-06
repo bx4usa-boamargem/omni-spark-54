@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenantContext } from "@/contexts/TenantContext";
@@ -13,6 +13,7 @@ import { ArrowLeft, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function GenerationNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { currentTenant } = useTenantContext();
   const { blog } = useBlog();
@@ -20,11 +21,36 @@ export default function GenerationNew() {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [form, setForm] = useState({
-    keyword: '', city: '', state: '', niche: '',
-    intent: 'auto', target_words: '2500',
-    tone: 'profissional', person: 'nós',
-    business_name: '', phone: '', whatsapp: '', website: '', avoid: '',
+    keyword: searchParams.get('keyword') || '',
+    city: searchParams.get('city') || '',
+    state: '',
+    niche: searchParams.get('niche') || '',
+    intent: 'auto',
+    target_words: '2500',
+    tone: 'profissional',
+    person: 'nós',
+    business_name: '',
+    phone: '',
+    whatsapp: '',
+    website: '',
+    avoid: '',
   });
+
+  // Effect to update form if searchParams change (optional but good for UX)
+  useEffect(() => {
+    const kw = searchParams.get('keyword');
+    const nc = searchParams.get('niche');
+    const ct = searchParams.get('city');
+
+    if (kw || nc || ct) {
+      setForm(prev => ({
+        ...prev,
+        keyword: kw || prev.keyword,
+        niche: nc || prev.niche,
+        city: ct || prev.city,
+      }));
+    }
+  }, [searchParams]);
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 

@@ -15,18 +15,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Sparkles, 
-  Eye, 
-  Loader2, 
+import {
+  Sparkles,
+  Eye,
+  Loader2,
   ArrowLeft,
   Zap,
   Brain,
@@ -79,7 +79,7 @@ interface GeneratorFormData {
 export default function ArticleGenerator() {
   const navigate = useNavigate();
   const { blog } = useBlog();
-  
+
   // Fetch business profile
   const { data: businessProfile } = useQuery({
     queryKey: ['business-profile', blog?.id],
@@ -94,7 +94,7 @@ export default function ArticleGenerator() {
     },
     enabled: !!blog?.id
   });
-  
+
   const [formData, setFormData] = useState<GeneratorFormData>({
     keyword: '',
     city: businessProfile?.city || '',
@@ -106,30 +106,34 @@ export default function ArticleGenerator() {
     eatInjection: true,
     imageAlt: true
   });
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
-  
+
   // Refs
   const timeoutWarningRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const isMounted = useRef(true);
+  const isNavigating = useRef(false);
+
   // Validation
   const isValid = formData.keyword.trim().length >= 3 && formData.city.trim().length > 0;
-  
+
   // Cleanup on unmount
   useEffect(() => {
+    isMounted.current = true;
     return () => {
+      isMounted.current = false;
       if (timeoutWarningRef.current) clearTimeout(timeoutWarningRef.current);
     };
   }, []);
-  
+
   // Timeout warning effect (3 minutes = very long)
   useEffect(() => {
     if (isGenerating) {
       timeoutWarningRef.current = setTimeout(() => {
         toast.warning('A geração está demorando mais que o esperado. Aguarde mais um momento...');
       }, 180000); // 3 minutes
-      
+
       return () => {
         if (timeoutWarningRef.current) {
           clearTimeout(timeoutWarningRef.current);
@@ -137,11 +141,11 @@ export default function ArticleGenerator() {
       };
     }
   }, [isGenerating]);
-  
+
   const handleInputChange = (field: keyof GeneratorFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
-  
+
   const handleGenerate = async () => {
     if (!isValid) return;
     if (!blog) {
@@ -169,18 +173,25 @@ export default function ArticleGenerator() {
 
       console.log('[ArticleGenerator] create-generation-job payload:', enginePayload);
       const { data, error } = await supabase.functions.invoke('create-generation-job', { body: enginePayload });
-      console.log('[ArticleGenerator] create-generation-job response:', { data, error: error?.message ?? error });
 
       if (error) throw error;
       if (!data?.job_id) throw new Error(data?.error || 'Resposta inesperada do servidor');
 
-      toast.success('Job criado! Acompanhe o progresso.');
-      navigate(`/client/articles/engine/${data.job_id}`);
+      if (isMounted.current) {
+        toast.success('Job criado! Acompanhe o progresso.');
+        isNavigating.current = true;
+        // Navegação síncrona com o estado do job
+        navigate(`/client/articles/engine/${data.job_id}`);
+      }
     } catch (err: any) {
       console.error('[ArticleGenerator] Generation setup error:', err);
-      toast.error(err?.message || 'Erro ao iniciar geração');
+      if (isMounted.current) {
+        toast.error(err?.message || 'Erro ao iniciar geração');
+        setIsGenerating(false); // Reset apenas em caso de erro real
+      }
     } finally {
-      setIsGenerating(false);
+      // Não resetamos o loading aqui se estivermos navegando, 
+      // para evitar flash de estado no botão antes de desmontar.
     }
   };
 
@@ -188,8 +199,8 @@ export default function ArticleGenerator() {
     <div className="container max-w-4xl py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           onClick={() => navigate('/client/articles')}
         >
@@ -205,7 +216,7 @@ export default function ArticleGenerator() {
           </p>
         </div>
       </div>
-      
+
       {/* Form */}
       <div className="grid gap-6">
         {/* Basic Info */}
@@ -235,7 +246,7 @@ export default function ArticleGenerator() {
                 </p>
               )}
             </div>
-            
+
             {/* City & State */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -270,7 +281,7 @@ export default function ArticleGenerator() {
                 </Select>
               </div>
             </div>
-            
+
             {/* Niche */}
             <div className="space-y-2">
               <Label>
@@ -284,7 +295,7 @@ export default function ArticleGenerator() {
             </div>
           </CardContent>
         </Card>
-        
+
         {/* Advanced Config */}
         <Card>
           <CardHeader>
@@ -317,7 +328,7 @@ export default function ArticleGenerator() {
                     </div>
                   </Label>
                 </div>
-                
+
                 <div>
                   <RadioGroupItem value="authority" id="mode-authority" className="peer sr-only" />
                   <Label
@@ -334,9 +345,9 @@ export default function ArticleGenerator() {
                 </div>
               </RadioGroup>
             </div>
-            
+
             <Separator />
-            
+
             {/* Template Selection */}
             <div className="space-y-3">
               <Label>Template Estrutural</Label>
@@ -346,9 +357,9 @@ export default function ArticleGenerator() {
                 disabled={isGenerating}
               />
             </div>
-            
+
             <Separator />
-            
+
             {/* Feature Toggles */}
             <div className="space-y-4">
               {/* Web Research */}
@@ -370,7 +381,7 @@ export default function ArticleGenerator() {
                   disabled={isGenerating}
                 />
               </div>
-              
+
               {/* E-E-A-T */}
               <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                 <div className="flex items-center gap-3">
@@ -390,7 +401,7 @@ export default function ArticleGenerator() {
                   disabled={isGenerating}
                 />
               </div>
-              
+
               {/* Image ALT */}
               <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                 <div className="flex items-center gap-3">
@@ -413,7 +424,7 @@ export default function ArticleGenerator() {
             </div>
           </CardContent>
         </Card>
-        
+
         {/* Actions */}
         <div className="flex items-center justify-between gap-4">
           <Button
@@ -425,7 +436,7 @@ export default function ArticleGenerator() {
             <Eye className="h-4 w-4" />
             Preview Template
           </Button>
-          
+
           <Button
             size="lg"
             onClick={handleGenerate}
@@ -446,7 +457,7 @@ export default function ArticleGenerator() {
           </Button>
         </div>
       </div>
-    
+
       {/* Template Preview Modal */}
       <ArticleTemplatePreviewModal
         open={showTemplatePreview}

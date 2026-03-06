@@ -12,25 +12,25 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { 
-  SERPMatrix, 
-  SERPCompetitor, 
+import {
+  SERPMatrix,
+  SERPCompetitor,
   KeywordFrequency,
   MarketRanges,
   MetaPatterns,
   KeywordPresence,
   SubaccountContext,
   calculateMarketRanges,
-  calculateKeywordPresence 
+  calculateKeywordPresence
 } from "../_shared/serpTypes.ts";
 import { getNicheProfile, filterTermsByProfile, NicheProfile } from "../_shared/nicheProfile.ts";
 import { filterSerpTermsForNiche, logBlockedAttempt } from "../_shared/nicheGuard.ts";
 import { generateSerpHashAsync } from "../_shared/contentHashing.ts";
-import { 
-  filterRealCompetitors, 
-  isBlockedCompetitor, 
+import {
+  filterRealCompetitors,
+  isBlockedCompetitor,
   analyzeFilterResults,
-  isValidSearchKeyword 
+  isValidSearchKeyword
 } from "../_shared/competitorFilter.ts";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -67,7 +67,7 @@ async function getSubaccountContext(
 
     // Extrair termo-chave do nicho do primeiro serviço
     const primaryService = servicesList[0] || bp.niche || 'serviços';
-    
+
     const context: SubaccountContext = {
       companyName: bp.company_name || 'Empresa',
       primaryService,
@@ -100,7 +100,7 @@ function buildSearchQuery(
   context: SubaccountContext | null,
   territory: string | null
 ): KeywordValidationResult {
-  
+
   // Se não temos contexto, usar input como está
   if (!context) {
     const city = territory || '';
@@ -111,7 +111,7 @@ function buildSearchQuery(
   }
 
   const city = territory || context.city;
-  
+
   // Padrões de keyword INVÁLIDA (genérica/placeholder)
   const INVALID_PATTERNS = [
     /^artigo\s+em\s+/i,           // "Artigo em Teresina..."
@@ -125,52 +125,52 @@ function buildSearchQuery(
     /^guia\s+completo\s*$/i,      // "Guia completo" sozinho
     /^tudo\s+sobre\s+/i,          // "Tudo sobre..."
   ];
-  
+
   // Termos que indicam que a keyword é sobre a PLATAFORMA, não o cliente
   const PLATFORM_TERMS = [
-    'omniseen', 'lovable', 'saas', 'plataforma', 'software', 
+    'omniseen', 'lovable', 'saas', 'plataforma', 'software',
     'marketing digital', 'seo', 'agência', 'consultoria seo',
     'geração de conteúdo', 'ia para', 'inteligência artificial'
   ];
-  
+
   const keywordLower = inputKeyword.toLowerCase().trim();
-  
+
   // Verificar se é keyword inválida por padrão
   const matchesInvalidPattern = INVALID_PATTERNS.some(p => p.test(keywordLower));
-  
+
   // Verificar se contém termos da plataforma
   const containsPlatformTerm = PLATFORM_TERMS.some(term => keywordLower.includes(term));
-  
+
   // Verificar se é muito curta ou genérica
   const isTooShort = keywordLower.length < 5;
   const isTooGeneric = keywordLower.split(' ').length <= 1 && keywordLower.length < 10;
-  
+
   const isInvalid = matchesInvalidPattern || containsPlatformTerm || isTooShort || isTooGeneric;
-  
+
   if (isInvalid) {
     // Construir keyword usando serviço primário + cidade
-    const query = city 
+    const query = city
       ? `${context.primaryService} em ${city}`
       : context.primaryService;
-    
+
     let reason = 'Keyword genérica ou placeholder detectada';
     if (containsPlatformTerm) reason = 'Keyword contém termos da plataforma, não do cliente';
     if (matchesInvalidPattern) reason = 'Keyword é um título genérico, não uma busca local';
-    
-    return { 
-      query, 
-      source: 'service', 
+
+    return {
+      query,
+      source: 'service',
       wasInvalid: true,
       reason
     };
   }
-  
+
   // Keyword parece válida - adicionar cidade se não tiver
   const hasCity = city && keywordLower.includes(city.toLowerCase());
-  const query = hasCity 
-    ? inputKeyword 
+  const query = hasCity
+    ? inputKeyword
     : (city ? `${inputKeyword} ${city}` : inputKeyword);
-  
+
   return { query, source: 'input', wasInvalid: false };
 }
 
@@ -215,7 +215,7 @@ async function scrapeWithFirecrawl(url: string, apiKey: string): Promise<Scraped
 
   try {
     console.log(`[SCRAPE] Scraping ${url} with Firecrawl...`);
-    
+
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -254,9 +254,9 @@ async function scrapeWithFirecrawl(url: string, apiKey: string): Promise<Scraped
     const listCount = countLists(html);
     const termFrequency = buildTermFrequencyMap(markdown);
     const hasSchema = html.includes('application/ld+json');
-    const hasFAQ = html.toLowerCase().includes('faqpage') || 
-                   html.includes('itemtype="https://schema.org/FAQPage"') ||
-                   h2s.some(h => h.toLowerCase().includes('perguntas frequentes') || h.toLowerCase().includes('faq'));
+    const hasFAQ = html.toLowerCase().includes('faqpage') ||
+      html.includes('itemtype="https://schema.org/FAQPage"') ||
+      h2s.some(h => h.toLowerCase().includes('perguntas frequentes') || h.toLowerCase().includes('faq'));
 
     return {
       url,
@@ -291,7 +291,7 @@ function extractTitle(html: string): string {
 
 function extractMetaDescription(html: string): string {
   const match = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i) ||
-                html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']description["']/i);
+    html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']description["']/i);
   return match ? match[1].trim() : '';
 }
 
@@ -356,12 +356,12 @@ function buildTermFrequencyMap(text: string): Record<string, number> {
 // ═══════════════════════════════════════════════════════════════════
 
 async function discoverTopURLsWithPerplexity(
-  keyword: string, 
+  keyword: string,
   territory: string | null,
   apiKey: string
 ): Promise<{ urls: string[]; competitors: SERPCompetitor[] }> {
   const searchQuery = territory ? `${keyword} ${territory}` : keyword;
-  
+
   const serpPrompt = `Analise os 10 primeiros resultados orgânicos do Google para a busca: "${searchQuery}"
 
 Para CADA um dos 10 primeiros resultados, extraia:
@@ -439,12 +439,13 @@ Retorne APENAS um JSON válido no formato:
       console.error('[SERP] ⏱️ Perplexity TIMEOUT (30s) - aborting URL discovery');
       throw new Error('PERPLEXITY_TIMEOUT: URL discovery exceeded 30 seconds');
     }
+    ```
     throw error;
   }
   clearTimeout(timeoutId);
 
   if (!response.ok) {
-    throw new Error(`Perplexity API error: ${response.status}`);
+    throw new Error(`Perplexity API error: ${ response.status } `);
   }
 
   const data = await response.json();
@@ -598,21 +599,21 @@ serve(async (req) => {
     // 1. Buscar contexto completo da subconta
     const subaccountContext = await getSubaccountContext(supabase, blogId);
     
-    console.log(`[ANALYZE-SERP] 🎯 Entidade raiz: ${subaccountContext?.companyName || 'N/A'}`);
-    console.log(`[ANALYZE-SERP] 📍 Nicho: ${subaccountContext?.nicheSlug || 'N/A'}`);
-    console.log(`[ANALYZE-SERP] 🔧 Serviço primário: ${subaccountContext?.primaryService || 'N/A'}`);
-    console.log(`[ANALYZE-SERP] 🌆 Cidade: ${subaccountContext?.city || territory || 'N/A'}`);
+    console.log(`[ANALYZE - SERP] 🎯 Entidade raiz: ${ subaccountContext?.companyName || 'N/A' } `);
+    console.log(`[ANALYZE - SERP] 📍 Nicho: ${ subaccountContext?.nicheSlug || 'N/A' } `);
+    console.log(`[ANALYZE - SERP] 🔧 Serviço primário: ${ subaccountContext?.primaryService || 'N/A' } `);
+    console.log(`[ANALYZE - SERP] 🌆 Cidade: ${ subaccountContext?.city || territory || 'N/A' } `);
 
     // 2. Validar e corrigir keyword se necessário
     let searchConfig = buildSearchQuery(keyword, subaccountContext, territory || null);
     let effectiveKeyword = searchConfig.query;
     
     if (searchConfig.wasInvalid) {
-      console.log(`[ANALYZE-SERP] ⚠️ Keyword original inválida: "${keyword}"`);
-      console.log(`[ANALYZE-SERP] 📝 Motivo: ${searchConfig.reason}`);
-      console.log(`[ANALYZE-SERP] ✅ Usando keyword do nicho: "${effectiveKeyword}"`);
+      console.log(`[ANALYZE - SERP] ⚠️ Keyword original inválida: "${keyword}"`);
+      console.log(`[ANALYZE - SERP] 📝 Motivo: ${ searchConfig.reason } `);
+      console.log(`[ANALYZE - SERP] ✅ Usando keyword do nicho: "${effectiveKeyword}"`);
     } else if (searchConfig.source === 'input' && effectiveKeyword !== keyword) {
-      console.log(`[ANALYZE-SERP] 📍 Keyword enriquecida com cidade: "${effectiveKeyword}"`);
+      console.log(`[ANALYZE - SERP] 📍 Keyword enriquecida com cidade: "${effectiveKeyword}"`);
     }
 
     // 3. Validação final contra termos da plataforma
@@ -621,12 +622,12 @@ serve(async (req) => {
       // Se mesmo após correção ainda for inválida, tentar serviço primário puro
       if (subaccountContext?.primaryService) {
         effectiveKeyword = subaccountContext.city 
-          ? `${subaccountContext.primaryService} em ${subaccountContext.city}`
+          ? `${ subaccountContext.primaryService } em ${ subaccountContext.city } `
           : subaccountContext.primaryService;
-        console.log(`[ANALYZE-SERP] 🔄 Fallback final para serviço: "${effectiveKeyword}"`);
+        console.log(`[ANALYZE - SERP] 🔄 Fallback final para serviço: "${effectiveKeyword}"`);
         searchConfig = { query: effectiveKeyword, source: 'niche', wasInvalid: true, reason: 'Fallback para serviço primário' };
       } else {
-        console.error(`[ANALYZE-SERP] ❌ Keyword inválida e sem contexto de fallback: ${keywordValidation.reason}`);
+        console.error(`[ANALYZE - SERP] ❌ Keyword inválida e sem contexto de fallback: ${ keywordValidation.reason } `);
         return new Response(
           JSON.stringify({ 
             error: keywordValidation.reason,
@@ -639,7 +640,7 @@ serve(async (req) => {
     }
 
     const hasCustomUrls = customCompetitorUrls && customCompetitorUrls.length > 0;
-    console.log(`[ANALYZE-SERP] V3.2 Starting for keyword: "${effectiveKeyword}" territory: "${territory || 'none'}" firecrawl: ${useFirecrawl} customUrls: ${hasCustomUrls ? customCompetitorUrls.length : 0}`);
+    console.log(`[ANALYZE - SERP] V3.2 Starting for keyword: "${effectiveKeyword}" territory: "${territory || 'none'}" firecrawl: ${ useFirecrawl } customUrls: ${ hasCustomUrls ? customCompetitorUrls.length : 0 } `);
 
     // V3.0: Skip cache if custom URLs provided
     if (!forceRefresh && !hasCustomUrls) {
@@ -661,7 +662,7 @@ serve(async (req) => {
                            Object.keys(cached.keyword_frequency_map || {}).length > 0;
         
         if (hasRealData) {
-          console.log(`[ANALYZE-SERP] Returning cached analysis from ${cached.analyzed_at}`);
+          console.log(`[ANALYZE - SERP] Returning cached analysis from ${ cached.analyzed_at } `);
           return new Response(
             JSON.stringify({ 
               success: true, 
@@ -675,7 +676,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
-          console.log(`[ANALYZE-SERP] Cache invalid (no real data) - forcing refresh`);
+          console.log(`[ANALYZE - SERP] Cache invalid(no real data) - forcing refresh`);
         }
       }
     }
@@ -691,7 +692,7 @@ serve(async (req) => {
 
     // Get niche profile
     const nicheProfile: NicheProfile = await getNicheProfile(supabase, blogId);
-    console.log(`[ANALYZE-SERP] Using niche profile: ${nicheProfile.displayName}`);
+    console.log(`[ANALYZE - SERP] Using niche profile: ${ nicheProfile.displayName } `);
 
     let competitors: SERPCompetitor[] = [];
     let commonTerms: string[] = [];
@@ -705,7 +706,7 @@ serve(async (req) => {
     // V3.0: CUSTOM URLS MODE - User provided specific competitors
     // ═══════════════════════════════════════════════════════════════════
     if (hasCustomUrls && FIRECRAWL_API_KEY) {
-      console.log(`[ANALYZE-SERP] Using ${customCompetitorUrls.length} custom competitor URLs`);
+      console.log(`[ANALYZE - SERP] Using ${ customCompetitorUrls.length } custom competitor URLs`);
       scrapeMethod = 'custom';
       
       const scrapedCompetitors: ScrapedCompetitor[] = [];
@@ -716,7 +717,7 @@ serve(async (req) => {
         // Skip blocked URLs even in custom mode
         const blockCheck = isBlockedCompetitor(url);
         if (blockCheck.blocked) {
-          console.log(`[ANALYZE-SERP] Skipping blocked custom URL: ${url} (${blockCheck.reason})`);
+          console.log(`[ANALYZE - SERP] Skipping blocked custom URL: ${ url } (${ blockCheck.reason })`);
           filterStats.blockedUrls.push(url);
           continue;
         }
@@ -758,13 +759,13 @@ serve(async (req) => {
         .map(([term, _]) => term)
         .slice(0, 30);
       
-      console.log(`[ANALYZE-SERP] Custom mode: scraped ${scrapedCompetitors.length} pages, ${commonTerms.length} terms`);
+      console.log(`[ANALYZE - SERP] Custom mode: scraped ${ scrapedCompetitors.length } pages, ${ commonTerms.length } terms`);
     }
     // ═══════════════════════════════════════════════════════════════════
     // STANDARD MODE: Perplexity discovery + Firecrawl scraping
     // ═══════════════════════════════════════════════════════════════════
     else if (PERPLEXITY_API_KEY) {
-      console.log(`[ANALYZE-SERP] Step 1: Discovering URLs with Perplexity for: "${effectiveKeyword}"`);
+      console.log(`[ANALYZE - SERP] Step 1: Discovering URLs with Perplexity for: "${effectiveKeyword}"`);
       const perplexityResult = await discoverTopURLsWithPerplexity(effectiveKeyword, territory || null, PERPLEXITY_API_KEY);
       competitors = perplexityResult.competitors;
       
@@ -776,7 +777,7 @@ serve(async (req) => {
       filterStats.blockedUrls = filterResult.blocked.map(b => b.item.url);
       
       const analysisResult = analyzeFilterResults(filterStats.originalCount, filterStats.filteredCount);
-      console.log(`[ANALYZE-SERP] Filter: ${analysisResult.message} (quality: ${analysisResult.quality})`);
+      console.log(`[ANALYZE - SERP] Filter: ${ analysisResult.message } (quality: ${ analysisResult.quality })`);
       
       // Extract from perplexity response
       topTitles = competitors.slice(0, 5).map(c => c.title);
@@ -841,7 +842,7 @@ serve(async (req) => {
     // Apply niche filtering to terms
     const originalTermsCount = commonTerms.length;
     commonTerms = filterTermsByProfile(commonTerms, nicheProfile);
-    console.log(`[ANALYZE-SERP] Niche filter: ${originalTermsCount} → ${commonTerms.length} terms`);
+    console.log(`[ANALYZE - SERP] Niche filter: ${ originalTermsCount } → ${ commonTerms.length } terms`);
 
     // Calculate averages
     const avgWords = competitors.length > 0 
@@ -898,7 +899,7 @@ serve(async (req) => {
       subaccountContext: subaccountContext || undefined
     };
 
-    console.log(`[ANALYZE-SERP] Matrix built: ${competitors.length} competitors, avg ${avgWords} words, method: ${scrapeMethod}, keyword: "${effectiveKeyword}"`);
+    console.log(`[ANALYZE - SERP] Matrix built: ${ competitors.length } competitors, avg ${ avgWords } words, method: ${ scrapeMethod }, keyword: "${effectiveKeyword}"`);
 
     // Save to cache - use effectiveKeyword for cache key
     const { error: cacheError } = await supabase
@@ -962,7 +963,7 @@ serve(async (req) => {
       }
     });
 
-    console.log(`[ANALYZE-SERP] Complete in ${durationMs}ms`);
+    console.log(`[ANALYZE - SERP] Complete in ${ durationMs } ms`);
 
     return new Response(
       JSON.stringify({ 

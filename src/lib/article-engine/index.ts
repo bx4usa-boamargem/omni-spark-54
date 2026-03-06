@@ -21,37 +21,36 @@ export type {
   ArticleMode,
   ToneType,
   CtaType,
-  
+
   // Estruturas de nicho
   NicheRuleset,
-  
+
   // Estruturas de subconta
   SubaccountProfile,
-  
+
   // Estruturas de intenção
   Intent,
   KeywordAnalysis,
-  
+
   // Estruturas de template
   TemplateSection,
   ArticleTemplate,
-  
+
   // Estruturas do pipeline
   ArticleBrief,
   ArticleOutline,
   OutlineSection,
   ArticleImage,
-  InternalLink,
   FaqItem,
   TldrSummary,
-  
+
   // Estruturas de validação
   ValidationCheck,
   ValidationResult,
-  
+
   // Artigo completo
   GeneratedArticle,
-  
+
   // Histórico
   ArticleHistoryRecord
 } from './types';

@@ -79,26 +79,26 @@ export const isPlatformHost = (): boolean => {
 export const isSubaccountHost = (): boolean => {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
-  
+
   // Log para debug em produção
-  console.log('[platformUrls] isSubaccountHost check:', { 
-    host, 
+  console.log('[platformUrls] isSubaccountHost check:', {
+    host,
     endsWithSuffix: host.endsWith('.app.omniseen.app'),
     isNotMain: host !== 'app.omniseen.app'
   });
-  
+
   // Padrão principal: subdomínio do app.omniseen.app
   if (host.endsWith('.app.omniseen.app') && host !== 'app.omniseen.app') {
     return true;
   }
-  
+
   // Fallback: verificar se há meta tag injetada pelo proxy
   const tenantMeta = document.querySelector('meta[name="x-tenant-slug"]');
   if (tenantMeta?.getAttribute('content')) {
     console.log('[platformUrls] isSubaccountHost: found tenant meta tag');
     return true;
   }
-  
+
   return false;
 };
 
@@ -119,7 +119,7 @@ export const isLandingHost = (): boolean => {
 export const isCustomDomainHost = (): boolean => {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
-  
+
   // Vercel fallback domain is never a custom domain
   if (host.endsWith('.vercel.app')) {
     return false;
@@ -129,13 +129,15 @@ export const isCustomDomainHost = (): boolean => {
   if (host.endsWith('omniseen.app') || host === 'omniseen.app') {
     return false;
   }
-  
+
   // Exclude development/preview hosts
   const devHosts = ['localhost', '127.0.0.1', '0.0.0.0'];
-  if (devHosts.some(h => host.includes(h)) || host.includes('lovable.app') || host.includes('lovableproject.com')) {
+  const isLocalIp = host.startsWith('192.168.') || host.startsWith('10.');
+
+  if (devHosts.some(h => host.includes(h)) || isLocalIp || host.includes('lovable.app') || host.includes('lovableproject.com')) {
     return false;
   }
-  
+
   return true;
 };
 
@@ -175,7 +177,7 @@ export const resolveCurrentTenantSlug = (): string | null => {
   // Prioridade 1: Meta tag do Worker
   const metaSlug = getTenantSlugFromMeta();
   if (metaSlug) return metaSlug;
-  
+
   // Prioridade 2: Parsing do hostname
   return extractSubdomainSlug();
 };

@@ -34,12 +34,12 @@ interface TenantContextValue {
   allMemberships: TenantMembership[];
   loading: boolean;
   error: string | null;
-  
+
   // Helpers
   isOwner: boolean;
   isAdmin: boolean;
   hasTenant: boolean;
-  
+
   // Ações
   switchTenant: (tenantId: string) => void;
   refetch: () => Promise<void>;
@@ -53,7 +53,7 @@ interface TenantProviderProps {
 
 export function TenantProvider({ children }: TenantProviderProps) {
   const { user, loading: authLoading } = useAuth();
-  
+
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [currentMembership, setCurrentMembership] = useState<TenantMembership | null>(null);
   const [allMemberships, setAllMemberships] = useState<TenantMembership[]>([]);
@@ -124,11 +124,55 @@ export function TenantProvider({ children }: TenantProviderProps) {
           tenant: m.tenant as unknown as Tenant,
         }));
 
-      setAllMemberships(formattedMemberships);
-
       // Selecionar tenant atual: preferir owner, ou primeiro da lista
       const ownerMembership = formattedMemberships.find(m => m.role === 'owner');
-      const selectedMembership = ownerMembership || formattedMemberships[0];
+      let selectedMembership = ownerMembership || formattedMemberships[0];
+
+      // ==========================================
+      // DEV_ACCESS_OVERRIDE — LOCAL TENANT SESSION
+      // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
+      // NUNCA vai para produção (variável não existe na Vercel)
+      // ==========================================
+      const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
+      const hostname = window.location.hostname;
+      const isLocal =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.');
+
+      if (isDEVMode && isLocal) {
+        console.log('[DEV_ACCESS_OVERRIDE] VITE_DEV_PREVIEW_MODE ativo. Forçando TenantContext para Bione Advocacia...');
+        const bioneTenantId = '44c4f7cd-05b0-4229-9828-2eb822d38bfd';
+
+        // Verifica se o usuário já tem no banco (run_init_bione.js executado)
+        let bioneMembership = formattedMemberships.find(m => m.tenant_id === bioneTenantId);
+
+        // Se não tem (bypassing RLS read na view do tenant local), forçamos na UI
+        if (!bioneMembership) {
+          bioneMembership = {
+            id: 'dev-override-membership',
+            tenant_id: bioneTenantId,
+            user_id: user.id,
+            role: 'owner',
+            joined_at: new Date().toISOString(),
+            tenant: {
+              id: bioneTenantId,
+              name: 'Bione Advocacia (DEV_OPERATOR)',
+              slug: 'bione-advocacia',
+              owner_user_id: user.id,
+              plan: 'business',
+              status: 'active',
+              created_at: new Date().toISOString()
+            } as Tenant
+          };
+          formattedMemberships.push(bioneMembership);
+        }
+        selectedMembership = bioneMembership;
+      }
+      // ==========================================
+
+      setAllMemberships(formattedMemberships);
 
       if (selectedMembership) {
         setCurrentMembership(selectedMembership);

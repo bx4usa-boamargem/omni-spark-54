@@ -47,17 +47,18 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-    if (!supabaseUrl || !serviceRoleKey) {
-        return jsonRes({ error: "Missing Supabase configuration" }, 500);
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false },
-    });
-
     let runId: string | null = null;
+    let supabase: any = null;
 
     try {
+        if (!supabaseUrl || !serviceRoleKey) {
+            console.error("[radar-v3] Missing Supabase configuration (URL or Service Role Key)");
+            return jsonRes({ error: "Missing Supabase configuration. Check Edge Function secrets." }, 500);
+        }
+
+        supabase = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false },
+        });
         // ─── 1. Parse & validate ─────────────────────────────────────────
         const body = await req.json().catch(() => ({}));
         const { blogId } = body as { blogId?: string };
@@ -317,7 +318,7 @@ Deno.serve(async (req: Request) => {
         const errorMsg = err instanceof Error ? err.message : String(err);
         console.error("[radar-v3] FATAL:", errorMsg);
 
-        if (runId) {
+        if (runId && supabase) {
             await supabase
                 .from("radar_v3_runs")
                 .update({

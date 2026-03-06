@@ -25,14 +25,14 @@ interface PanelPosition {
  * - Faixa lateral roxo→laranja quando ativo
  * - Usa position: fixed para evitar clipping por overflow
  */
-export function HubMenuItem({ 
-  id, 
-  icon: Icon, 
-  label, 
+export function HubMenuItem({
+  id,
+  icon: Icon,
+  label,
   isActive,
   isExpanded = true,
   children,
-  onClose 
+  onClose
 }: HubMenuItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState<PanelPosition>({ top: 0, left: 0 });
@@ -75,7 +75,7 @@ export function HubMenuItem({
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative"
       onMouseEnter={handleMouseEnter}
@@ -105,25 +105,25 @@ export function HubMenuItem({
           >
             {/* Faixa lateral ativa (roxo → laranja) */}
             {isActive && (
-              <div 
+              <div
                 className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
-                style={{ 
-                  background: 'linear-gradient(to bottom, #7C3AED, #F97316)' 
+                style={{
+                  background: 'linear-gradient(to bottom, #7C3AED, #F97316)'
                 }}
               />
             )}
-            
+
             <Icon className={cn(
               'h-5 w-5 shrink-0 transition-colors',
               isActive && 'text-[#7C3AED]'
             )} />
-            
+
             {isExpanded && (
               <>
                 <span className="flex-1 text-left text-sm font-medium whitespace-nowrap">
                   {label}
                 </span>
-                
+
                 <ChevronRight className={cn(
                   'h-4 w-4 text-[#9CA3AF] transition-transform duration-200',
                   isOpen && 'rotate-90'
@@ -135,14 +135,12 @@ export function HubMenuItem({
 
         if (!isExpanded) {
           return (
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>{btn}</TooltipTrigger>
-                <TooltipContent side="right" className="font-medium">
-                  {label}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>{btn}</TooltipTrigger>
+              <TooltipContent side="right" className="font-medium">
+                {label}
+              </TooltipContent>
+            </Tooltip>
           );
         }
 
@@ -153,14 +151,14 @@ export function HubMenuItem({
       {isOpen && (
         <>
           {/* Overlay invisível para detectar click fora */}
-          <div 
-            className="fixed inset-0 z-[100]" 
+          <div
+            className="fixed inset-0 z-[100]"
             onClick={handleCloseMenu}
             aria-hidden="true"
           />
-          
+
           {/* Card flutuante com position fixed */}
-          <div 
+          <div
             className={cn(
               'fixed z-[110]',
               'w-80 bg-white dark:bg-gray-900 rounded-xl',

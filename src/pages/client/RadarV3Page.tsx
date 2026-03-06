@@ -232,7 +232,21 @@ export default function RadarV3Page() {
             const { data, error } = await supabase.functions.invoke('radar-v3-refresh', {
                 body: { blogId: blog.id },
             });
-            if (error) throw error;
+
+            if (error) {
+                console.error('[RadarV3] Function error:', error);
+
+                // Tratar erro 404 (Função não encontrada/não deployada)
+                if (error.message?.includes('404') || error.message?.includes('not found')) {
+                    toast.error('Edge Function não encontrada', {
+                        description: 'A função "radar-v3-refresh" não está deployada no projeto Supabase. Execute: supabase functions deploy radar-v3-refresh',
+                        duration: 6000,
+                    });
+                } else {
+                    throw error;
+                }
+                return;
+            }
             toast.success('Radar atualizado!', {
                 description: `${data?.opportunities_count || 0} oportunidades em ${data?.elapsed_ms || '?'}ms`,
             });

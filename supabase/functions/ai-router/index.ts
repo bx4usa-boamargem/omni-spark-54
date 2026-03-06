@@ -75,23 +75,23 @@ type TaskType =
 // ============================================================
 
 const MODEL_ROUTING: Record<TaskType, { temperature: number; maxTokens: number }> = {
-  serp_analysis:            { temperature: 0.3, maxTokens: 8000 },
-  nlp_keywords:             { temperature: 0.2, maxTokens: 8000 },
-  title_gen:                { temperature: 0.7, maxTokens: 4000 },
-  outline_gen:              { temperature: 0.4, maxTokens: 8000 },
-  content_gen:              { temperature: 0.5, maxTokens: 12000 },
-  content_critic:           { temperature: 0.1, maxTokens: 4000 },
-  context_summary:          { temperature: 0.1, maxTokens: 2000 },
-  image_gen:                { temperature: 0.7, maxTokens: 2000 },
-  seo_score:                { temperature: 0.1, maxTokens: 4000 },
-  meta_gen:                 { temperature: 0.3, maxTokens: 4000 },
-  serp_summary:             { temperature: 0.3, maxTokens: 2000 },
-  article_gen_single_pass:  { temperature: 0.4, maxTokens: 8000 },
-  entity_extraction:        { temperature: 0.2, maxTokens: 4000 },
+  serp_analysis: { temperature: 0.3, maxTokens: 8000 },
+  nlp_keywords: { temperature: 0.2, maxTokens: 8000 },
+  title_gen: { temperature: 0.7, maxTokens: 4000 },
+  outline_gen: { temperature: 0.4, maxTokens: 8000 },
+  content_gen: { temperature: 0.5, maxTokens: 12000 },
+  content_critic: { temperature: 0.1, maxTokens: 4000 },
+  context_summary: { temperature: 0.1, maxTokens: 2000 },
+  image_gen: { temperature: 0.7, maxTokens: 2000 },
+  seo_score: { temperature: 0.1, maxTokens: 4000 },
+  meta_gen: { temperature: 0.3, maxTokens: 4000 },
+  serp_summary: { temperature: 0.3, maxTokens: 2000 },
+  article_gen_single_pass: { temperature: 0.4, maxTokens: 8000 },
+  entity_extraction: { temperature: 0.2, maxTokens: 4000 },
   article_gen_from_outline: { temperature: 0.4, maxTokens: 12000 },
-  serp_gap_analysis:        { temperature: 0.2, maxTokens: 4000 },
-  section_expansion:        { temperature: 0.3, maxTokens: 4000 },
-  entity_coverage_assign:   { temperature: 0.2, maxTokens: 4000 },
+  serp_gap_analysis: { temperature: 0.2, maxTokens: 4000 },
+  section_expansion: { temperature: 0.3, maxTokens: 4000 },
+  entity_coverage_assign: { temperature: 0.2, maxTokens: 4000 },
 };
 
 // Cost per 1M tokens (placeholder; optional)
@@ -295,6 +295,7 @@ serve(async (req) => {
 
     const wantsJson =
       (typeof body?.responseFormat === "string" && body.responseFormat === "json") ||
+      ["serp_analysis", "outline_gen"].includes(String(task)) ||
       effectiveMessages.some((m: any) => typeof m?.content === "string" && /ONLY valid JSON|Return ONLY valid JSON|JSON \(/i.test(m.content));
 
     const result = await callWithRetry({

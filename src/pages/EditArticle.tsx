@@ -15,7 +15,6 @@ import { ArticleVersionHistory, ArticleVersion } from "@/components/seo/ArticleV
 import { GenerationProgress, GenerationStage } from "@/components/seo/GenerationProgress";
 import { ArticleExportDialog } from "@/components/ArticleExportDialog";
 import { SchedulePublishDialog } from "@/components/scheduling/SchedulePublishDialog";
-import { InternalLinksSuggestions } from "@/components/seo/InternalLinksSuggestions";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { ArticleSidebar } from "@/components/editor/ArticleSidebar";
 import { SocialSharePanel } from "@/components/social/SocialSharePanel";
@@ -28,11 +27,11 @@ import { getArticleUrl } from "@/utils/blogUrl";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { 
-  ArrowLeft, 
-  Save, 
-  Upload, 
-  Loader2, 
+import {
+  ArrowLeft,
+  Save,
+  Upload,
+  Loader2,
   Sparkles,
   Trash2,
   History,
@@ -208,7 +207,7 @@ export default function EditArticle() {
         .select("slug, custom_domain, domain_verified")
         .eq("id", data.blog_id)
         .single();
-      
+
       if (blog) {
         setBlogData(blog);
       }
@@ -219,7 +218,7 @@ export default function EditArticle() {
         .from("article_translations")
         .select("language_code")
         .eq("article_id", id);
-      
+
       if (translations) {
         setExistingTranslations(translations.map(t => t.language_code));
       }
@@ -256,7 +255,7 @@ export default function EditArticle() {
   // Fetch version history
   const fetchVersions = useCallback(async () => {
     if (!id) return;
-    
+
     const { data, error } = await supabase
       .from("article_versions")
       .select("*")
@@ -299,15 +298,15 @@ export default function EditArticle() {
 
   // Calculate SEO score for comparison
   const calculateSEOScore = (
-    checkTitle: string, 
-    checkMeta: string, 
+    checkTitle: string,
+    checkMeta: string,
     checkContent: string | null,
     checkKeywords: string[]
   ) => {
     let score = 0;
     const contentText = checkContent || '';
     const wordCount = contentText.split(/\s+/).filter(w => w.length > 0).length;
-    
+
     // Title check
     const titleLength = checkTitle.length;
     const keywordInTitle = checkKeywords.some(kw => checkTitle.toLowerCase().includes(kw.toLowerCase()));
@@ -334,11 +333,11 @@ export default function EditArticle() {
 
     // Density check
     const contentLower = contentText.toLowerCase();
-    const avgDensity = checkKeywords.length > 0 
+    const avgDensity = checkKeywords.length > 0
       ? checkKeywords.reduce((acc, kw) => {
-          const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
-          return acc + ((matches?.length || 0) / Math.max(wordCount, 1)) * 100;
-        }, 0) / checkKeywords.length
+        const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
+        return acc + ((matches?.length || 0) / Math.max(wordCount, 1)) * 100;
+      }, 0) / checkKeywords.length
       : 0;
     const mainKeywordFound = checkKeywords.some(kw => {
       const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
@@ -423,8 +422,8 @@ export default function EditArticle() {
         changeType: type,
         before: {
           value: currentValue,
-          score: type === 'title' ? (title.length >= 50 && title.length <= 60 && keywords.some(k => title.toLowerCase().includes(k.toLowerCase())) ? 15 : 8) : 
-                 type === 'meta' ? (metaDescription.length >= 140 && metaDescription.length <= 160 ? 15 : 8) : 10,
+          score: type === 'title' ? (title.length >= 50 && title.length <= 60 && keywords.some(k => title.toLowerCase().includes(k.toLowerCase())) ? 15 : 8) :
+            type === 'meta' ? (metaDescription.length >= 140 && metaDescription.length <= 160 ? 15 : 8) : 10,
           maxScore: type === 'content' ? 20 : 15,
         },
         after: {
@@ -511,12 +510,12 @@ export default function EditArticle() {
 
   const handleRestoreVersion = async (version: ArticleVersion) => {
     if (!article) return;
-    
+
     setIsRestoring(true);
-    
+
     try {
       await saveVersion('rollback', `Restaurado para versão ${version.version_number}`);
-      
+
       setTitle(version.title);
       setExcerpt(version.excerpt || '');
       setMetaDescription(version.meta_description || '');
@@ -555,31 +554,31 @@ export default function EditArticle() {
 
     const contentText = article.content || '';
     const wordCount = contentText.split(/\s+/).filter(w => w.length > 0).length;
-    
+
     const fixableItems: ('title' | 'meta' | 'content' | 'density')[] = [];
-    
+
     const titleLength = title.length;
     const keywordInTitle = keywords.some(kw => title.toLowerCase().includes(kw.toLowerCase()));
     if (!(titleLength >= 50 && titleLength <= 60 && keywordInTitle)) {
       fixableItems.push('title');
     }
-    
+
     const metaLength = metaDescription.length;
     const keywordInMeta = keywords.some(kw => metaDescription.toLowerCase().includes(kw.toLowerCase()));
     if (!(metaLength >= 140 && metaLength <= 160 && keywordInMeta)) {
       fixableItems.push('meta');
     }
-    
+
     if (wordCount < 1500 && wordCount >= 300) {
       fixableItems.push('content');
     }
-    
+
     const contentLower = contentText.toLowerCase();
-    const avgDensity = keywords.length > 0 
+    const avgDensity = keywords.length > 0
       ? keywords.reduce((acc, kw) => {
-          const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
-          return acc + ((matches?.length || 0) / Math.max(wordCount, 1)) * 100;
-        }, 0) / keywords.length
+        const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
+        return acc + ((matches?.length || 0) / Math.max(wordCount, 1)) * 100;
+      }, 0) / keywords.length
       : 0;
     const mainKeywordFound = keywords.some(kw => {
       const matches = contentLower.match(new RegExp(kw.toLowerCase(), 'gi'));
@@ -627,13 +626,13 @@ export default function EditArticle() {
         const { improvedValue } = response.data;
 
         if (improvedValue) {
-          const dbField = itemType === 'title' ? 'title' : 
-                          itemType === 'meta' ? 'meta_description' : 'content';
-          
+          const dbField = itemType === 'title' ? 'title' :
+            itemType === 'meta' ? 'meta_description' : 'content';
+
           // Persist to database immediately
           await supabase
             .from("articles")
-            .update({ 
+            .update({
               [dbField]: improvedValue,
               updated_at: new Date().toISOString()
             })
@@ -662,8 +661,8 @@ export default function EditArticle() {
     setIsFixingAll(false);
     setFixAllStep(0);
     setFixAllTotal(0);
-    toast({ 
-      title: "SEO otimizado!", 
+    toast({
+      title: "SEO otimizado!",
       description: `${fixableItems.length} itens corrigidos automaticamente.`
     });
   };
@@ -680,21 +679,21 @@ export default function EditArticle() {
     // Aplica normalização de estrutura antes de salvar (H1, parágrafos, CTA)
     // ========================================================================
     let contentToSave = article.content;
-    
+
     if (contentToSave) {
       try {
         console.log('[POLISH] Applying final editorial polish before save...');
-        
+
         const polishResponse = await supabase.functions.invoke('polish-article-final', {
           body: { content: contentToSave }
         });
 
         if (polishResponse.data?.success && polishResponse.data?.content) {
           contentToSave = polishResponse.data.content;
-          
+
           // Update local state with polished content
           setArticle(prev => prev ? { ...prev, content: contentToSave } : null);
-          
+
           const changes = polishResponse.data.changes || [];
           if (changes.length > 0) {
             console.log(`[POLISH] Applied changes: ${changes.join(', ')}`);
@@ -823,7 +822,7 @@ export default function EditArticle() {
     } else {
       setStatus("scheduled");
       setScheduledAt(scheduledDate);
-      toast({ 
+      toast({
         title: "Artigo agendado!",
         description: `Será publicado em ${format(scheduledDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
       });
@@ -893,27 +892,27 @@ export default function EditArticle() {
 
   const addSuggestedKeyword = async (keyword: string) => {
     if (!article || keywords.includes(keyword) || keywords.length >= 5) return;
-    
+
     const newKeywords = [...keywords, keyword];
     setKeywords(newKeywords);
-    
+
     await supabase
       .from("articles")
-      .update({ 
+      .update({
         keywords: newKeywords,
         updated_at: new Date().toISOString()
       })
       .eq("id", article.id);
-      
+
     toast({ title: `Palavra-chave "${keyword}" adicionada!` });
   };
 
   const handleSuggestKeywords = async () => {
     if (!article) return;
-    
+
     setIsLoadingSuggestions(true);
     setSuggestedKeywords([]);
-    
+
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/suggest-keywords`,
@@ -937,7 +936,7 @@ export default function EditArticle() {
       }
 
       const data = await response.json();
-      
+
       if (data.keywords && Array.isArray(data.keywords)) {
         setSuggestedKeywords(data.keywords);
         toast({ title: `${data.keywords.length} keywords sugeridas!` });
@@ -975,7 +974,7 @@ export default function EditArticle() {
         .getPublicUrl(data.path);
 
       setFeaturedImage(urlData.publicUrl);
-      
+
       await supabase
         .from('articles')
         .update({ featured_image_url: urlData.publicUrl })
@@ -1003,7 +1002,7 @@ export default function EditArticle() {
     try {
       // Get current user for cost tracking
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
+
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: {
           articleTitle: title,
@@ -1018,7 +1017,7 @@ export default function EditArticle() {
       if (!data?.imageBase64 && !data?.imageUrl) throw new Error('Imagem não gerada');
 
       let publicUrl = data.imageUrl;
-      
+
       // If we only got base64, upload to storage
       if (!publicUrl && data.imageBase64) {
         // Import helper inline to avoid circular deps
@@ -1040,7 +1039,7 @@ export default function EditArticle() {
       }
 
       setFeaturedImage(publicUrl);
-      
+
       await supabase
         .from('articles')
         .update({ featured_image_url: publicUrl })
@@ -1064,7 +1063,7 @@ export default function EditArticle() {
     if (!article) return;
 
     setFeaturedImage(null);
-    
+
     await supabase
       .from('articles')
       .update({ featured_image_url: null })
@@ -1079,9 +1078,9 @@ export default function EditArticle() {
     const now = new Date();
     const { error } = await supabase
       .from('articles')
-      .update({ 
+      .update({
         approved_at: now.toISOString(),
-        approved_by: user?.id 
+        approved_by: user?.id
       })
       .eq('id', article.id);
 
@@ -1097,9 +1096,9 @@ export default function EditArticle() {
 
     const { error } = await supabase
       .from('articles')
-      .update({ 
+      .update({
         approved_at: null,
-        approved_by: null 
+        approved_by: null
       })
       .eq('id', article.id);
 
@@ -1171,7 +1170,7 @@ export default function EditArticle() {
       if (stats.totalImprovements > 0) {
         // Save version before applying changes
         await saveVersion('ai_improve', 'Melhoria automática com IA');
-        
+
         // Store results for dialog
         setImproveResults({
           improvements,
@@ -1431,18 +1430,10 @@ export default function EditArticle() {
                   </div>
                 )}
 
-                {/* Internal Links */}
-                {article && (
-                  <InternalLinksSuggestions
-                    articleId={article.id}
-                    blogId={article.blog_id}
-                    content={article.content || ""}
-                    onContentUpdate={handleContentUpdate}
-                  />
-                )}
+                {/* Internal Links: PERMANENTLY REMOVED */}
               </div>
             )}
-            
+
             {activeTab === "preview" && (
               <div className="max-w-4xl mx-auto">
                 {/* Toggle Desktop/Mobile */}
@@ -1470,8 +1461,8 @@ export default function EditArticle() {
                 {/* Preview Container com largura condicional */}
                 <div className={cn(
                   "mx-auto transition-all duration-300",
-                  previewMode === "mobile" 
-                    ? "max-w-[375px] border rounded-3xl shadow-lg p-2 bg-background" 
+                  previewMode === "mobile"
+                    ? "max-w-[375px] border rounded-3xl shadow-lg p-2 bg-background"
                     : "max-w-4xl"
                 )}>
                   <ArticlePreview
@@ -1490,7 +1481,7 @@ export default function EditArticle() {
                 </div>
               </div>
             )}
-            
+
             {activeTab === "split" && (
               <div className="grid grid-cols-2 gap-4 h-full">
                 {/* Editor lado esquerdo */}
@@ -1512,7 +1503,7 @@ export default function EditArticle() {
                     placeholder="Escreva o conteúdo do artigo..."
                   />
                 </div>
-                
+
                 {/* Preview lado direito */}
                 <div className="overflow-auto border-l pl-4">
                   <ArticlePreview

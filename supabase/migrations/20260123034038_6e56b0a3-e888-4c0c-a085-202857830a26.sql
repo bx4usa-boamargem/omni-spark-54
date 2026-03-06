@@ -23,10 +23,7 @@ FOR ALL
 USING (true)
 WITH CHECK (true);
 
--- 2. Ativar FEATURE_VERSIONED_CONTENT apenas no Bione
-INSERT INTO public.blog_feature_flags (blog_id, flag_name, is_enabled)
-VALUES ('8608656b-393e-4014-b365-dec11a67960e', 'FEATURE_VERSIONED_CONTENT', true)
-ON CONFLICT (blog_id, flag_name) DO UPDATE SET is_enabled = true, updated_at = now();
+-- 2. Ativar FEATURE_VERSIONED_CONTENT (Removido Mock Hardcoded para Deploy Automático)
 
 -- 3. Expandir article_versions com campos de controle
 ALTER TABLE public.article_versions 

@@ -1,16 +1,17 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Radar, 
-  FileText, 
-  LayoutTemplate, 
-  Globe, 
-  Users, 
+import {
+  Radar,
+  FileText,
+  LayoutTemplate,
+  Globe,
+  Users,
   Settings,
   HelpCircle,
   User,
   Building2,
   Compass,
-  CreditCard
+  CreditCard,
+  Plug
 } from 'lucide-react';
 import { OmniseenLogo } from '@/components/ui/OmniseenLogo';
 import { SidebarNavItem } from './SidebarNavItem';
@@ -53,6 +54,15 @@ export function MinimalSidebar({ onHelpClick }: MinimalSidebarProps) {
       title: 'Estratégia',
       subtitle: 'Defina sua estratégia de conteúdo.',
       path: '/client/radar',
+    },
+    {
+      id: 'connectors',
+      icon: Plug,
+      iconColor: 'bg-indigo-100 dark:bg-indigo-900/30',
+      iconTextColor: 'text-indigo-600 dark:text-indigo-400',
+      title: 'Conectores',
+      subtitle: 'Integrações de API',
+      path: '/client/connectors',
     },
     {
       id: 'billing',

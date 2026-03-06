@@ -67,7 +67,7 @@ export async function createArticleFromOpportunity(
   try {
     const { data: blog } = await supabase
       .from('blogs')
-      .select('city, niche_profile_id, niche_profiles(slug)')
+      .select('city, niche_profile_id, niche_profiles(name)')
       .eq('id', blogId)
       .single();
 
@@ -76,7 +76,7 @@ export async function createArticleFromOpportunity(
       const nicheProfile = Array.isArray(blog.niche_profiles)
         ? blog.niche_profiles[0]
         : blog.niche_profiles;
-      niche = (nicheProfile as any)?.slug || 'default';
+      niche = (nicheProfile as any)?.name || 'default';
     }
   } catch {
     // fallback defaults

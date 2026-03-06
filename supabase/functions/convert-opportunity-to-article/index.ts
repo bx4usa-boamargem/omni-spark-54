@@ -37,7 +37,7 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
+
     // A) Receber request_id do frontend
     const { opportunityId, blogId, request_id }: ConvertRequest & { request_id?: string } = await req.json();
     requestId = request_id || crypto.randomUUID();
@@ -89,7 +89,7 @@ serve(async (req) => {
 
     if (existingArticleForOpp) {
       console.log(`[${requestId}][CONVERT] Article already exists for opportunity ${opportunityId}: ${existingArticleForOpp.id}`);
-      
+
       // Sincronizar status da oportunidade se estiver dessincronizado
       await supabase
         .from("article_opportunities")
@@ -100,7 +100,7 @@ serve(async (req) => {
         })
         .eq("id", opportunityId)
         .eq("status", "pending"); // Só atualiza se ainda pending
-      
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -127,14 +127,14 @@ serve(async (req) => {
 
     if (lockError || !lockResult) {
       console.log(`[${requestId}][CONVERT] Could not acquire lock - opportunity may be processing or already converted`);
-      
+
       // Re-verificar status atual
       const { data: recheckOpp } = await supabase
         .from("article_opportunities")
         .select("status, converted_article_id")
         .eq("id", opportunityId)
         .single();
-        
+
       if (recheckOpp?.converted_article_id) {
         return new Response(
           JSON.stringify({
@@ -147,7 +147,7 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       if (recheckOpp?.status === 'processing') {
         return new Response(
           JSON.stringify({
@@ -159,7 +159,7 @@ serve(async (req) => {
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       throw new Error("Failed to acquire processing lock for opportunity");
     }
 
@@ -237,17 +237,6 @@ serve(async (req) => {
       .maybeSingle();
 
     // Buscar artigos existentes para links internos
-    const { data: existingArticles } = await supabase
-      .from("articles")
-      .select("title, slug")
-      .eq("blog_id", blogId)
-      .eq("status", "published")
-      .limit(5);
-
-    const internalLinks = existingArticles?.map(a => ({
-      title: a.title,
-      url: `/blog/${a.slug}`
-    })) || [];
 
     // ========================================================================
     // CITY FALLBACK CHAIN: territory → profile → extracted from title → Brasil
@@ -345,8 +334,6 @@ serve(async (req) => {
         lng: territory.lng,
         neighborhood_tags: territory.neighborhood_tags || []
       } : undefined,
-      // Links for GEO
-      internal_links: internalLinks,
       whatsapp: profile?.whatsapp || null,
       // V6.0: No longer sending structure/editorial params - orchestrator decides
       // D) Propagar request_id para generate-article-structured
@@ -363,7 +350,7 @@ serve(async (req) => {
 
     // ENGINE V1: Delegate to create-generation-job → orchestrate-generation
     console.log(`[${requestId}][CONVERT] Delegating to Engine v1 via create-generation-job`);
-    
+
     const jobPayload = {
       keyword: opportunity.suggested_title,
       blog_id: blogId,
@@ -387,17 +374,17 @@ serve(async (req) => {
     });
 
     const responseText = await generateResponse.text();
-    
+
     if (!generateResponse.ok) {
       console.error(`[${requestId}][CONVERT] Engine v1 job creation failed:`, responseText);
-      
+
       // Mark placeholder as failed
       await supabase.from("articles").update({
         status: 'draft',
         generation_stage: 'failed',
         title: opportunity.suggested_title,
       }).eq("id", placeholderArticleId);
-      
+
       return new Response(
         JSON.stringify({
           success: false,

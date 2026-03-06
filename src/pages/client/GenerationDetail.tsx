@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Download, Eye, Edit, CheckCircle, XCircle, Loader2, Clock, AlertTriangle, RefreshCw, Search, FileText, Image, Brain } from "lucide-react";
+import { ArrowLeft, Download, Eye, Edit, CheckCircle, XCircle, Loader2, Clock, AlertTriangle, RefreshCw, Search, FileText, Image, Brain, TrendingUp, Shield, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useIsSubAccount } from "@/hooks/useIsSubAccount";
 import { cn } from "@/lib/utils";
@@ -47,15 +47,25 @@ const SEO_LABELS: Record<string, string> = { topic_coverage: 'Cobertura', entity
 // CLIENT PIPELINE — 4 stages driven ENTIRELY by public_stage field
 // ============================================================
 const CLIENT_STAGES = [
-  { key: 'ANALYZING_MARKET', label: 'Analisando mercado', icon: Search },
-  { key: 'WRITING_CONTENT', label: 'Criando conteúdo', icon: FileText },
-  { key: 'FINALIZING', label: 'Finalizando artigo', icon: Brain },
+  { key: 'SERP_SCOUT', label: 'Agent 1: Local SERP Scout', icon: Search },
+  { key: 'ENTITY_MAPPER', label: 'Agent 2: Entity & Semantic Mapper', icon: Brain },
+  { key: 'TREND_ANALYST', label: 'Agent 3: Trend Analyst', icon: Search },
+  { key: 'COMPETITOR_INTEL', label: 'Agent 4: Competitor Intel', icon: Search },
+  { key: 'BLUEPRINT_BUILDER', label: 'Agent 5: SEO Blueprint Builder', icon: FileText },
+  { key: 'SECTION_WRITER', label: 'Agent 6: Section Writer (Chunking)', icon: Edit },
+  { key: 'SEO_FINALIZER', label: 'Agent 7: Schema & SEO Finalizer', icon: CheckCircle },
+  { key: 'QUALITY_GATE', label: 'Agent 8: Quality Gate Verification', icon: CheckCircle },
 ] as const;
 
 const CLIENT_STAGE_ORDER: Record<string, number> = {
-  'ANALYZING_MARKET': 0,
-  'WRITING_CONTENT': 1,
-  'FINALIZING': 2,
+  'SERP_SCOUT': 0,
+  'ENTITY_MAPPER': 1,
+  'TREND_ANALYST': 2,
+  'COMPETITOR_INTEL': 3,
+  'BLUEPRINT_BUILDER': 4,
+  'SECTION_WRITER': 5,
+  'SEO_FINALIZER': 6,
+  'QUALITY_GATE': 7,
 };
 
 // ============================================================
