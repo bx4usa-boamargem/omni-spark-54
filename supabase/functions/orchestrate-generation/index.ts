@@ -8,10 +8,9 @@ import { QUALITY_GATE, getMinWordCount } from "../_shared/superPageEngine.ts";
  *
  * Pipeline: INPUT_VALIDATION -> SERP_ANALYSIS -> SERP_GAP_ANALYSIS -> OUTLINE_GEN ->
  *   AUTO_SECTION_EXPANSION -> ENTITY_EXTRACTION -> ENTITY_COVERAGE -> CONTENT_GEN ->
- *   SAVE_ARTICLE -> IMAGE_GEN (Gemini Nano Banana: hero + section + contextual) ->
- *   INTERNAL_LINK_ENGINE -> SEO_SCORE -> QUALITY_GATE -> COMPLETED
+ *   SAVE_ARTICLE -> IMAGE_GEN -> QUALITY_GATE -> COMPLETED
  *
- * Super pages: SERP gap analysis, entity coverage, auto section expansion, internal links, quality gate blocks publish.
+ * Super pages: SERP gap analysis, entity coverage, auto section expansion, quality gate blocks publish.
  */
 
 const corsHeaders = {
@@ -41,7 +40,6 @@ const PUBLIC_STAGE_MAP: Record<string, { stage: string; progress: number; messag
   'CONTENT_GEN': { stage: 'WRITING_CONTENT', progress: 55, message: 'Criando conteúdo...' },
   'SAVE_ARTICLE': { stage: 'FINALIZING', progress: 72, message: 'Salvando artigo...' },
   'IMAGE_GEN': { stage: 'FINALIZING', progress: 82, message: 'Gerando imagens (hero + seções)...' },
-  'INTERNAL_LINK_ENGINE': { stage: 'FINALIZING', progress: 88, message: 'Gerando links internos...' },
   'SEO_SCORE': { stage: 'FINALIZING', progress: 93, message: 'Calculando score SEO...' },
   'QUALITY_GATE': { stage: 'FINALIZING', progress: 98, message: 'Verificando qualidade...' },
 };
@@ -57,7 +55,6 @@ const PIPELINE_STEPS = [
   'CONTENT_GEN',
   'SAVE_ARTICLE',
   'IMAGE_GEN',
-  'INTERNAL_LINK_ENGINE',
   'SEO_SCORE',
   'QUALITY_GATE',
 ] as const;
@@ -194,15 +191,26 @@ class ParseError extends Error {
 }
 
 function parseAIJson(content: string, label: string): Record<string, unknown> {
-  try { return JSON.parse(content); } catch { /* continue */ }
+  const clean = content.replace(/```json\s*|```\s*/g, '').trim();
+  try { return JSON.parse(clean); } catch { /* continue */ }
+
   const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     try { return JSON.parse(codeBlockMatch[1].trim()); } catch { /* continue */ }
   }
+
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try { return JSON.parse(jsonMatch[0]); } catch { /* continue */ }
   }
+
+  // Last resort: extract everything between the first { and last }
+  const startIdx = content.indexOf('{');
+  const endIdx = content.lastIndexOf('}');
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    try { return JSON.parse(content.substring(startIdx, endIdx + 1)); } catch { /* continue */ }
+  }
+
   throw new ParseError(`${label}_PARSE_ERROR: Could not extract valid JSON`, content);
 }
 
@@ -695,6 +703,7 @@ async function executeSaveArticle(
   articleData: Record<string, unknown>,
   jobInput: Record<string, unknown>,
   supabase: ReturnType<typeof createClient>,
+  userClient: ReturnType<typeof createClient>,
   totalApiCalls: number,
   totalCostUsd: number,
   contentType: 'article' | 'super_page'
@@ -761,6 +770,7 @@ async function executeSaveArticle(
 
   const insertPayload: Record<string, unknown> = {
     blog_id: blogId,
+    tenant_id: tenantId,
     title,
     slug,
     content: finalHtml,
@@ -769,6 +779,7 @@ async function executeSaveArticle(
     faq: faqItems as unknown,
     keywords: [(jobInput.keyword as string) || ''],
     status: 'draft',
+    category: contentType === 'super_page' ? 'Guides' : 'Artigos',
     generation_stage: 'completed',
     generation_source: 'engine_v2',
     generation_progress: 100,
@@ -776,8 +787,6 @@ async function executeSaveArticle(
     reading_time: readingTime,
     cta: cta as unknown,
     source_payload: { image_prompt: imagePrompt } as unknown,
-    content_type: contentType,
-    word_count_target: wordCountTarget,
   };
 
   if (schemaJson) {
@@ -796,82 +805,134 @@ async function executeSaveArticle(
     }
   }
 
-  console.log("[SAVE_ARTICLE] Insert payload", {
-    job_id: jobId,
+  console.log(`[SAVE_START] Attempting to persist article for job: ${jobId}`);
+  console.log("[SAVE_PAYLOAD]", JSON.stringify({
     blog_id: blogId,
-    tenant_id: tenantId || null,
     title,
     slug,
-    content_len: finalHtml.length,
-    payload: insertPayload,
-  });
+    content_length: finalHtml.length,
+    payload_keys: Object.keys(insertPayload)
+  }));
 
-  // 3x retry insert
+  // 3x retry insert — USING SERVICE ROLE (bypasses RLS) to prevent silent auth failures
   let articleId: string | null = null;
   let lastInsertError: any = null;
   let payloadForInsert: Record<string, unknown> = { ...insertPayload };
-  if (tenantId) payloadForInsert.tenant_id = tenantId;
+
   for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`[SAVE_ATTEMPT] ${attempt}/3 for job: ${jobId} using SERVICE_ROLE client (RLS bypass)`);
+
     const { data: article, error: articleError } = await supabase
-      .from('articles').insert(payloadForInsert).select('id').single();
+      .from('articles')
+      .insert(payloadForInsert)
+      .select('id')
+      .single();
+
+    // BRUTAL LOGGING: Log EVERYTHING regardless of success/failure
+    console.log(`[SAVE_RAW_RESPONSE] attempt=${attempt}`, JSON.stringify({
+      has_data: !!article,
+      article_id: article?.id || null,
+      has_error: !!articleError,
+      error_code: (articleError as any)?.code || null,
+      error_message: (articleError as any)?.message || null,
+      error_details: (articleError as any)?.details || null,
+      error_hint: (articleError as any)?.hint || null,
+    }));
+
     if (!articleError && article?.id) {
       articleId = article.id;
+      console.log(`[SAVE_DB_RESPONSE] ✅ SUCCESS! Article ID: ${articleId}`);
       break;
     }
-    lastInsertError = articleError;
+
+    // RLS SILENT FAILURE DETECTION: no error but no data either
+    if (!articleError && !article?.id) {
+      console.error(`[SAVE_SILENT_FAILURE] ⚠️ CRITICAL: No error returned but no article ID either! This typically means RLS is silently blocking the insert.`, JSON.stringify({
+        job_id: jobId,
+        blog_id: blogId,
+        attempt,
+        client_type: 'service_role',
+        returned_data: article,
+      }));
+      lastInsertError = { code: 'RLS_SILENT_BLOCK', message: 'Insert returned null data without error - likely RLS policy violation', details: 'No article row was created despite no Postgres error' };
+    } else {
+      lastInsertError = articleError;
+    }
 
     // If schema differs (column doesn't exist), drop the offending field and retry.
-    const errCode = (articleError as any)?.code ? String((articleError as any).code) : '';
-    const errMsg = (articleError as any)?.message ? String((articleError as any).message) : '';
-    const errDetails = (articleError as any)?.details ? String((articleError as any).details) : '';
-    const errBlob = `${errMsg} ${errDetails}`.toLowerCase();
-    const isUnknownColumn = errCode === 'PGRST204' || errBlob.includes('could not find') || errBlob.includes('column');
-    if (isUnknownColumn && ('tenant_id' in payloadForInsert) && errBlob.includes('tenant_id')) {
-      delete payloadForInsert.tenant_id;
-    }
-    if (isUnknownColumn && ('schema_json' in payloadForInsert) && errBlob.includes('schema_json')) {
-      delete payloadForInsert.schema_json;
-    }
+    if (articleError) {
+      const errCode = (articleError as any)?.code ? String((articleError as any).code) : '';
+      const errMsg = (articleError as any)?.message ? String((articleError as any).message) : '';
+      const errDetails = (articleError as any)?.details ? String((articleError as any).details) : '';
+      const errBlob = `${errMsg} ${errDetails}`.toLowerCase();
+      const isUnknownColumn = errCode === 'PGRST204' || errBlob.includes('could not find') || errBlob.includes('column') || errBlob.includes('does not exist');
 
-    console.error(`[SAVE_ARTICLE] Insert attempt ${attempt}/3 failed`, {
-      job_id: jobId,
-      blog_id: blogId,
-      attempt,
-      payload_keys: Object.keys(payloadForInsert),
-      error: articleError
-        ? {
+      if (isUnknownColumn) {
+        const columnMatch = errBlob.match(/column "([^"]+)"/i) || errBlob.match(/column ([^ ]+)/i);
+        const columnName = columnMatch ? columnMatch[1] : null;
+
+        if (columnName && columnName in payloadForInsert) {
+          console.warn(`[SAVE_STRICT_CLEANUP] Removing non-existent column from payload: ${columnName}`);
+          delete payloadForInsert[columnName];
+        } else {
+          // Fallback: remove all known problematic columns
+          for (const col of ['tenant_id', 'schema_json', 'content_type', 'word_count_target']) {
+            if (col in payloadForInsert) {
+              console.warn(`[SAVE_STRICT_CLEANUP] Fallback removal of column: ${col}`);
+              delete payloadForInsert[col];
+            }
+          }
+        }
+      }
+
+      console.error(`[SAVE_ARTICLE_ERROR] Insert attempt ${attempt}/3 FAILED`, JSON.stringify({
+        job_id: jobId,
+        blog_id: blogId,
+        attempt,
+        payload_keys: Object.keys(payloadForInsert),
+        error: {
           code: (articleError as any).code,
           message: (articleError as any).message,
           details: (articleError as any).details,
           hint: (articleError as any).hint,
-        }
-        : null,
-      returned_article: article ?? null,
-    });
+        },
+      }));
+    }
+
     if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
   }
 
   if (!articleId) {
-    console.error("[SAVE_ARTICLE] All 3 insert attempts failed", {
+    const errorDetails = {
       job_id: jobId,
       blog_id: blogId,
       slug,
-      last_error: lastInsertError
-        ? {
-          code: (lastInsertError as any).code,
-          message: (lastInsertError as any).message,
-          details: (lastInsertError as any).details,
-          hint: (lastInsertError as any).hint,
-        }
-        : null,
-    });
+      last_error: lastInsertError ? {
+        code: (lastInsertError as any).code,
+        message: (lastInsertError as any).message,
+        details: (lastInsertError as any).details,
+        hint: (lastInsertError as any).hint,
+      } : "no_error_object",
+      payload_keys: Object.keys(payloadForInsert)
+    };
+    console.error("[SAVE_FAILED_REASON] CRITICAL: Article insertion failed after all attempts", errorDetails);
+
+    // Log to generation_jobs if possible before failing
+    try {
+      await supabase.from('generation_jobs').update({
+        status: 'failed',
+        error_message: `SAVE_ARTICLE_FAILED: ${lastInsertError?.message || "Check logs for details"}`,
+        output: { error_details: errorDetails }
+      }).eq('id', jobId);
+    } catch (_) { }
+
     throw new Error(
-      `SAVE_ARTICLE_INSERT_FAILED:${(lastInsertError as any)?.message || "unknown"}`,
+      `CRITICAL_PERSISTENCE_FAILURE: ${JSON.stringify(errorDetails)}`,
     );
   }
 
   // Update generation_jobs with article_id
-  await supabase.from('generation_jobs').update({
+  const { error: updateError } = await supabase.from('generation_jobs').update({
     article_id: articleId,
     output: {
       article_id: articleId,
@@ -884,6 +945,16 @@ async function executeSaveArticle(
     },
     engine_version: 'v2',
   }).eq('id', jobId);
+
+  if (updateError) {
+    console.error("[SAVE_ARTICLE] Failed to link article_id to generation_job", {
+      job_id: jobId,
+      article_id: articleId,
+      error: updateError
+    });
+    // We don't throw here to allow following steps (images, SEO) to try and run, 
+    // since we already have the articleId in scope.
+  }
 
   return { article_id: articleId, html_generated: true, total_words: wordCount };
 }
@@ -963,7 +1034,8 @@ async function executeImageGenGeminiNanoBanana(
   articleData: Record<string, unknown>,
   outline: OutlineData,
   jobInput: Record<string, unknown>,
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  userClient: ReturnType<typeof createClient>
 ): Promise<Record<string, unknown>> {
   if (!articleId) return { skipped: true, reason: "no_article_id" };
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -995,7 +1067,7 @@ async function executeImageGenGeminiNanoBanana(
       heroUrl = `https://picsum.photos/seed/${slug}-hero/1024/576`;
       heroAlt = `${keyword} — imagem ilustrativa`;
     }
-    await supabase.from("articles").update({ featured_image_url: heroUrl, featured_image_alt: heroAlt }).eq("id", articleId);
+    await userClient.from("articles").update({ featured_image_url: heroUrl, featured_image_alt: heroAlt }).eq("id", articleId);
 
     const html = (articleData.html_article as string) || "";
     const sectionCount = (html.match(/<h2[^>]*>/gi) || []).length;
@@ -1022,55 +1094,21 @@ async function executeImageGenGeminiNanoBanana(
     if (contentImages.length > 0 && validateContentStructure(html)) {
       const injected = injectImagesIntoContent(html, contentImages.map((c) => ({ ...c, alt: c.alt })));
       if (injected.injected > 0) {
-        await supabase.from("articles").update({ content: injected.content, content_images: contentImages }).eq("id", articleId);
+        await userClient.from("articles").update({ content: injected.content, content_images: contentImages }).eq("id", articleId);
       }
     }
     return { success: true, heroUrl, sectionCount: contentImages.length };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const fallback = `https://picsum.photos/seed/${slug}-hero/1024/576`;
-    await supabase.from("articles").update({ featured_image_url: fallback, featured_image_alt: `${keyword} — imagem ilustrativa` }).eq("id", articleId);
+    await userClient.from("articles").update({ featured_image_url: fallback, featured_image_alt: `${keyword} — imagem ilustrativa` }).eq("id", articleId);
     return { success: false, fallback: true, error: msg };
   }
 }
 
-// ============================================================
-// STEP: INTERNAL_LINK_ENGINE (cluster links between articles/super pages)
-// ============================================================
+// INTERNAL_LINK_ENGINE: PERMANENTLY REMOVED (2026-03-01)
+const INTERNAL_LINK_ENGINE = false;
 
-async function executeInternalLinkEngine(
-  articleId: string | null,
-  blogId: string,
-  keyword: string,
-  title: string,
-  supabase: ReturnType<typeof createClient>
-): Promise<Record<string, unknown>> {
-  if (!articleId) return { skipped: true, reason: "no_article_id" };
-  try {
-    const { data: candidates } = await supabase
-      .from("articles")
-      .select("id, title, slug")
-      .eq("blog_id", blogId)
-      .neq("id", articleId)
-      .in("status", ["draft", "published"])
-      .limit(10);
-    if (!candidates?.length) return { inserted: 0, reason: "no_candidates" };
-    const links: { source_article_id: string; target_article_id: string; anchor_text: string }[] = [];
-    const words = (keyword + " " + title).toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-    for (const t of candidates.slice(0, 5)) {
-      const anchor = t.title?.slice(0, 60) || t.slug || "";
-      if (!anchor) continue;
-      links.push({ source_article_id: articleId, target_article_id: t.id, anchor_text: anchor });
-    }
-    for (const link of links) {
-      const { error } = await supabase.from("article_internal_links").insert(link);
-      if (error && error.code !== '23505') console.warn("[INTERNAL_LINK_ENGINE] insert warning:", error.message);
-    }
-    return { inserted: links.length, candidates: candidates.length };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : String(e) };
-  }
-}
 
 // ============================================================
 // STEP: QUALITY_GATE (block publish if thresholds not met)
@@ -1083,7 +1121,8 @@ async function executeQualityGate(
   entityCoverageScore: number,
   seoScoreResult: Record<string, unknown>,
   jobType: "article" | "super_page",
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  userClient: ReturnType<typeof createClient>
 ): Promise<Record<string, unknown>> {
   if (!articleId) return { passed: false, reason: "no_article_id" };
   const html = (articleData.html_article as string) || "";
@@ -1107,7 +1146,7 @@ async function executeQualityGate(
 
   // [SAFE MODE] Change 'blocked' to 'quality_failed' to allow visualization
   const qualityGateStatus = passed ? "approved" : "quality_failed";
-  await supabase.from("articles").update({
+  await userClient.from("articles").update({
     quality_gate_status: qualityGateStatus,
     ...(passed ? { ready_for_publish_at: new Date().toISOString() } : {}),
   }).eq("id", articleId);
@@ -1129,7 +1168,13 @@ async function executeQualityGate(
 // ORCHESTRATOR CORE (TRUE SUPER PAGE ENGINE)
 // ============================================================
 
-async function orchestrate(jobId: string, supabase: ReturnType<typeof createClient>, supabaseUrl: string, serviceKey: string): Promise<void> {
+async function orchestrate(
+  jobId: string,
+  supabase: ReturnType<typeof createClient>,
+  userClient: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<void> {
   const jobStart = Date.now();
   let totalApiCalls = 0;
   let totalCostUsd = 0;
@@ -1344,7 +1389,7 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     // ============================================================
     console.log(`[V2] Step: SAVE_ARTICLE`);
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', false, lockId);
-    const saveOutput = await executeSaveArticle(jobId, articleData, jobInput, supabase, totalApiCalls, totalCostUsd, jobType);
+    const saveOutput = await executeSaveArticle(jobId, articleData, jobInput, supabase, userClient, totalApiCalls, totalCostUsd, jobType);
     if (!saveOutput.article_id) throw new Error("Failed to save article_id");
     articleId = saveOutput.article_id as string; // [SAFE MODE] Sync with scoped var
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', true, lockId);
@@ -1353,16 +1398,18 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
     // STEP 8: POST-PROCESSING (Images, Links, SEO) - Non-fatal
     // ============================================================
     try {
-      await withTimeout(executeImageGenGeminiNanoBanana(saveOutput.article_id as string, articleData, outline, jobInput, supabase), 180_000, 'IMAGE_GEN');
+      await withTimeout(executeImageGenGeminiNanoBanana(saveOutput.article_id as string, articleData, outline, jobInput, supabase, userClient), 180_000, 'IMAGE_GEN');
     } catch (e) { console.warn("[V2] ImageGen failed:", e); }
 
-    try {
-      await executeInternalLinkEngine(saveOutput.article_id as string, jobInput.blog_id as string, jobInput.keyword as string, articleData.title as string, supabase);
-    } catch (e) { console.warn("[V2] InternalLink failed:", e); }
+    // INTERNAL_LINK_ENGINE: PERMANENTLY REMOVED
+    if (INTERNAL_LINK_ENGINE) {
+      throw new Error("Internal Link Engine permanently removed");
+    }
+
 
     // Quality Gate
     try {
-      const qgOutput = await executeQualityGate(saveOutput.article_id as string, jobInput.blog_id as string, articleData, entityCoverage.coverageScore, {}, jobType, supabase);
+      const qgOutput = await executeQualityGate(saveOutput.article_id as string, jobInput.blog_id as string, articleData, entityCoverage.coverageScore, {}, jobType, supabase, userClient);
       console.log(`[V2] QUALITY_GATE: passed=${qgOutput.passed}`);
     } catch (e) { console.warn("[V2] QualityGate failed:", e); }
 
@@ -1399,7 +1446,7 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
       await supabase.from('generation_jobs').update({
         status: finalStatus,
         article_id: articleId,
-        error_message: articleId ? `Recovered from error: ${errorMsg}` : errorMsg,
+        error_message: articleId ? `Recovered from error: ${errorMsg}` : `FATAL_ERROR: ${errorMsg}`,
         public_message: finalMessage,
         completed_at: new Date().toISOString(),
         public_stage: 'FINALIZING',
@@ -1407,6 +1454,8 @@ async function orchestrate(jobId: string, supabase: ReturnType<typeof createClie
         locked_at: null,
         locked_by: null
       }).eq('id', jobId);
+
+      console.log(`[ORCHESTRATOR] Final job status update attempted for ${jobId} as ${finalStatus}`);
     } catch (updateErr) {
       console.error('[ORCHESTRATOR:V2:FATAL_UPDATE_FAILED]', updateErr);
     }
@@ -1433,6 +1482,25 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // User Authentication Context
+  const authHeader = req.headers.get("Authorization");
+  let userClient = supabase; // Fallback to service role if no auth header (may fail RLS)
+  let authContext: any = { role: 'service_role' };
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const { data: { user } } = await userClient.auth.getUser();
+    authContext = {
+      uid: user?.id || 'unauthenticated',
+      role: 'authenticated',
+      has_user: !!user
+    };
+  }
+
+  console.log('[AUTH_DEBUG]', authContext);
+
   try {
     const { job_id } = await req.json();
     console.log('[ORCHESTRATOR_HANDLER_ENTRY:V2]', job_id);
@@ -1455,7 +1523,7 @@ serve(async (req) => {
       );
     }
 
-    await orchestrate(job_id, supabase, supabaseUrl, serviceKey);
+    await orchestrate(job_id, supabase, userClient, supabaseUrl, serviceKey);
     return new Response(JSON.stringify({ success: true, job_id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("[ORCHESTRATOR:V2] Fatal:", error);
