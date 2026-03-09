@@ -53,6 +53,14 @@ import { DashboardProofOfValue } from "@/components/dashboard/DashboardProofOfVa
 import { DashboardRadarWidget } from "@/components/dashboard/DashboardRadarWidget";
 import { DashboardTerritoryPerformance } from "@/components/dashboard/DashboardTerritoryPerformance";
 
+interface RoiDashboardData {
+  total_articles: number;
+  published_articles: number;
+  total_views: number;
+  total_cta_clicks: number;
+  total_leads: number;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -60,6 +68,7 @@ export default function Dashboard() {
   const { showOnboarding, completeOnboarding, skipOnboarding, startTour } = useOnboarding('dashboard');
   const [articles, setArticles] = useState<Article[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [roiMetrics, setRoiMetrics] = useState<RoiDashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const refreshTimer = useRef<number | null>(null);
 
@@ -100,6 +109,15 @@ export default function Dashboard() {
           setProfile(profileData);
         }
 
+        // Fetch ROI metrics
+        const { data: roiData, error: roiError } = await supabase
+          .rpc("get_client_roi_dashboard", { p_blog_id: blog.id })
+          .maybeSingle();
+
+        if (!roiError && roiData) {
+          setRoiMetrics(roiData as RoiDashboardData);
+        }
+
         // Fetch articles for the blog
         await fetchArticles(blog.id);
       } catch (error) {
@@ -135,6 +153,7 @@ export default function Dashboard() {
           }
           refreshTimer.current = window.setTimeout(() => {
             fetchArticles(blogId);
+            // Optionally refetch ROI metrics here
           }, 500);
         }
       )
@@ -157,9 +176,13 @@ export default function Dashboard() {
   };
 
   const userName = profile?.full_name?.split(" ")[0] || "usuário";
-  const totalViews = articles.reduce((sum, a) => sum + (a.view_count || 0), 0);
-  const publishedCount = articles.filter((a) => a.status === "published").length;
-  const draftCount = articles.filter((a) => a.status === "draft").length;
+
+  // Use DB data if available, fallback to client-side calc
+  const totalArticlesCard = roiMetrics?.total_articles ?? articles.length;
+  const publishedCountCard = roiMetrics?.published_articles ?? articles.filter((a) => a.status === "published").length;
+  const totalViewsCard = roiMetrics?.total_views ?? articles.reduce((sum, a) => sum + (a.view_count || 0), 0);
+  const leadsGeneratedCard = roiMetrics?.total_leads ?? 0;
+  const ctaClicksCard = roiMetrics?.total_cta_clicks ?? 0;
 
   if (authLoading || blogLoading || loadingData) {
     return (
@@ -280,7 +303,7 @@ export default function Dashboard() {
               </div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Publicados</p>
               <div className="flex items-end gap-3">
-                <h3 className="text-3xl font-bold">{publishedCount}</h3>
+                <h3 className="text-3xl font-bold">{publishedCountCard}</h3>
                 <span className="text-xs font-medium text-emerald-500 flex items-center gap-1.5 ml-auto">
                   <TrendingUp className="h-3 w-3" /> ~100%
                 </span>
@@ -298,7 +321,7 @@ export default function Dashboard() {
               </div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Visualizações</p>
               <div className="flex items-end gap-3">
-                <h3 className="text-3xl font-bold">{totalViews.toLocaleString("pt-BR")}</h3>
+                <h3 className="text-3xl font-bold">{totalViewsCard.toLocaleString("pt-BR")}</h3>
                 <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 ml-auto">
                   — 0%
                 </span>
@@ -349,51 +372,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Quick Stats */}
-        <div className="mb-4">
-          <SectionHelper
-            title="Visão Geral do Blog"
-            description="Métricas principais do seu blog em tempo real."
-          />
-        </div>
-        <div className="grid gap-4 md:grid-cols-4 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total de Artigos</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{articles.length}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Publicados</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{publishedCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Rascunhos</CardTitle>
-              <PenTool className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{draftCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Visualizações</CardTitle>
-              <Eye className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalViews.toLocaleString("pt-BR")}</div>
-            </CardContent>
-          </Card>
-        </div>
+
 
         {/* Create Content Section - Hidden for viewers */}
         <PermissionGate permission="articles.create">
