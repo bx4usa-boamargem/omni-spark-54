@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Compass, Loader2, Save, CheckCircle2, Building2, Users, Target, 
+import {
+  Compass, Loader2, Save, CheckCircle2, Building2, Users, Target,
   Lightbulb, TrendingUp, Sparkles, X, Plus, Globe, Radar
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -91,7 +91,7 @@ export default function ClientStrategy() {
   const [saving, setSaving] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
   const [activeTab, setActiveTab] = useState('strategy');
-  
+
   const [strategy, setStrategy] = useState<ClientStrategy>({
     blog_id: '',
     empresa_nome: '',
@@ -271,398 +271,412 @@ export default function ClientStrategy() {
   }
 
   return (
-    <div className="space-y-6">
-      {strategyError && (
-        <Alert variant="destructive">
-          <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
-            <span>{strategyError}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRetryCount((c) => c + 1)}
-            >
-              Tentar novamente
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-800 dark:text-white">
-            <Compass className="h-8 w-8 text-primary" />
-            Estratégia
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Informações do seu negócio para personalizar artigos gerados pela IA
-          </p>
+    <div className="relative min-h-screen">
+      {/* Background ambient glow */}
+      <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[140px] animate-pulse" />
+      <div className="absolute bottom-0 left-0 -z-10 w-[500px] h-[500px] bg-violet-500/5 rounded-full blur-[120px]" />
+
+      <div className="space-y-8 max-w-[1400px] mx-auto p-4 md:p-8 pb-20">
+        {strategyError && (
+          <Alert variant="destructive" className="glass border-destructive/20 bg-destructive/10">
+            <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+              <span className="font-medium text-destructive">{strategyError}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRetryCount((c) => c + 1)}
+                className="border-destructive/20 hover:bg-destructive/10"
+              >
+                Tentar novamente
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary text-[10px] uppercase font-bold tracking-widest px-2 py-0">
+                STRATEGIC ENGINE
+              </Badge>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted px-2 py-0 rounded">v3.0</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground flex items-center gap-4">
+              <Compass className="h-10 w-10 text-primary animate-pulse" />
+              Estratégia
+            </h1>
+            <p className="text-muted-foreground font-medium text-lg max-w-2xl">
+              Informações do seu negócio para personalizar artigos gerados pela IA
+            </p>
+          </div>
+
+          <Button
+            className="gradient-primary hover:scale-[1.02] active:scale-[0.98] text-white font-bold flex items-center gap-2 shadow-xl shadow-primary/20 h-14 px-8 rounded-2xl transition-all"
+            onClick={() => navigate('/client/landing-pages/new')}
+          >
+            <Sparkles className="h-5 w-5" />
+            Criar Super Página
+          </Button>
         </div>
 
-        <Button
-          className="gap-2"
-          onClick={() => navigate('/client/landing-pages/new')}
-        >
-          <Sparkles className="h-4 w-4" />
-          Criar Super Página
-        </Button>
-      </div>
+        {/* Status Alert */}
+        {isConfigured && (
+          <Alert className="bg-green-500/10 border-green-500/20">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-700 dark:text-green-400">
+              Blog configurado! Você pode gerar artigos ilimitados.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {/* Status Alert */}
-      {isConfigured && (
-        <Alert className="bg-green-500/10 border-green-500/20">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700 dark:text-green-400">
-            Blog configurado! Você pode gerar artigos ilimitados.
-          </AlertDescription>
-        </Alert>
-      )}
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="strategy" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Estratégia</span>
+            </TabsTrigger>
+            <TabsTrigger value="radar" className="gap-2">
+              <Radar className="h-4 w-4" />
+              <span className="hidden sm:inline">Radar</span>
+            </TabsTrigger>
+            <TabsTrigger value="competitors" className="gap-2">
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">Concorrentes</span>
+            </TabsTrigger>
+            <TabsTrigger value="opportunities" className="gap-2">
+              <Lightbulb className="h-4 w-4" />
+              <span className="hidden sm:inline">Oportunidades</span>
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="strategy" className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Estratégia</span>
-          </TabsTrigger>
-          <TabsTrigger value="radar" className="gap-2">
-            <Radar className="h-4 w-4" />
-            <span className="hidden sm:inline">Radar</span>
-          </TabsTrigger>
-          <TabsTrigger value="competitors" className="gap-2">
-            <Globe className="h-4 w-4" />
-            <span className="hidden sm:inline">Concorrentes</span>
-          </TabsTrigger>
-          <TabsTrigger value="opportunities" className="gap-2">
-            <Lightbulb className="h-4 w-4" />
-            <span className="hidden sm:inline">Oportunidades</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Strategy Tab */}
-        <TabsContent value="strategy" className="space-y-6">
-          {/* Universal Strategy Header */}
-          <Card className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border-violet-500/20">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-violet-500/20">
-                  <Sparkles className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+          {/* Strategy Tab */}
+          <TabsContent value="strategy" className="space-y-6">
+            {/* Universal Strategy Header */}
+            <Card className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border-violet-500/20">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-violet-500/20">
+                    <Sparkles className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Estratégia Universal de Conteúdo</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Configure sua estratégia para que a IA gere conteúdo personalizado e de alta qualidade.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Estratégia Universal de Conteúdo</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Configure sua estratégia para que a IA gere conteúdo personalizado e de alta qualidade.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Identity Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-primary" />
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Identidade do Negócio
-                    <Badge variant="secondary">Essencial</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Informações básicas para personalizar tom e contexto dos artigos
-                  </CardDescription>
+            {/* Identity Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Identidade do Negócio
+                      <Badge variant="secondary">Essencial</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Informações básicas para personalizar tom e contexto dos artigos
+                    </CardDescription>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm text-green-600 dark:text-green-400 mt-2">
-                Preencha apenas o nome da empresa para começar. O resto pode ficar para depois.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <p className="text-sm text-green-600 dark:text-green-400 mt-2">
+                  Preencha apenas o nome da empresa para começar. O resto pode ficar para depois.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nome da Empresa</Label>
+                    <Input
+                      placeholder="Ex: Truly Nolen Teresina"
+                      value={strategy.empresa_nome}
+                      onChange={(e) => setStrategy(prev => ({ ...prev, empresa_nome: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de Negócio</Label>
+                    <Select
+                      value={strategy.tipo_negocio}
+                      onValueChange={(v) => setStrategy(prev => ({ ...prev, tipo_negocio: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_NEGOCIO_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label>Nome da Empresa</Label>
+                  <Label>Região de Atuação</Label>
                   <Input
-                    placeholder="Ex: Truly Nolen Teresina"
-                    value={strategy.empresa_nome}
-                    onChange={(e) => setStrategy(prev => ({ ...prev, empresa_nome: e.target.value }))}
+                    placeholder="Ex: Teresina - Piauí - Brasil"
+                    value={strategy.regiao_atuacao}
+                    onChange={(e) => setStrategy(prev => ({ ...prev, regiao_atuacao: e.target.value }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Audience Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Público-Alvo
+                      <Badge variant="outline">Opcional</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Cliente ideal. A IA usa para criar conteúdo relevante.
+                    </CardDescription>
+                  </div>
+                </div>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                  Se você não souber, deixe em branco. A IA usará um público genérico.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tipo de Público</Label>
+                    <Select
+                      value={strategy.tipo_publico}
+                      onValueChange={(v) => setStrategy(prev => ({ ...prev, tipo_publico: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_PUBLICO_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nível de Consciência</Label>
+                    <Select
+                      value={strategy.nivel_consciencia}
+                      onValueChange={(v) => setStrategy(prev => ({ ...prev, nivel_consciencia: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NIVEL_CONSCIENCIA_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nível de Conhecimento</Label>
+                    <Select
+                      value={strategy.nivel_conhecimento}
+                      onValueChange={(v) => setStrategy(prev => ({ ...prev, nivel_conhecimento: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NIVEL_CONHECIMENTO_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Dor Principal</Label>
+                  <Textarea
+                    placeholder="Ex: Infestação de pragas dentro de casa ou no negócio, trazendo risco à saúde..."
+                    value={strategy.dor_principal}
+                    onChange={(e) => setStrategy(prev => ({ ...prev, dor_principal: e.target.value }))}
+                    className="min-h-[80px]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Tipo de Negócio</Label>
-                  <Select 
-                    value={strategy.tipo_negocio} 
-                    onValueChange={(v) => setStrategy(prev => ({ ...prev, tipo_negocio: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_NEGOCIO_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Região de Atuação</Label>
-                <Input
-                  placeholder="Ex: Teresina - Piauí - Brasil"
-                  value={strategy.regiao_atuacao}
-                  onChange={(e) => setStrategy(prev => ({ ...prev, regiao_atuacao: e.target.value }))}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Audience Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-primary" />
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Público-Alvo
-                    <Badge variant="outline">Opcional</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Cliente ideal. A IA usa para criar conteúdo relevante.
-                  </CardDescription>
-                </div>
-              </div>
-              <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-                Se você não souber, deixe em branco. A IA usará um público genérico.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Tipo de Público</Label>
-                  <Select 
-                    value={strategy.tipo_publico} 
-                    onValueChange={(v) => setStrategy(prev => ({ ...prev, tipo_publico: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_PUBLICO_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nível de Consciência</Label>
-                  <Select 
-                    value={strategy.nivel_consciencia} 
-                    onValueChange={(v) => setStrategy(prev => ({ ...prev, nivel_consciencia: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {NIVEL_CONSCIENCIA_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nível de Conhecimento</Label>
-                  <Select 
-                    value={strategy.nivel_conhecimento} 
-                    onValueChange={(v) => setStrategy(prev => ({ ...prev, nivel_conhecimento: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {NIVEL_CONHECIMENTO_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Dor Principal</Label>
-                <Textarea
-                  placeholder="Ex: Infestação de pragas dentro de casa ou no negócio, trazendo risco à saúde..."
-                  value={strategy.dor_principal}
-                  onChange={(e) => setStrategy(prev => ({ ...prev, dor_principal: e.target.value }))}
-                  className="min-h-[80px]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Desejo Principal</Label>
-                <Textarea
-                  placeholder="Ex: Eliminar as pragas de forma definitiva, segura e profissional..."
-                  value={strategy.desejo_principal}
-                  onChange={(e) => setStrategy(prev => ({ ...prev, desejo_principal: e.target.value }))}
-                  className="min-h-[80px]"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Offer Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Target className="h-5 w-5 text-primary" />
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Oferta
-                    <Badge variant="outline">Opcional</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    O que você vende e por que é a melhor escolha.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>O que você oferece</Label>
-                <Textarea
-                  placeholder="Ex: Serviços de controle de pragas residencial e comercial..."
-                  value={strategy.o_que_oferece}
-                  onChange={(e) => setStrategy(prev => ({ ...prev, o_que_oferece: e.target.value }))}
-                  className="min-h-[80px]"
-                />
-              </div>
-
-              {/* Benefits */}
-              <div className="space-y-2">
-                <Label>Principais Benefícios</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Ex: Garantia de 90 dias"
-                    value={newBeneficio}
-                    onChange={(e) => setNewBeneficio(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBeneficio())}
+                  <Label>Desejo Principal</Label>
+                  <Textarea
+                    placeholder="Ex: Eliminar as pragas de forma definitiva, segura e profissional..."
+                    value={strategy.desejo_principal}
+                    onChange={(e) => setStrategy(prev => ({ ...prev, desejo_principal: e.target.value }))}
+                    className="min-h-[80px]"
                   />
-                  <Button type="button" onClick={addBeneficio} size="icon" variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {strategy.principais_beneficios.map((b, i) => (
-                    <Badge key={i} variant="secondary" className="gap-1 py-1">
-                      {b}
-                      <button onClick={() => removeBeneficio(i)} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Differentiators */}
-              <div className="space-y-2">
-                <Label>Diferenciais</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Ex: 50 anos de experiência"
-                    value={newDiferencial}
-                    onChange={(e) => setNewDiferencial(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addDiferencial())}
+            {/* Offer Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Target className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Oferta
+                      <Badge variant="outline">Opcional</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      O que você vende e por que é a melhor escolha.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>O que você oferece</Label>
+                  <Textarea
+                    placeholder="Ex: Serviços de controle de pragas residencial e comercial..."
+                    value={strategy.o_que_oferece}
+                    onChange={(e) => setStrategy(prev => ({ ...prev, o_que_oferece: e.target.value }))}
+                    className="min-h-[80px]"
                   />
-                  <Button type="button" onClick={addDiferencial} size="icon" variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {strategy.diferenciais.map((d, i) => (
-                    <Badge key={i} variant="secondary" className="gap-1 py-1">
-                      {d}
-                      <button onClick={() => removeDiferencial(i)} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Conversion Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Conversão
-                    <Badge variant="outline">Opcional</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Qual ação você quer que o leitor tome após ler o artigo.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Ação Desejada</Label>
-                <Input
-                  placeholder="Ex: Solicitar orçamento gratuito"
-                  value={strategy.acao_desejada}
-                  onChange={(e) => setStrategy(prev => ({ ...prev, acao_desejada: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Canal de CTA</Label>
-                <Select 
-                  value={strategy.canal_cta} 
-                  onValueChange={(v) => setStrategy(prev => ({ ...prev, canal_cta: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o canal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CANAL_CTA_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                {/* Benefits */}
+                <div className="space-y-2">
+                  <Label>Principais Benefícios</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ex: Garantia de 90 dias"
+                      value={newBeneficio}
+                      onChange={(e) => setNewBeneficio(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBeneficio())}
+                    />
+                    <Button type="button" onClick={addBeneficio} size="icon" variant="outline">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {strategy.principais_beneficios.map((b, i) => (
+                      <Badge key={i} variant="secondary" className="gap-1 py-1">
+                        {b}
+                        <button onClick={() => removeBeneficio(i)} className="ml-1 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving} size="lg" className="gap-2">
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Salvar Estratégia
-                </>
-              )}
-            </Button>
-          </div>
-        </TabsContent>
+                {/* Differentiators */}
+                <div className="space-y-2">
+                  <Label>Diferenciais</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ex: 50 anos de experiência"
+                      value={newDiferencial}
+                      onChange={(e) => setNewDiferencial(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addDiferencial())}
+                    />
+                    <Button type="button" onClick={addDiferencial} size="icon" variant="outline">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {strategy.diferenciais.map((d, i) => (
+                      <Badge key={i} variant="secondary" className="gap-1 py-1">
+                        {d}
+                        <button onClick={() => removeDiferencial(i)} className="ml-1 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Radar Tab */}
-        <TabsContent value="radar">
-          {blog?.id && <MarketRadarTab blogId={blog.id} />}
-        </TabsContent>
+            {/* Conversion Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Conversão
+                      <Badge variant="outline">Opcional</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Qual ação você quer que o leitor tome após ler o artigo.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Ação Desejada</Label>
+                  <Input
+                    placeholder="Ex: Solicitar orçamento gratuito"
+                    value={strategy.acao_desejada}
+                    onChange={(e) => setStrategy(prev => ({ ...prev, acao_desejada: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Canal de CTA</Label>
+                  <Select
+                    value={strategy.canal_cta}
+                    onValueChange={(v) => setStrategy(prev => ({ ...prev, canal_cta: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o canal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CANAL_CTA_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Competitors Tab */}
-        <TabsContent value="competitors">
-          {blog?.id && <ClientCompetitorsTab blogId={blog.id} />}
-        </TabsContent>
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <Button onClick={handleSave} disabled={saving} size="lg" className="gap-2">
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Salvar Estratégia
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
 
-        {/* Opportunities Tab */}
-        <TabsContent value="opportunities">
-          {blog?.id && <ClientOpportunitiesTab blogId={blog.id} />}
-        </TabsContent>
-      </Tabs>
+          {/* Radar Tab */}
+          <TabsContent value="radar">
+            {blog?.id && <MarketRadarTab blogId={blog.id} />}
+          </TabsContent>
+
+          {/* Competitors Tab */}
+          <TabsContent value="competitors">
+            {blog?.id && <ClientCompetitorsTab blogId={blog.id} />}
+          </TabsContent>
+
+          {/* Opportunities Tab */}
+          <TabsContent value="opportunities">
+            {blog?.id && <ClientOpportunitiesTab blogId={blog.id} />}
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

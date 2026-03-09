@@ -80,22 +80,78 @@ function SourceBadge({ source }: { source: string }) {
 // ============================================================================
 // Maintenance Fallback
 // ============================================================================
+// ============================================================================
+// Scanning Animation Component
+// ============================================================================
+function ScanningCircle() {
+    return (
+        <div className="relative w-48 h-48 mx-auto flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-2 border-violet-500/20 animate-[ping_3s_infinite]" />
+            <div className="absolute inset-0 rounded-full border border-violet-500/30 animate-[pulse_2s_infinite]" />
+            <div className="absolute inset-4 rounded-full border border-purple-500/20 rotate-45" />
+            <div className="absolute inset-4 rounded-full border border-purple-500/20 -rotate-45" />
+            <div className="relative p-8 rounded-full bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 shadow-2xl">
+                <Radar className="h-16 w-16 text-violet-500 animate-spin-slow" />
+            </div>
+            {/* Scanning beam */}
+            <div className="absolute inset-0 rounded-full border-t-2 border-primary/40 animate-spin-slow" />
+        </div>
+    );
+}
+
+// ============================================================================
+// Onboarding Card
+// ============================================================================
+function RadarOnboarding({ onStart, refreshing }: { onStart: () => void; refreshing: boolean }) {
+    return (
+        <Card className="border-2 border-dashed bg-gradient-to-b from-background to-muted/20">
+            <CardContent className="flex flex-col items-center justify-center py-20 text-center px-6">
+                <ScanningCircle />
+                <h2 className="text-2xl font-bold mt-10 mb-3 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                    Ativar Inteligência de Descoberta
+                </h2>
+                <p className="text-muted-foreground max-w-lg mb-8 leading-relaxed">
+                    O Radar V3 analisa o Top 10 do Google em tempo real, mapeia intenções de busca e identifica lacunas semânticas para seus próximos artigos de alta performance.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 w-full max-w-2xl">
+                    {[
+                        { title: 'Google SERPScan', desc: 'Lê os resultados atuais do Top 10' },
+                        { title: 'Semantic Gap', desc: 'Acha o que ninguém escreveu' },
+                        { title: 'PAA Extraction', desc: 'Extrai People Also Ask' }
+                    ].map(f => (
+                        <div key={f.title} className="p-3 rounded-xl bg-background border border-border/50 text-left">
+                            <h4 className="text-xs font-bold text-violet-600 mb-1">{f.title}</h4>
+                            <p className="text-[10px] text-muted-foreground leading-tight">{f.desc}</p>
+                        </div>
+                    ))}
+                </div>
+                <Button
+                    size="lg"
+                    onClick={onStart}
+                    disabled={refreshing}
+                    className="gradient-primary px-10 h-14 rounded-full shadow-lg shadow-primary/25 font-bold text-lg transition-all hover:scale-105"
+                >
+                    {refreshing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
+                    {refreshing ? 'Escaneando Mercado...' : 'Iniciar Primeira Varredura'}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
 function RadarMaintenanceFallback() {
     return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] p-6">
-            <div className="relative mb-8">
-                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-purple-500/20 blur-3xl rounded-full" />
-                <div className="relative p-6 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20">
-                    <Radar className="h-16 w-16 text-violet-500 animate-pulse" />
-                </div>
+            <div className="relative mb-8 p-6 rounded-2xl bg-muted/30 border border-border/50">
+                <Radar className="h-16 w-16 text-muted-foreground/40" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-3">Radar em Manutenção</h1>
-            <p className="text-muted-foreground text-center max-w-md mb-6">
-                O Radar está temporariamente desativado. A geração de artigos continua normalmente.
+            <h1 className="text-2xl font-bold text-foreground mb-3">Radar Offline</h1>
+            <p className="text-muted-foreground text-center max-w-md mb-6 leading-relaxed">
+                Esta funcionalidade está habilitada apenas para planos Enterprise ou via Feature Flag específica.
             </p>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-lg">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-4 py-2 rounded-lg">
                 <Shield className="h-4 w-4" />
-                <span>Article Engine operando independentemente</span>
+                <span>Consulte seu administrador para ativar o Discovery Engine</span>
             </div>
         </div>
     );
@@ -288,105 +344,106 @@ export default function RadarV3Page() {
     };
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500/15 to-purple-600/15">
-                        <Radar className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-600/10 border border-violet-500/20 shadow-sm">
+                        <Radar className="h-6 w-6 text-violet-600 dark:text-violet-400 animate-pulse" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-foreground">Radar V3</h1>
-                        <p className="text-xs text-muted-foreground">Minimal Discovery Engine</p>
+                        <h1 className="text-2xl font-black tracking-tight text-foreground">Discovery Radar <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20 ml-2 uppercase tracking-widest">v3.0</span></h1>
+                        <p className="text-sm text-muted-foreground font-medium">Mapeamento de intenções e lacunas do Top 10 Google</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     {lastRun && (
-                        <span className="text-xs text-muted-foreground hidden sm:inline">
-                            {formatDistanceToNow(new Date(lastRun.created_at), { addSuffix: true, locale: ptBR })}
-                            {lastRun.metadata && (lastRun.metadata as any).elapsed_ms
-                                ? ` (${(lastRun.metadata as any).elapsed_ms}ms)`
-                                : ''}
-                        </span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            <Clock className="h-3 w-3" />
+                            Último scan: {formatDistanceToNow(new Date(lastRun.created_at), { addSuffix: true, locale: ptBR })}
+                        </div>
                     )}
-                    <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="gap-1.5 h-8">
-                        {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                        Atualizar
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="gap-2 h-10 shadow-lg shadow-primary/20 font-bold px-5"
+                    >
+                        {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        {refreshing ? 'Escaneando...' : 'Atualizar Radar'}
                     </Button>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-2">
-                {[
-                    { label: 'Oportunidades', value: stats.total, icon: <Search className="h-3 w-3" /> },
-                    { label: 'High (≥70)', value: stats.high, icon: <Zap className="h-3 w-3" />, color: 'text-green-600 dark:text-green-400' },
-                    { label: 'Score Médio', value: stats.avg, icon: <Target className="h-3 w-3" /> },
-                    { label: 'Pendentes', value: stats.pending, icon: <Clock className="h-3 w-3" /> },
-                ].map((s) => (
-                    <Card key={s.label} className="bg-muted/30">
-                        <CardContent className="pt-3 pb-2 px-3">
-                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">{s.icon}{s.label}</div>
-                            <p className={`text-lg font-bold ${s.color || ''}`}>{s.value}</p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+            {/* Stats - Somente se houver oportunidades */}
+            {opportunities.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                        { label: 'Oportunidades', value: stats.total, icon: <Search className="h-4 w-4" /> },
+                        { label: 'High Potential', value: stats.high, icon: <Zap className="h-4 w-4" />, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/5' },
+                        { label: 'Score Médio', value: stats.avg, icon: <Target className="h-4 w-4" /> },
+                        { label: 'Em Aberto', value: stats.pending, icon: <Clock className="h-4 w-4" /> },
+                    ].map((s) => (
+                        <Card key={s.label} className={`border-none ${s.bg || 'bg-muted/30'} backdrop-blur-sm shadow-sm transition-all hover:scale-[1.02]`}>
+                            <CardContent className="pt-4 pb-3 px-4">
+                                <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground mb-1.5 tracking-tight">{s.icon}{s.label}</div>
+                                <p className={`text-2xl font-black ${s.color || ''}`}>{s.value}</p>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
 
             {/* Failed run alert */}
             {lastRun?.status === 'failed' && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="border-red-500/20 bg-red-500/10">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>Última execução falhou. Clique em "Atualizar" para tentar novamente.</AlertDescription>
+                    <AlertDescription className="font-medium text-destructive">A última varredura falhou devido a timeout ou erro de API. Tente novamente em alguns segundos.</AlertDescription>
                 </Alert>
             )}
 
-            {/* Filters */}
-            <div className="flex rounded-md border border-border overflow-hidden w-fit">
-                {(['all', 'high'] as const).map((f, i) => (
-                    <button
-                        key={f}
-                        onClick={() => setFilter(f)}
-                        className={`px-3 py-1 text-xs transition-colors ${i > 0 ? 'border-l border-border' : ''} ${filter === f ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                            }`}
-                    >
-                        {f === 'all' ? 'Todas' : 'High Score'}
-                    </button>
-                ))}
-            </div>
-
             {/* Content */}
-            {loading ? (
-                <div className="flex items-center justify-center min-h-[250px]">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            {loading && !refreshing ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                    <ScanningCircle />
+                    <p className="text-sm font-bold text-muted-foreground animate-pulse">Carregando inteligência...</p>
                 </div>
-            ) : filtered.length === 0 ? (
-                <Card className="border-dashed">
-                    <CardContent className="flex flex-col items-center justify-center py-14">
-                        <div className="p-3 rounded-full bg-violet-500/10 mb-3">
-                            <Radar className="h-8 w-8 text-violet-500" />
-                        </div>
-                        <h3 className="text-base font-semibold mb-1">
-                            {opportunities.length === 0 ? 'Nenhuma oportunidade descoberta' : 'Nenhuma neste filtro'}
-                        </h3>
-                        <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
-                            {opportunities.length === 0
-                                ? 'Clique em "Atualizar" para o Radar descobrir oportunidades.'
-                                : 'Mude o filtro ou atualize o Radar.'}
+            ) : refreshing ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] gap-6 text-center animate-in zoom-in-95 duration-500">
+                    <ScanningCircle />
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-bold">Escaneando o Top 10 Google</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                            Nossos agentes estão lendo cabeçalhos, metadados e People Also Ask para encontrar sua próxima brecha SEO.
                         </p>
-                        {opportunities.length === 0 && (
-                            <Button onClick={handleRefresh} disabled={refreshing} size="sm" className="gap-1.5">
-                                {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                                Descobrir Oportunidades
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
+            ) : opportunities.length === 0 ? (
+                <RadarOnboarding onStart={handleRefresh} refreshing={refreshing} />
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {filtered.map((opp) => (
-                        <OpportunityCard key={opp.id} opp={opp} onGenerate={handleGenerate} />
-                    ))}
+                <div className="space-y-6">
+                    {/* Filters */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex bg-muted/50 p-1 rounded-xl border border-border/50 w-fit">
+                            {(['all', 'high'] as const).map((f) => (
+                                <button
+                                    key={f}
+                                    onClick={() => setFilter(f)}
+                                    className={`px-6 py-2 text-xs font-bold transition-all rounded-lg ${filter === f ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                                        }`}
+                                >
+                                    {f === 'all' ? 'Ver Todas' : 'Apenas High Score'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filtered.map((opp) => (
+                            <OpportunityCard key={opp.id} opp={opp} onGenerate={handleGenerate} />
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

@@ -13,7 +13,7 @@ const contentItems = [
     iconBg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
     title: 'Radar de Oportunidades',
     subtitle: 'Descubra o que sua cidade procura',
-    path: '/client/radar',
+    path: '/client/strategy',
   },
   {
     id: 'generate',
@@ -62,10 +62,10 @@ export function ContentHubPanel({ onNavigate, currentPath }: ContentHubPanelProp
           Conteúdo
         </h3>
       </div>
-      
+
       {contentItems.map((item) => {
         const isCurrentRoute = currentPath?.includes(item.path.replace('/client', ''));
-        
+
         return (
           <button
             key={item.id}
@@ -85,7 +85,7 @@ export function ContentHubPanel({ onNavigate, currentPath }: ContentHubPanelProp
             )}>
               <item.icon className="h-5 w-5" />
             </div>
-            
+
             <div className="flex-1 text-left min-w-0">
               <span className={cn(
                 'text-sm font-medium text-[#111827] dark:text-white block',

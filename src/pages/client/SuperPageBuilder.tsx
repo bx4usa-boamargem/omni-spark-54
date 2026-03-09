@@ -156,311 +156,330 @@ export default function SuperPageBuilder() {
     };
 
     return (
-        <div className="container max-w-5xl py-6 space-y-8">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => navigate('/client/articles')}
-                >
-                    <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold flex items-center gap-3">
-                        <Sparkles className="h-8 w-8 text-primary" />
-                        1-Click Super Page Builder
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Crie artigos imbatíveis com Inteligência Artificial baseados em PAA do Google, LSI Keywords, imagens e vídeos automáticos.
-                    </p>
-                </div>
-            </div>
+        <div className="relative min-h-[calc(100vh-4rem)]">
+            {/* Background Glows */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -z-10 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-violet-500/5 blur-[100px] rounded-full -z-10 pointer-events-none" />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* Left Column: Form Sections */}
-                <div className="lg:col-span-2 space-y-6">
-
-                    {/* Main Keyword & Clone */}
-                    <Card className="border-primary/20 bg-card">
-                        <CardHeader className="bg-primary/5 pb-4 border-b">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Search className="h-5 w-5 text-primary" />
-                                Keyword & Clonagem
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="keyword" className="font-semibold text-base">
-                                    Palavra-chave Principal <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                    id="keyword"
-                                    placeholder="Ex: melhor software de gestão para varejo 2026"
-                                    value={formData.keyword}
-                                    onChange={(e) => handleInputChange('keyword', e.target.value)}
-                                    disabled={isGenerating}
-                                    className="h-12 text-lg"
-                                />
+            <div className="container max-w-5xl py-8 space-y-10 relative">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
+                    <div className="flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => navigate('/client/articles')}
+                            className="rounded-full h-12 w-12 border-border/40 bg-background/50 backdrop-blur-md shadow-sm hover:translate-x-[-2px] transition-transform"
+                        >
+                            <ArrowLeft className="h-5 w-5" />
+                        </Button>
+                        <div className="space-y-1">
+                            <div className="flex items-center justify-center md:justify-start gap-3">
+                                <h1 className="text-4xl font-black tracking-tighter text-foreground">Super Page <span className="bg-gradient-to-r from-primary to-violet-600 bg-clip-text text-transparent italic">Elite</span></h1>
+                                <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20">v3 engine</span>
                             </div>
-
-                            <div className="space-y-2 pt-2">
-                                <Label htmlFor="cloneUrl" className="flex items-center gap-2 font-medium">
-                                    <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                                    URL do Concorrente (1-Click Clone) - <span className="text-muted-foreground font-normal text-xs">Opcional</span>
-                                </Label>
-                                <Input
-                                    id="cloneUrl"
-                                    placeholder="https://..."
-                                    value={formData.cloneUrl}
-                                    onChange={(e) => handleInputChange('cloneUrl', e.target.value)}
-                                    disabled={isGenerating}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Se informado, a IA extrairá a estrutura de H2/H3 (Outline) desta URL e criará conteúdo superior e original.
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Local SEO & Niche */}
-                    <Card>
-                        <CardHeader className="pb-4 border-b">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <MapPin className="h-5 w-5 text-green-500" />
-                                Local SEO & Nicho
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Cidade <span className="text-muted-foreground font-normal text-xs">(Opcional)</span></Label>
-                                    <Input
-                                        placeholder="Ex: São Paulo"
-                                        value={formData.city}
-                                        onChange={(e) => handleInputChange('city', e.target.value)}
-                                        disabled={isGenerating}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Estado</Label>
-                                    <Select value={formData.state} onValueChange={(v) => handleInputChange('state', v)} disabled={isGenerating}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {STATES.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Nicho Especialista</Label>
-                                <NicheSelectorDropdown
-                                    value={formData.niche as NicheType}
-                                    onChange={(value) => handleInputChange('niche', value)}
-                                    disabled={isGenerating}
-                                />
-                                <p className="text-xs text-muted-foreground">O modelo NLP se ajustará para as jargões e LSI keywords deste nicho.</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Call To Action */}
-                    <Card>
-                        <CardHeader className="pb-4 border-b">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <MousePointerClick className="h-5 w-5 text-orange-500" />
-                                Converta Leitores (CTA)
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Texto do Botão / Chamada</Label>
-                                    <Input
-                                        placeholder="Agende um Teste Grátis"
-                                        value={formData.ctaText}
-                                        onChange={(e) => handleInputChange('ctaText', e.target.value)}
-                                        disabled={isGenerating}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>URL de Destino</Label>
-                                    <Input
-                                        placeholder="https://suaempresa.com.br/contato"
-                                        value={formData.ctaUrl}
-                                        onChange={(e) => handleInputChange('ctaUrl', e.target.value)}
-                                        disabled={isGenerating}
-                                    />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
+                            <p className="text-muted-foreground text-sm font-medium max-w-md">
+                                Arquitetura de 8 agentes para criar conteúdo que domina o Top 10 e converte em escala industrial.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Right Column: Configuration Switches */}
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                    {/* Article Specs */}
-                    <Card>
-                        <CardHeader className="pb-4 border-b bg-muted/20">
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <Settings2 className="h-5 w-5" />
-                                Especificações
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-6">
-                            <div className="space-y-2">
-                                <Label>Tamanho do Artigo</Label>
-                                <Select value={formData.targetWords} onValueChange={(v) => handleInputChange('targetWords', v)} disabled={isGenerating}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="1000">Pequeno (1.000 words)</SelectItem>
-                                        <SelectItem value="1500">Padrão (1.500 words)</SelectItem>
-                                        <SelectItem value="2000">Completo (2.000 words)</SelectItem>
-                                        <SelectItem value="2500">Super Page (2.500 words)</SelectItem>
-                                        <SelectItem value="3500">Pillar Page (3.500 words)</SelectItem>
-                                        <SelectItem value="5000">Ultimate Guide (5.000 words)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Tom de Voz</Label>
-                                <Select value={formData.tone} onValueChange={(v) => handleInputChange('tone', v)} disabled={isGenerating}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="professional">Profissional & Confiável</SelectItem>
-                                        <SelectItem value="conversational">Amigável & Conversacional</SelectItem>
-                                        <SelectItem value="educational">Educacional (Wikipedia)</SelectItem>
-                                        <SelectItem value="persuasive">Direto & Persuasivo</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Ponto de Vista</Label>
-                                <Select value={formData.pointOfView} onValueChange={(v) => handleInputChange('pointOfView', v)} disabled={isGenerating}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="we">Nós (Empresa/Equipe)</SelectItem>
-                                        <SelectItem value="i">Eu (Especialista Único)</SelectItem>
-                                        <SelectItem value="third">Terceira Pessoa (Neutro)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {/* Left Column: Form Sections */}
+                    <div className="lg:col-span-2 space-y-6">
 
-                    {/* Media & Enhancements */}
-                    <Card>
-                        <CardHeader className="pb-4 border-b bg-muted/20">
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <LayoutTemplate className="h-5 w-5 text-purple-500" />
-                                Elementos de Mídia & SEO
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-5 pt-6">
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <Label className="text-sm font-medium flex items-center gap-2">
-                                        <ImageIcon className="h-4 w-4" /> Imagens AI
+                        {/* Main Keyword & Clone */}
+                        <Card className="border-border/40 bg-background/50 backdrop-blur-xl shadow-2xl overflow-hidden group transition-all hover:border-primary/30">
+                            <CardHeader className="bg-primary/5 pb-4 border-b border-border/40">
+                                <CardTitle className="text-xl flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                                        <Search className="h-5 w-5" />
+                                    </div>
+                                    Keyword & Clonagem Elite
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-8">
+                                <div className="space-y-3">
+                                    <Label htmlFor="keyword" className="font-bold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        Palavra-chave Principal
+                                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
                                     </Label>
-                                    <p className="text-xs text-muted-foreground mr-4">Imagens fotorrealistas ou ilustrativas geradas na hora.</p>
+                                    <Input
+                                        id="keyword"
+                                        placeholder="Ex: melhor software de gestão para varejo 2026"
+                                        value={formData.keyword}
+                                        onChange={(e) => handleInputChange('keyword', e.target.value)}
+                                        disabled={isGenerating}
+                                        className="h-14 text-xl font-medium bg-background/50 border-border/40 focus:ring-primary/20 focus:border-primary transition-all"
+                                    />
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Mínimo 3 caracteres para ativar o motor</p>
                                 </div>
-                                <Switch checked={formData.includeImages} onCheckedChange={(c) => handleInputChange('includeImages', c)} disabled={isGenerating} />
-                            </div>
 
-                            {formData.includeImages && (
-                                <div className="pl-6 space-y-4 border-l-2 ml-2 pb-2">
-                                    <div className="flex items-center justify-between gap-4">
-                                        <Label className="text-xs">Quantidade:</Label>
+                                <Separator className="bg-border/40" />
+
+                                <div className="space-y-3 pt-2">
+                                    <Label htmlFor="cloneUrl" className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider text-muted-foreground">
+                                        <LinkIcon className="h-4 w-4" />
+                                        Competitive Clone URL <span className="text-[10px] font-normal lowercase">(opcional)</span>
+                                    </Label>
+                                    <div className="relative">
                                         <Input
-                                            type="number" min="1" max="15"
-                                            value={formData.imageCount}
-                                            onChange={(e) => handleInputChange('imageCount', parseInt(e.target.value) || 1)}
-                                            className="w-20 h-8"
+                                            id="cloneUrl"
+                                            placeholder="https://site-do-concorrente.com/artigo-que-voce-quer-bater"
+                                            value={formData.cloneUrl}
+                                            onChange={(e) => handleInputChange('cloneUrl', e.target.value)}
                                             disabled={isGenerating}
+                                            className="h-12 bg-background/30 border-border/30 pl-4 pr-12 font-mono text-sm"
+                                        />
+                                        {formData.cloneUrl && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] font-black text-green-500 bg-green-500/10 px-2 py-1 rounded border border-green-500/20">
+                                                <Sparkles className="h-3 w-3" />
+                                                PRONTO
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-violet-500/5 border border-violet-500/10">
+                                        <p className="text-xs text-muted-foreground leading-relaxed italic">
+                                            Nosso agente entrará via <strong>Firecrawl</strong> nesta URL, mapeará os H2/H3 e criará uma estrutura 2.5x mais rica e atualizada.
+                                        </p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Local SEO & Nicho */}
+                        <Card className="border-border/40 bg-background/50 backdrop-blur-xl shadow-lg transition-all hover:border-green-500/30">
+                            <CardHeader className="bg-green-500/5 pb-4 border-b border-border/40">
+                                <CardTitle className="text-xl flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-green-500/10 text-green-500">
+                                        <MapPin className="h-5 w-5" />
+                                    </div>
+                                    Local SEO & Nicho
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-8">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold uppercase text-muted-foreground">Cidade Estratégica</Label>
+                                        <Input
+                                            placeholder="Ex: São Paulo"
+                                            value={formData.city}
+                                            onChange={(e) => handleInputChange('city', e.target.value)}
+                                            disabled={isGenerating}
+                                            className="bg-background/50"
                                         />
                                     </div>
-                                    <div className="space-y-1 mt-1">
-                                        <Label className="text-xs">Estilo Visual:</Label>
-                                        <Select value={formData.imageStyle} onValueChange={(v) => handleInputChange('imageStyle', v)} disabled={isGenerating}>
-                                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold uppercase text-muted-foreground">Estado</Label>
+                                        <Select value={formData.state} onValueChange={(v) => handleInputChange('state', v)} disabled={isGenerating}>
+                                            <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="cinematic">Cinemático Fotorrealista</SelectItem>
-                                                <SelectItem value="illustration">Ilustração Moderna (Vetor)</SelectItem>
-                                                <SelectItem value="3d">Render 3D</SelectItem>
-                                                <SelectItem value="minimalist">Minimalista Claro</SelectItem>
+                                                {STATES.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
-                            )}
 
-                            <Separator />
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <Label className="text-sm font-medium flex items-center gap-2">
-                                        <MonitorPlay className="h-4 w-4 text-red-500" /> YouTube Embeds
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mr-4">Busca e insere o melhor vídeo público sobre o tema.</p>
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-xs font-bold uppercase text-muted-foreground">Especialidade do Agente</Label>
+                                    <NicheSelectorDropdown
+                                        value={formData.niche as NicheType}
+                                        onChange={(value) => handleInputChange('niche', value)}
+                                        disabled={isGenerating}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-2 pl-1">A IA usará terminologia técnica de {formData.niche === 'default' ? 'Negócios' : formData.niche}</p>
                                 </div>
-                                <Switch checked={formData.includeYoutube} onCheckedChange={(c) => handleInputChange('includeYoutube', c)} disabled={isGenerating} />
-                            </div>
+                            </CardContent>
+                        </Card>
 
-                            <Separator />
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <Label className="text-sm font-medium flex items-center gap-2">
-                                        <MapPin className="h-4 w-4 text-emerald-500" /> Google Maps Embed
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mr-4">Insere mapa da cidade ou negócio para SEO Local.</p>
+                        {/* CTA Section */}
+                        <Card className="border-border/40 bg-background/50 backdrop-blur-xl shadow-lg transition-all hover:border-orange-500/30">
+                            <CardHeader className="bg-orange-500/5 pb-4 border-b border-border/40">
+                                <CardTitle className="text-xl flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                                        <MousePointerClick className="h-5 w-5" />
+                                    </div>
+                                    Conversão (CTA)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold uppercase text-muted-foreground">Texto do Botão Magneto</Label>
+                                        <Input
+                                            placeholder="Agende um Teste Grátis"
+                                            value={formData.ctaText}
+                                            onChange={(e) => handleInputChange('ctaText', e.target.value)}
+                                            disabled={isGenerating}
+                                            className="bg-background/50 font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold uppercase text-muted-foreground">Destino do Lead</Label>
+                                        <Input
+                                            placeholder="https://suaempresa.com.br/contato"
+                                            value={formData.ctaUrl}
+                                            onChange={(e) => handleInputChange('ctaUrl', e.target.value)}
+                                            disabled={isGenerating}
+                                            className="bg-background/50 font-mono text-xs"
+                                        />
+                                    </div>
                                 </div>
-                                <Switch checked={formData.includeMapEmbed} onCheckedChange={(c) => handleInputChange('includeMapEmbed', c)} disabled={isGenerating} />
-                            </div>
+                            </CardContent>
+                        </Card>
 
-                            <Separator />
+                    </div>
 
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <Label className="text-sm font-medium">FAQ (Questions & Answers)</Label>
-                                    <p className="text-xs text-muted-foreground mr-4">Gera schema JSON-LD e seção FAQ baseada em PAA do Google.</p>
+                    {/* Right Column: Configuration Switches */}
+                    <div className="space-y-6">
+
+                        {/* Article Specs */}
+                        <Card className="border-border/40 bg-card/60 backdrop-blur-md">
+                            <CardHeader className="pb-4 border-b bg-muted/20">
+                                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                    <Settings2 className="h-4 w-4" />
+                                    Specs de Saída
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-6">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Impacto Content</Label>
+                                    <Select value={formData.targetWords} onValueChange={(v) => handleInputChange('targetWords', v)} disabled={isGenerating}>
+                                        <SelectTrigger className="bg-background/50 font-semibold"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1000">Pequeno (1.000 words)</SelectItem>
+                                            <SelectItem value="1500">Padrão (1.500 words)</SelectItem>
+                                            <SelectItem value="2000">Completo (2.000 words)</SelectItem>
+                                            <SelectItem value="2500">Super Page (2.500 words)</SelectItem>
+                                            <SelectItem value="3500" className="text-primary font-bold">Pillar Page (3.500+)</SelectItem>
+                                            <SelectItem value="5000" className="text-violet-500 font-black italic">Ultimate Guide (5k)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <Switch checked={formData.includeFaq} onCheckedChange={(c) => handleInputChange('includeFaq', c)} disabled={isGenerating} />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <Label className="text-sm font-medium">NLP & LSI Optimization</Label>
-                                    <p className="text-xs text-muted-foreground mr-4">Inclui TF-IDF terms forçando densidade co-semântica.</p>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Voz da Marca</Label>
+                                    <Select value={formData.tone} onValueChange={(v) => handleInputChange('tone', v)} disabled={isGenerating}>
+                                        <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="professional">Profissional & Confiável</SelectItem>
+                                            <SelectItem value="conversational">Amigável & Conversacional</SelectItem>
+                                            <SelectItem value="educational">Educacional (Wikipedia)</SelectItem>
+                                            <SelectItem value="persuasive">Direto & Persuasivo</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <Switch checked={formData.optimizeNLP} onCheckedChange={(c) => handleInputChange('optimizeNLP', c)} disabled={isGenerating} />
-                            </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Perspectiva</Label>
+                                    <Select value={formData.pointOfView} onValueChange={(v) => handleInputChange('pointOfView', v)} disabled={isGenerating}>
+                                        <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="we">Nós (Empresa/Equipe)</SelectItem>
+                                            <SelectItem value="i">Eu (Especialista Único)</SelectItem>
+                                            <SelectItem value="third">Terceira Pessoa (Neutro)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                        </CardContent>
-                    </Card>
+                        {/* Media & Enhancements */}
+                        <Card className="border-border/40 bg-card/60 backdrop-blur-md overflow-hidden">
+                            <CardHeader className="pb-4 border-b bg-purple-500/5">
+                                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                    <LayoutTemplate className="h-4 w-4 text-purple-500" />
+                                    Boosts de SEO
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-5 pt-6">
 
-                    <Button
-                        size="lg"
-                        className="w-full text-lg h-14 gradient-primary shadow-lg shadow-primary/30 font-bold tracking-wide"
-                        onClick={handleGenerate}
-                        disabled={!isValid || isGenerating}
-                    >
-                        {isGenerating ? (
-                            <><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Processando Super Page...</>
-                        ) : (
-                            <><Sparkles className="mr-2 h-6 w-6" /> Gerar Super Page</>
-                        )}
-                    </Button>
-                    <p className="text-xs text-center text-muted-foreground">
-                        A geração de uma Super Page pode levar entre 2 a 5 minutos utilizando a arquitetura de múltiplos agentes.
-                    </p>
+                                <div className="flex items-center justify-between group">
+                                    <div>
+                                        <Label className="text-sm font-bold flex items-center gap-2 mb-1">
+                                            <ImageIcon className="h-4 w-4 text-primary" /> Imagens AI
+                                        </Label>
+                                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">Geradas no Flux / Midjourney</p>
+                                    </div>
+                                    <Switch checked={formData.includeImages} onCheckedChange={(c) => handleInputChange('includeImages', c)} disabled={isGenerating} />
+                                </div>
+
+                                {formData.includeImages && (
+                                    <div className="pl-5 space-y-4 border-l border-primary/20 ml-2 animate-in slide-in-from-left-2 duration-300">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <Label className="text-[10px] font-bold">Lote:</Label>
+                                            <Input
+                                                type="number" min="1" max="15"
+                                                value={formData.imageCount}
+                                                onChange={(e) => handleInputChange('imageCount', parseInt(e.target.value) || 1)}
+                                                className="w-16 h-7 text-xs bg-background/50"
+                                                disabled={isGenerating}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] font-bold">Estilo:</Label>
+                                            <Select value={formData.imageStyle} onValueChange={(v) => handleInputChange('imageStyle', v)} disabled={isGenerating}>
+                                                <SelectTrigger className="h-7 text-[10px] bg-background/30"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="cinematic">Cinemático</SelectItem>
+                                                    <SelectItem value="illustration">Vetor</SelectItem>
+                                                    <SelectItem value="3d">Render 3D</SelectItem>
+                                                    <SelectItem value="minimalist">Clean</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Separator className="bg-border/20" />
+
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <Label className="text-sm font-bold flex items-center gap-2 mb-1">
+                                            <MonitorPlay className="h-4 w-4 text-red-500" /> YouTube Loop
+                                        </Label>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Embed Contextual</p>
+                                    </div>
+                                    <Switch checked={formData.includeYoutube} onCheckedChange={(c) => handleInputChange('includeYoutube', c)} disabled={isGenerating} />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <Label className="text-sm font-bold flex items-center gap-2 mb-1">
+                                            <LayoutTemplate className="h-4 w-4 text-violet-500" /> FAQ Engine
+                                        </Label>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">PAA & JSON-LD</p>
+                                    </div>
+                                    <Switch checked={formData.includeFaq} onCheckedChange={(c) => handleInputChange('includeFaq', c)} disabled={isGenerating} />
+                                </div>
+
+                            </CardContent>
+                        </Card>
+
+                        <div className="p-1 rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-purple-600 shadow-xl shadow-primary/20">
+                            <Button
+                                size="lg"
+                                className="w-full text-lg h-16 bg-background hover:bg-background/90 text-foreground border-none rounded-xl font-black group transition-all"
+                                onClick={handleGenerate}
+                                disabled={!isValid || isGenerating}
+                            >
+                                {isGenerating ? (
+                                    <><Loader2 className="mr-3 h-6 w-6 animate-spin text-primary" /> Ativando Agentes...</>
+                                ) : (
+                                    <><Sparkles className="mr-3 h-6 w-6 text-primary group-hover:scale-125 transition-transform" /> GERAR SUPER PAGE</>
+                                )}
+                            </Button>
+                        </div>
+
+                        <div className="flex items-start gap-3 p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400">
+                            <Settings2 className="h-5 w-5 mt-0.5 shrink-0" />
+                            <p className="text-[11px] font-medium leading-relaxed">
+                                <strong>Atenção:</strong> Super Pages consomem mais tokens e créditos de imagem devido à profundidade semântica. Tempo estimado: ~4min.
+                            </p>
+                        </div>
+                    </div>
+
                 </div>
-
             </div>
         </div>
     );

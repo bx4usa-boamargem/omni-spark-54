@@ -83,7 +83,7 @@ export function DashboardRadarWidget({ blogId }: { blogId?: string }) {
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     Ainda não temos dados rastreados. Acesse a aba Planejamento ou navegue até o Radar V3 para iniciar sua varredura local.
                 </p>
-                <Button onClick={() => navigate("/client/radar")} variant="outline" className="mt-4">
+                <Button onClick={() => navigate("/client/strategy?tab=radar")} variant="outline" className="mt-4">
                     Ir para o Radar
                 </Button>
             </div>
@@ -185,7 +185,7 @@ export function DashboardRadarWidget({ blogId }: { blogId?: string }) {
                     <span className="text-amber-500">💡</span> Hoje você tem <strong className="text-foreground">+{opportunities.length} possibilidades</strong> de títulos que podem atrair leads.
                 </p>
                 <button
-                    onClick={() => navigate('/client/radar')}
+                    onClick={() => navigate('/client/strategy?tab=radar')}
                     className="text-sm font-semibold text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
                 >
                     Ver todas no Radar <ChevronRight className="h-4 w-4" />

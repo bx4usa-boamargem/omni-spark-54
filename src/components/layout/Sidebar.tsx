@@ -80,7 +80,7 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
     { icon: Home, label: t('sidebar.home'), path: "/client/dashboard" },
     { icon: FileText, label: t('sidebar.content'), path: "/client/articles" },
     { icon: BookOpen, label: t('sidebar.ebooks'), path: "/client/ebooks", badge: t('sidebar.new') },
-    ...(hasPermission("blog.settings") ? [{ icon: Target, label: t('sidebar.strategy'), path: "/client/radar" }] : []),
+    ...(hasPermission("blog.settings") ? [{ icon: Target, label: t('sidebar.strategy'), path: "/client/strategy" }] : []),
     { icon: BarChart3, label: t('sidebar.seoAnalysis'), path: "/client/results" },
     ...(hasPermission("blog.settings") ? [{ icon: Zap, label: t('sidebar.automations'), path: "/client/automation" }] : []),
     { icon: Gift, label: t('sidebar.referrals'), path: "/client/referrals" },
