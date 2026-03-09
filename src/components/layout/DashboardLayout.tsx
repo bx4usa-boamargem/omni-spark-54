@@ -129,15 +129,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Main Content - min-w-0 so flex child can shrink and editor stays visible */}
-      <main className="flex-1 min-w-0 lg:pt-0 pt-16 overflow-auto flex flex-col">
+      <main className="flex-1 min-w-0 lg:pt-0 pt-16 flex flex-col h-screen overflow-y-auto">
         {/* Trial Banner - show only for users in active trial */}
         {isInActiveTrial && (
-          <TrialBanner
-            daysRemaining={daysRemainingTrial}
-            onSubscribeClick={handleOpenPlanModal}
-          />
+          <div className="shrink-0">
+            <TrialBanner
+              daysRemaining={daysRemainingTrial}
+              onSubscribeClick={handleOpenPlanModal}
+            />
+          </div>
         )}
-        <div className="flex-1">
+        <div className="flex-1 flex flex-col min-h-0">
           {children}
         </div>
       </main>

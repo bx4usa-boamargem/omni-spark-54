@@ -8,6 +8,7 @@ import { ArticleContent } from "@/components/public/ArticleContent";
 import { ArticleCTARenderer } from "@/components/client/ArticleCTARenderer";
 import type { ArticleData } from "@/types/article";
 import type { ContentImage, ImageGenerationProgress } from "@/utils/generateContentImages";
+import { SdrChatbotWidget } from "@/components/public/SdrChatbotWidget";
 
 interface ArticlePreviewProps {
   article: ArticleData | null;
@@ -27,15 +28,15 @@ const contextLabels: Record<string, string> = {
   result: 'Resultado'
 };
 
-export function ArticlePreview({ 
-  article, 
-  streamingText, 
-  isStreaming, 
-  featuredImage, 
+export function ArticlePreview({
+  article,
+  streamingText,
+  isStreaming,
+  featuredImage,
   contentImages = [],
-  isGeneratingImages, 
+  isGeneratingImages,
   imageProgress,
-  onRegenerateImages 
+  onRegenerateImages
 }: ArticlePreviewProps) {
   if (!article && !streamingText && !isStreaming) {
     return (
@@ -101,19 +102,19 @@ export function ArticlePreview({
           </div>
         </div>
       )}
-      
+
       {featuredImage && !isGeneratingImages && (
         <div className="relative group">
-          <img 
-            src={featuredImage} 
-            alt="Imagem de capa do artigo" 
+          <img
+            src={featuredImage}
+            alt="Imagem de capa do artigo"
             className="w-full aspect-video object-cover"
           />
           {onRegenerateImages && (
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <Button 
-                variant="secondary" 
-                size="sm" 
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onRegenerateImages}
                 className="gap-2"
               >
@@ -171,11 +172,11 @@ export function ArticlePreview({
           <Eye className="h-3.5 w-3.5" />
           <span>Simulação do post publicado</span>
         </div>
-        
+
         {/* Usar o mesmo componente do blog público */}
-        <ArticleContent 
-          content={article.content} 
-          contentImages={contentImages} 
+        <ArticleContent
+          content={article.content}
+          contentImages={contentImages}
         />
 
         {article.faq && article.faq.length > 0 && (
@@ -201,6 +202,14 @@ export function ArticlePreview({
             <ArticleCTARenderer cta={(article as any).cta} />
           </div>
         )}
+
+        <SdrChatbotWidget
+          articleId={article.id}
+          articleTitle={article.title}
+          articleContent={article.content}
+          pageType="article"
+          clientName="Omniseen Assistant"
+        />
       </CardContent>
     </Card>
   );

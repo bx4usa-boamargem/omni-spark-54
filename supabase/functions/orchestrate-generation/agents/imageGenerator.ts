@@ -67,24 +67,43 @@ export async function executeImageGenerator(
         const sectionCount = (html.match(/<h2[^>]*>/gi) || []).length;
         const maxSectionImages = Math.min(sectionCount, 8);
 
-        for (let i = 0; i < maxSectionImages; i++) {
+        // Fetch section images in parallel with extreme timeout guards
+        const sectionImagePromises = Array.from({ length: maxSectionImages }).map(async (_, i) => {
             const sectionTitle = outline.h2[i]?.title || `Section ${i + 1}`;
             const prompt = `${keyword}, ${sectionTitle}. Editorial, realistic.`;
-            const img = await generateOneImage(prompt, apiKey);
-            let url: string;
-            if (img?.url && img.url.startsWith("data:")) {
-                const base64Match = img.url.match(/^data:image\/(\w+);base64,(.+)$/);
-                if (base64Match) {
-                    const fmt = base64Match[1];
-                    const bin = Uint8Array.from(atob(base64Match[2]), (c) => c.charCodeAt(0));
-                    const fname = `${articleId}-section-${i + 1}-${Date.now()}.${fmt}`;
-                    await supabase.storage.from("article-images").upload(fname, bin, { contentType: `image/${fmt}`, upsert: true });
-                    const { data: pub } = supabase.storage.from("article-images").getPublicUrl(fname);
-                    url = pub.publicUrl;
-                } else continue;
-            } else url = `https://picsum.photos/seed/${slug}-sec-${i}/800/450`;
-            contentImages.push({ context: sectionTitle, url, alt: sectionTitle, after_section: i + 1 });
-        }
+
+            try {
+                // Hard timeout for each image specifically so one hanging generation doesn't kill the whole Promise.all
+                const img = await Promise.race([
+                    generateOneImage(prompt, apiKey),
+                    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('IMAGE_TIMEOUT')), 15000))
+                ]);
+
+                let url: string;
+
+                if (img?.url && img.url.startsWith("data:")) {
+                    const base64Match = img.url.match(/^data:image\/(\w+);base64,(.+)$/);
+                    if (base64Match) {
+                        const fmt = base64Match[1];
+                        const bin = Uint8Array.from(atob(base64Match[2]), (c) => c.charCodeAt(0));
+                        const fname = `${articleId}-section-${i + 1}-${Date.now()}.${fmt}`;
+                        await supabase.storage.from("article-images").upload(fname, bin, { contentType: `image/${fmt}`, upsert: true });
+                        const { data: pub } = supabase.storage.from("article-images").getPublicUrl(fname);
+                        url = pub.publicUrl;
+                        return { context: sectionTitle, url, alt: sectionTitle, after_section: i + 1 };
+                    }
+                }
+            } catch (e) {
+                console.warn(`[IMAGE_GEN] Section ${i} failed or timed out:`, e);
+            }
+
+            // Fallback
+            let fallbackUrl = `https://picsum.photos/seed/${slug}-sec-${i}/800/450`;
+            return { context: sectionTitle, url: fallbackUrl, alt: sectionTitle, after_section: i + 1 };
+        });
+
+        const generatedImages = await Promise.all(sectionImagePromises);
+        contentImages.push(...generatedImages.filter((img) => img !== null));
 
         if (contentImages.length > 0 && validateContentStructure(html)) {
             const injected = injectImagesIntoContent(html, contentImages.map((c) => ({ ...c, alt: c.alt })));

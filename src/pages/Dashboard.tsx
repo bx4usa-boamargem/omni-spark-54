@@ -30,6 +30,8 @@ import {
   Calendar,
   Upload,
   ChevronRight,
+  Check,
+  Users
 } from "lucide-react";
 import { SectionHelper } from "@/components/blog-editor/SectionHelper";
 import { DashboardQuickGrid } from "@/components/dashboard/DashboardQuickGrid";
@@ -46,6 +48,10 @@ interface Article {
 interface Profile {
   full_name: string | null;
 }
+
+import { DashboardProofOfValue } from "@/components/dashboard/DashboardProofOfValue";
+import { DashboardRadarWidget } from "@/components/dashboard/DashboardRadarWidget";
+import { DashboardTerritoryPerformance } from "@/components/dashboard/DashboardTerritoryPerformance";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -200,31 +206,6 @@ export default function Dashboard() {
     onboarding_completed: blog.onboarding_completed || false,
   };
 
-  if (!blog) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center p-8">
-          <div className="p-4 rounded-2xl gradient-primary inline-block mb-6">
-            <PenTool className="h-12 w-12 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-display font-bold mb-4">Vamos criar seu blog!</h1>
-          <p className="text-muted-foreground mb-8">
-            Em poucos passos você terá um blog profissional pronto para receber artigos gerados por IA.
-          </p>
-          <Button size="lg" onClick={() => navigate("/onboarding")}>
-            Começar configuração
-            <Sparkles className="ml-2 h-5 w-5" />
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!blog.onboarding_completed) {
-    navigate("/onboarding");
-    return null;
-  }
-
   return (
     <DashboardLayout>
       {/* Onboarding Tour */}
@@ -237,27 +218,125 @@ export default function Dashboard() {
         />
       )}
 
-      <div className="container py-8">
-        {/* Quick Access Grid */}
-        <div className="mb-6">
-          <DashboardQuickGrid blogSlug={blog.slug} isPlatformAdmin={isPlatformAdmin} onStartTour={startTour} />
-        </div>
-
+      <div className="container py-8 max-w-6xl">
         {/* Admin Mode Banner */}
         {isPlatformAdmin && (
           <div className="mb-6">
-            <BlogSelector selectedBlogId={blog.id} onSelectBlog={() => {}} />
+            <BlogSelector selectedBlogId={blog.id} onSelectBlog={() => { }} />
           </div>
         )}
 
-        {/* Greeting Section */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-display font-bold mb-2 flex items-center gap-2">
+              Bem-vindo, {blog.name}! 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {blog.slug}
+            </p>
+          </div>
+          <Button onClick={() => navigate("/app/articles/new")} className="bg-[#FF6B00] hover:bg-[#E56000] text-white">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Gerar Artigo
+          </Button>
+        </div>
+
+        {/* Setup Checklist (Conditional) */}
+        {user && blog && !blog.onboarding_completed && (
+          <div className="mb-8 space-y-4">
+            <p className="text-muted-foreground">
+              Para que você tenha maior desempenho e organização, é necessário que você faça as configurações iniciais do seu blog.
+            </p>
+            <SetupChecklist blogId={blog.id} userId={user.id} />
+          </div>
+        )}
+
+        {/* Core KPIs matches V1 exactly */}
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
+          <Card className="border-muted/60 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-500">
+                  <FileText className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">Total de Artigos</p>
+              <div className="flex items-end gap-3">
+                <h3 className="text-3xl font-bold">{articles.length}</h3>
+                <span className="text-xs font-medium text-emerald-500 flex items-center gap-1.5 ml-auto">
+                  <TrendingUp className="h-3 w-3" /> ~100%
+                </span>
+              </div>
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition-colors"></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/60 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <Check className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">Publicados</p>
+              <div className="flex items-end gap-3">
+                <h3 className="text-3xl font-bold">{publishedCount}</h3>
+                <span className="text-xs font-medium text-emerald-500 flex items-center gap-1.5 ml-auto">
+                  <TrendingUp className="h-3 w-3" /> ~100%
+                </span>
+              </div>
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors"></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/60 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500">
+                  <Eye className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">Visualizações</p>
+              <div className="flex items-end gap-3">
+                <h3 className="text-3xl font-bold">{totalViews.toLocaleString("pt-BR")}</h3>
+                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 ml-auto">
+                  — 0%
+                </span>
+              </div>
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-colors"></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/60 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-500">
+                  <Users className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">Leads Gerados</p>
+              <div className="flex items-end gap-3">
+                <h3 className="text-3xl font-bold">0</h3>
+                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 ml-auto">
+                  — 0%
+                </span>
+              </div>
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl group-hover:bg-orange-500/10 transition-colors"></div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Proof of Value Component */}
+        <DashboardProofOfValue />
+
+        {/* Radar Opportunities Widget */}
         <div className="mb-8">
-          <h1 className="text-3xl font-display font-bold mb-2">
-            {getGreeting()}, {userName}! 👋
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie seu blog <span className="font-medium text-foreground">{blogData.name}</span>
-          </p>
+          <DashboardRadarWidget blogId={blog.id} />
+        </div>
+
+        {/* Territory Performance Component */}
+        <div className="mb-8">
+          <DashboardTerritoryPerformance />
         </div>
 
         {/* Orientation Message + Setup Checklist */}
@@ -488,9 +567,8 @@ export default function Dashboard() {
                       <p className="text-sm text-muted-foreground">{new Date(article.created_at).toLocaleDateString("pt-BR")}</p>
                     </div>
                     <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        article.status === "published" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                      }`}
+                      className={`text-xs px-2 py-1 rounded-full ${article.status === "published" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                        }`}
                     >
                       {article.status === "published" ? "Publicado" : "Rascunho"}
                     </span>

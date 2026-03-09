@@ -51,6 +51,8 @@ export async function executeSectionWriter(
     const niche = jobInput.niche || '';
     const language = jobInput.language || 'pt-BR';
     const jobType = jobInput.job_type || 'article';
+    const tone = jobInput.tone || 'professional';
+    const pointOfView = jobInput.point_of_view || 'we';
 
     let totalCostUsd = 0;
     let fullHtml = `<!DOCTYPE html>\n<html lang="${language === 'pt-BR' ? 'pt-BR' : 'en'}">\n<head>\n<meta charset="UTF-8">\n<title>${outline.h1}</title>\n</head>\n<body>\n`;
@@ -59,7 +61,7 @@ export async function executeSectionWriter(
     // Write Introduction
     console.log(`[AGENT_6_SECTION_WRITER] Writing Introduction...`);
     const introPrompt = `You are a premium Local SEO writer. Write the introductory paragraphs for the article titled "${outline.h1}".
-Context: Keyword: ${keyword}, City: ${city || 'Brazil'}, Niche: ${niche}.
+Context: Keyword: ${keyword}, City: ${city || 'Brazil'}, Niche: ${niche}, Tone: ${tone}, Point of View: ${pointOfView}.
 Style: Engaging, answer-first, concise. Do not use H2 tags here, just <p> tags.
 Return ONLY HTML (no markdown wrappers).`;
 
@@ -88,6 +90,8 @@ Context:
 - Overall Article Title: ${outline.h1}
 - Location: ${city || 'Brazil'}
 - Niche: ${niche}
+- Tone: ${tone}
+- Point of View: ${pointOfView}
 
 Semantic Entities to include naturally in this specific section:
 ${sectionEntities.join(', ')}
@@ -118,6 +122,7 @@ Rules:
     // Write FAQ
     console.log(`[AGENT_6_SECTION_WRITER] Writing FAQ...`);
     const faqPrompt = `You are a premium Local SEO writer. Write a FAQ section for the article "${outline.h1}".
+Context: Tone: ${tone}, Point of View: ${pointOfView}.
 Generate 3 to 5 frequently asked questions and short, helpful answers.
 Return ONLY HTML (no markdown wrappers). Use an <h2> tag for the FAQ title (e.g., "Perguntas Frequentes"), then use <h3> for questions and <p> for answers.`;
 
@@ -129,6 +134,23 @@ Return ONLY HTML (no markdown wrappers). Use an <h2> tag for the FAQ title (e.g.
     if (faqAiResult.success) {
         fullHtml += faqAiResult.content.replace(/```html|```/g, '').trim() + '\n';
         totalCostUsd += faqAiResult.costUsd || 0;
+    }
+
+    // Write Call to Action (CTA) block if provided
+    const cta = jobInput.cta;
+    const ctaText = outline.cta || cta?.text;
+    if (ctaText) {
+        console.log(`[AGENT_6_SECTION_WRITER] Generating CTA Block...`);
+        const ctaHtml = `
+<div class="omniseen-cta-block relative overflow-hidden bg-primary/5 border border-primary/20 rounded-2xl p-8 my-8 text-center" data-omniseen-sdr="true">
+    <h2 class="text-2xl font-bold mb-4">${ctaText}</h2>
+    <p class="text-muted-foreground mb-6">Fale agora com a nossa equipe e veja como podemos ajudar você em ${city || 'sua região'}.</p>
+    <a href="${cta?.url || '#'}" class="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+        ${cta?.text || ctaText}
+    </a>
+</div>
+`;
+        fullHtml += ctaHtml;
     }
 
     fullHtml += `</body>\n</html>`;

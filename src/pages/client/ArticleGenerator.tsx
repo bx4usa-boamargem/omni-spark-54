@@ -169,6 +169,12 @@ export default function ArticleGenerator() {
         intent: 'informational' as const,
         target_words: formData.mode === 'authority' ? 2500 : 1200,
         image_count: formData.mode === 'authority' ? 8 : 4,
+        tone: 'professional',
+        point_of_view: 'we',
+        cta: {
+          text: `Falar com ${businessProfile?.company_name || 'Especialista'}`,
+          url: businessProfile?.whatsapp ? `https://wa.me/${businessProfile.whatsapp.replace(/\D/g, '')}` : '#'
+        }
       };
 
       console.log('[ArticleGenerator] create-generation-job payload:', enginePayload);

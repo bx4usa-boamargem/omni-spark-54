@@ -225,7 +225,7 @@ async function orchestrate(
     // STEP 5: BLUEPRINT BUILDER (AGENT 5)
     await updatePublicStatus(supabase, jobId, 'BLUEPRINT_BUILDER', false, lockId);
     const outlineStepId = await createStepOrFail(supabase, jobId, 'OUTLINE_GEN', { keyword: jobInput.keyword });
-    const blueprintResult = await withTimeout(executeBlueprintBuilder(jobInput, scoutResult.output, mapperResult.output.entities, trendResult.output, supabaseUrl, serviceKey), 60_000, 'BLUEPRINT_BUILDER');
+    const blueprintResult = await withTimeout(executeBlueprintBuilder(jobInput, scoutResult.output, mapperResult.output.entities, trendResult.output, supabaseUrl, serviceKey), 45_000, 'BLUEPRINT_BUILDER'); // Reduced from 60s
     totalApiCalls++;
     totalCostUsd += blueprintResult.aiResult.costUsd || 0;
     const outline = blueprintResult.output.outline;
@@ -240,7 +240,8 @@ async function orchestrate(
     // STEP 6: SECTION WRITER (AGENT 6 - CHUNKING)
     await updatePublicStatus(supabase, jobId, 'SECTION_WRITER', false, lockId);
     const contentStepId = await createStepOrFail(supabase, jobId, 'CONTENT_GEN', { keyword: jobInput.keyword });
-    const contentResult = await withTimeout(executeSectionWriter(jobInput, outline, mapperResult.output.entities, entityCoverage, supabaseUrl, serviceKey), 300_000, 'SECTION_WRITER'); // Long timeout for chunking
+    // Deno runtime has hard limits. Capping section writer to 120_000 (2 minutes) to leave room for final steps.
+    const contentResult = await withTimeout(executeSectionWriter(jobInput, outline, mapperResult.output.entities, entityCoverage, supabaseUrl, serviceKey), 120_000, 'SECTION_WRITER');
     totalApiCalls += outline.h2.length + 2;
     totalCostUsd += contentResult.rawCostUsd || 0;
     const articleData = contentResult.output as any;
@@ -256,11 +257,12 @@ async function orchestrate(
     articleId = saveOutput.article_id as string;
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', true, lockId);
 
-    // IMAGE GEN 
+    // DECOUPLED IMAGE GEN (Fire and Forget or parallel to avoid holding execution context)
     await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', false, lockId);
     try {
-      await withTimeout(executeImageGenerator(articleId, articleData, outline, jobInput, supabase, userClient), 180_000, 'IMAGE_GEN');
-    } catch (e) { console.warn("[V2] ImageGen failed:", e); }
+      // Reduced image timeout heavily to prevent orchestration kill. Usually image models are fast or they hang completely.
+      await withTimeout(executeImageGenerator(articleId, articleData, outline, jobInput, supabase, userClient), 45_000, 'IMAGE_GEN');
+    } catch (e) { console.warn("[V2] ImageGen failed or timeout, continuing:", e); }
     await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', true, lockId);
 
     // STEP 8: SCHEMA & QUALITY GATE (AGENT 7 & 8)

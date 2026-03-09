@@ -30,17 +30,23 @@ export async function executeBlueprintBuilder(
     const language = jobInput.language || 'pt-BR';
     const jobType = jobInput.job_type || 'article';
 
+    const tone = jobInput.tone || 'professional';
+    const pointOfView = jobInput.point_of_view || 'we';
+    const ctaContext = jobInput.cta ? `\n- CTA Target: ${jobInput.cta.text} (URL: ${jobInput.cta.url || 'N/A'})` : '';
+
     const wordHint = jobType === 'super_page'
         ? 'Support 3000-6000 words: 6-12 H2 sections, 2-4 H3 per H2.'
         : 'Support 1500-3000 words: 4-6 H2 sections, 2-3 H3 per H2.';
 
     const prompt = `You are a Master SEO Content Architect. Create a robust, intent-driven outline for a ${jobType}.
 
-TARGET:
+TARGET STRATEGY:
 - Keyword: ${keyword}
 - Location: ${city || 'Brazil'}
 - Niche: ${niche}
 - Language: ${language}
+- Tone: ${tone}
+- Point of View: ${pointOfView}${ctaContext}
 
 COMPETITIVE CONTEXT (Agent 1):
 ${scoutResult.serp_summary || 'No serp summary available.'}
@@ -55,7 +61,7 @@ Gaps to Cover: ${(trendResult.semantic_gaps || []).join(', ')}
 PAA Questions: ${(trendResult.paa_questions || []).join(', ')}
 
 ${wordHint}
-Include a clear, location-aware CTA idea at the end.
+Include a highly persuasive, location-aware CTA (Call To Action) idea at the end that perfectly transitions the reader to the target action.
 
 Return ONLY a valid JSON object in this exact format (no markdown, no code blocks):
 {

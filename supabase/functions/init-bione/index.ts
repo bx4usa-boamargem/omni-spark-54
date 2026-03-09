@@ -9,12 +9,26 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
+        const body = await req.json().catch(() => ({}));
+
         // Usar service_role para bypass de RLS
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
             { auth: { autoRefreshToken: false, persistSession: false } }
         );
+
+        // Discovery Mode
+        if (body.mode === 'list') {
+            const { data: blogs } = await supabaseAdmin.from('blogs').select('id, name, city, tenant_id');
+            const { data: niches } = await supabaseAdmin.from('niche_profiles').select('id, name, description');
+            const { data: subAccounts } = await supabaseAdmin.from('sub_accounts').select('id, tenant_id, blog_id');
+
+            return new Response(JSON.stringify({ blogs, niches, subAccounts }, null, 2), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        }
 
         const log: string[] = [];
 
