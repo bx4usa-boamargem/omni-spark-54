@@ -84,7 +84,10 @@ export async function executeSchemaAndQuality(
     await userClient.from("articles").update({
         quality_gate_status: qualityGateStatus,
         schema_json: schemaJson as unknown,
-        ...(passed ? { ready_for_publish_at: new Date().toISOString() } : {}),
+        ...(passed ? {
+            status: "ready_for_publish",
+            ready_for_publish_at: new Date().toISOString(),
+        } : {}),
     }).eq("id", articleId);
 
     await supabase.from("quality_gate_audits").insert({

@@ -7,6 +7,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -42,7 +43,6 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch broken link details with article content
@@ -102,15 +102,8 @@ serve(async (req) => {
         const surroundingContext = article.content.substring(contextStart, contextEnd);
 
         // Ask AI to rewrite the section without the broken link
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
+        const responseResult = await callWriter({
+          messages: [
               {
                 role: 'system',
                 content: 'Você é um editor de conteúdo. Reescreva o trecho de texto removendo ou substituindo o link quebrado, mantendo o sentido original. Retorne APENAS o trecho reescrito, sem explicações.'
@@ -120,13 +113,12 @@ serve(async (req) => {
                 content: `O link "${brokenLink.url}" está quebrado no seguinte trecho:\n\n"${surroundingContext}"\n\nTexto âncora do link: "${brokenLink.anchor_text || 'link'}"\n\nReescreva este trecho removendo o link quebrado, mas mantendo o sentido do texto e a fluidez da leitura.`
               }
             ],
-            temperature: 0.7,
-            max_tokens: 500,
-          }),
+          temperature: 0.7,
+          maxTokens: 500,
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = { choices: [{ message: { content: responseResult.data?.content || "" } }] };
           const rewrittenText = data.choices?.[0]?.message?.content?.trim();
 
           if (rewrittenText) {

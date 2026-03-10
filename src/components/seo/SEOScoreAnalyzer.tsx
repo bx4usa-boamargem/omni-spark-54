@@ -37,6 +37,9 @@ interface SEOScoreAnalyzerProps {
   keywords: string[];
   excerpt: string;
   featuredImage?: string | null;
+  // Advanced SEO props (E-E-A-T)
+  authorName?: string | null;
+  publishedAt?: string | null;
   // SEO fix callbacks
   onFixTitle?: () => void;
   onFixMeta?: () => void;
@@ -78,6 +81,8 @@ export function SEOScoreAnalyzer({
   keywords, 
   excerpt,
   featuredImage,
+  authorName,
+  publishedAt,
   onFixTitle,
   onFixMeta,
   onFixContent,
@@ -386,8 +391,116 @@ export function SEOScoreAnalyzer({
       });
     }
 
+    // ── 7. Schema.org / JSON-LD ─────────────────────────────────────────
+    const hasSchemaLD = contentText.includes('"@type"') || contentText.includes('application/ld+json');
+    checks.push({
+      id: 'schema',
+      label: 'Schema.org (JSON-LD)',
+      status: hasSchemaLD ? 'success' : 'warning',
+      message: hasSchemaLD
+        ? 'Structured data detectado no conteúdo'
+        : 'JSON-LD não encontrado',
+      suggestion: !hasSchemaLD
+        ? 'Adicione markup Article ou FAQPage para rich results e IA'
+        : undefined,
+      icon: <Search className="h-4 w-4" />,
+      points: hasSchemaLD ? 10 : 3,
+      maxPoints: 10,
+    });
+
+    // ── 8. E-E-A-T (Autor, Data, Fontes) ───────────────────────────────
+    const hasAuthor = !!authorName && authorName.trim().length > 2;
+    const hasDate   = !!publishedAt;
+    const hasSources = /https?:\/\//.test(contentText) ||
+      /fonte:|source:|according to|segundo|de acordo com/i.test(contentText);
+    const eeaScore = (hasAuthor ? 1 : 0) + (hasDate ? 1 : 0) + (hasSources ? 1 : 0);
+    checks.push({
+      id: 'eeat',
+      label: 'E-E-A-T (Autor, Data, Fontes)',
+      status: eeaScore === 3 ? 'success' : eeaScore >= 2 ? 'warning' : 'error',
+      message: eeaScore === 3
+        ? 'Autor, data e fontes presentes'
+        : `Faltam: ${[!hasAuthor && 'autor', !hasDate && 'data', !hasSources && 'fontes'].filter(Boolean).join(', ')}`,
+      suggestion: eeaScore < 3
+        ? 'Adicione nome do autor, data de publicação e links para fontes'
+        : undefined,
+      icon: <Sparkles className="h-4 w-4" />,
+      points: eeaScore === 3 ? 10 : eeaScore * 3,
+      maxPoints: 10,
+    });
+
+    // ── 9. Heading Hierarchy (H1/H2/H3) ────────────────────────────────
+    const h1Count = (contentText.match(/<h1[\s>]/gi) || []).length + (contentText.match(/^# /gm) || []).length;
+    const h2Count = (contentText.match(/<h2[\s>]/gi) || []).length + (contentText.match(/^## /gm) || []).length;
+    const h3Count = (contentText.match(/<h3[\s>]/gi) || []).length + (contentText.match(/^### /gm) || []).length;
+    const headingStatus = h1Count === 1 && h2Count >= 2 ? 'success' : h1Count <= 1 && h2Count >= 1 ? 'warning' : 'error';
+    checks.push({
+      id: 'headings',
+      label: 'Hierarquia de Títulos',
+      status: headingStatus,
+      message: `H1: ${h1Count} · H2: ${h2Count} · H3: ${h3Count}`,
+      suggestion: headingStatus !== 'success'
+        ? 'Use exatamente 1 H1, mínimo 2 H2 e H3 para subtópicos'
+        : undefined,
+      icon: <Hash className="h-4 w-4" />,
+      points: headingStatus === 'success' ? 10 : headingStatus === 'warning' ? 5 : 0,
+      maxPoints: 10,
+    });
+
+    // ── 10. Internal Links ────────────────────────────────────────────
+    const internalLinks = (contentText.match(/href=["'][/][^"']+["']/gi) || []).length +
+      (contentText.match(/\[.+?\]\(\/[^)]+\)/g) || []).length;
+    checks.push({
+      id: 'internal_links',
+      label: 'Links Internos',
+      status: internalLinks >= 2 ? 'success' : internalLinks === 1 ? 'warning' : 'error',
+      message: `${internalLinks} link(s) interno(s)`,
+      suggestion: internalLinks < 2
+        ? 'Adicione pelo menos 2 links internos para outros artigos'
+        : undefined,
+      icon: <Hash className="h-4 w-4" />,
+      points: internalLinks >= 2 ? 10 : internalLinks * 3,
+      maxPoints: 10,
+    });
+
+    // ── 11. Reading Time ──────────────────────────────────────────────
+    const readingMinutes = Math.round(wordCount / 200);
+    const readingStatus = readingMinutes >= 5 && readingMinutes <= 15 ? 'success' : readingMinutes >= 3 ? 'warning' : 'error';
+    checks.push({
+      id: 'reading_time',
+      label: 'Tempo de Leitura',
+      status: readingStatus,
+      message: `~${readingMinutes} min · ${wordCount} palavras`,
+      suggestion: readingStatus !== 'success'
+        ? readingMinutes < 5 ? 'Expanda o conteúdo para 5-15 min de leitura' : 'Artigo muito longo — considere dividir em partes'
+        : undefined,
+      icon: <AlignLeft className="h-4 w-4" />,
+      points: readingStatus === 'success' ? 5 : readingStatus === 'warning' ? 3 : 0,
+      maxPoints: 5,
+    });
+
+    // ── 12. AI-Friendly Format ────────────────────────────────────────
+    const hasQA     = /\?(\r?\n|\s*<br)/i.test(contentText) || /\?\s*\n/i.test(contentText);
+    const hasBullets = /<ul>|<li>/.test(contentText) || /^\s*[-*•]/m.test(contentText);
+    const hasDirectAnswer = /^(é |são |o (que|como)|como |quando |por que |qual )/im.test(contentText.substring(0, 500));
+    const aiScore = (hasQA ? 1 : 0) + (hasBullets ? 1 : 0) + (hasDirectAnswer ? 1 : 0);
+    checks.push({
+      id: 'ai_friendly',
+      label: 'AI-Friendly (GPT/Gemini/Perplexity)',
+      status: aiScore >= 2 ? 'success' : aiScore === 1 ? 'warning' : 'error',
+      message: aiScore >= 2
+        ? 'Conteúdo estruturado para extrações por IA'
+        : 'Pouco amigável para buscas por IA',
+      suggestion: aiScore < 2
+        ? 'Inclua: resposta direta no 1º parágrafo, listas de tópicos, seção FAQ'
+        : undefined,
+      icon: <Sparkles className="h-4 w-4" />,
+      points: aiScore >= 2 ? 10 : aiScore * 3,
+      maxPoints: 10,
+    });
+
     return checks;
-  }, [title, content, metaDescription, keywords, excerpt, featuredImage]);
+  }, [title, content, metaDescription, keywords, excerpt, featuredImage, authorName, publishedAt]);
 
   const totalScore = useMemo(() => {
     const earned = seoChecks.reduce((acc, check) => acc + check.points, 0);

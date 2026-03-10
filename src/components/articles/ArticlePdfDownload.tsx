@@ -35,7 +35,7 @@ export function ArticlePdfDownload({
 
   const handleGeneratePdf = async () => {
     setIsGenerating(true);
-    
+
     try {
       toast.info('Gerando e-Book PDF...', { duration: 3000 });
 
@@ -46,17 +46,19 @@ export function ArticlePdfDownload({
       if (error) throw error;
 
       if (data?.success && data?.html) {
-        // Convert HTML to PDF client-side using jsPDF + html2canvas
-        await generatePdfFromHtml(data.html, articleTitle);
-        
+        // Use browser's native print-to-PDF with the HTML from server
+        openPrintWindow(data.html, articleTitle);
+
         if (data.pdf_url) {
           setPdfUrl(data.pdf_url);
           onPdfGenerated?.(data.pdf_url);
         }
-        
-        toast.success('e-Book PDF gerado com sucesso!');
+
+        toast.success('e-Book aberto para download! Use "Salvar como PDF" no diálogo de impressão.');
       } else if (data?.error) {
         throw new Error(data.error);
+      } else {
+        throw new Error('Resposta inválida do servidor');
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -68,78 +70,44 @@ export function ArticlePdfDownload({
     }
   };
 
-  const generatePdfFromHtml = async (html: string, title: string) => {
-    // Dynamic import for jsPDF and html2canvas
-    const { default: jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
-
-    // Create temporary container
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.width = '794px'; // A4 width in pixels at 96 DPI
-    container.style.background = 'white';
-    document.body.appendChild(container);
-
-    try {
-      // Render to canvas
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 794,
-        windowHeight: 1123 // A4 height
+  /**
+   * Opens the ebook HTML in a new window and triggers the browser's print dialog.
+   * The browser can save as PDF natively, preserving all clickable links.
+   */
+  const openPrintWindow = (html: string, title: string) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      toast.error('Popup bloqueado', {
+        description: 'Permita popups para este site e tente novamente.'
       });
-
-      // Create PDF
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 0;
-      const contentWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * contentWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = margin;
-
-      // Add first page
-      pdf.addImage(imgData, 'JPEG', margin, position, contentWidth, imgHeight);
-      heightLeft -= (pageHeight - margin * 2);
-
-      // Add more pages if needed
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + margin;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', margin, position, contentWidth, imgHeight);
-        heightLeft -= (pageHeight - margin * 2);
-      }
-
-      // Download
-      const filename = title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .substring(0, 50);
-      
-      pdf.save(`${filename}-ebook.pdf`);
-    } finally {
-      document.body.removeChild(container);
+      return;
     }
+
+    // Write the ebook HTML directly to the print window
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    // Wait for fonts/images to load, then trigger print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 800);
+    };
+
+    // Fallback if onload doesn't fire
+    setTimeout(() => {
+      if (printWindow && !printWindow.closed) {
+        printWindow.focus();
+        printWindow.print();
+      }
+    }, 2500);
   };
 
   const handleCopyLink = async () => {
     if (!pdfUrl) return;
-    
+
     try {
       await navigator.clipboard.writeText(pdfUrl);
       setCopied(true);
@@ -183,7 +151,7 @@ export function ArticlePdfDownload({
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Baixar artigo como e-Book PDF</p>
+            <p>Baixar artigo como e-Book PDF (com links internos e externos)</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -256,7 +224,7 @@ export function ArticlePdfDownload({
             className="gap-2"
           >
             <ExternalLink className="h-4 w-4" />
-            Abrir PDF
+            Abrir HTML
           </Button>
 
           <Button

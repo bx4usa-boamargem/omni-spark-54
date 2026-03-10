@@ -48,6 +48,7 @@ import EbookDetails from "./pages/EbookDetails";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import PublicEbook from "./pages/PublicEbook";
+import PublicSmartLink from "./pages/PublicSmartLink";
 import ClientReview from "./pages/ClientReview";
 import Help from "./pages/Help";
 import HelpArticle from "./pages/HelpArticle";
@@ -70,6 +71,7 @@ import ServicesEN from "./pages/en/ServicesEN";
 import Integrations from "./pages/Integrations";
 import OAuthCallback from "./pages/auth/OAuthCallback";
 import ArticleQueuePage from "./pages/ArticleQueuePage";
+import SocialCallback from "./pages/SocialCallback";
 
 // Client (SubAccount) pages
 import ClientDashboard from "./pages/client/ClientDashboard";
@@ -107,6 +109,8 @@ import GenerationNew from "./pages/client/GenerationNew";
 import GenerationDetail from "./pages/client/GenerationDetail";
 import WordPressCallback from "./pages/cms/WordPressCallback";
 import DebugGenerate from "./pages/DebugGenerate";
+import { WorkflowMonitor } from "./pages/admin/WorkflowMonitor";
+import ArticleLinksDashboard from "./pages/client/ArticleLinksDashboard";
 
 const queryClient = new QueryClient();
 
@@ -219,6 +223,7 @@ const AdminRoutes = () => (
     <Routes>
       <Route index element={<Admin />} />
       <Route path="validation" element={<ValidationDashboard />} />
+      <Route path="workflows" element={<WorkflowMonitor />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </PlatformAdminGuard>
@@ -269,6 +274,7 @@ const ClientRoutes = () => (
           <Route path="review/:id" element={<ClientReviewCenter />} />
           <Route path="ebooks" element={<ClientEbooks />} />
           <Route path="ebooks/:id" element={<ClientEbookEditor />} />
+          <Route path="links" element={<ArticleLinksDashboard />} />
 
           {/* Operação */}
           <Route path="automation" element={<ClientAutomation />} />
@@ -278,6 +284,7 @@ const ClientRoutes = () => (
           <Route path="territories" element={<ClientTerritoryAnalytics />} />
           <Route path="domains" element={<ClientDomains />} />
           <Route path="settings" element={<ClientSettings />} />
+          <Route path="integrations" element={<Integrations />} />
           <Route path="connectors" element={<ClientConnectors />} />
 
           {/* Ajuda */}
@@ -319,6 +326,7 @@ const PlatformRoutes = () => (
     <Route path="/cms/wordpress-callback" element={<WordPressCallback />} />
     <Route path="/invite/accept" element={<AcceptInvite />} />
     <Route path="/oauth/callback" element={<OAuthCallback />} />
+    <Route path="/app/social/callback" element={<SocialCallback />} />
 
     {/* Legacy auth redirects */}
     <Route path="/auth" element={<Navigate to="/login" replace />} />
@@ -337,6 +345,7 @@ const PlatformRoutes = () => (
     <Route path="/en/services" element={<ServicesEN />} />
     <Route path="/pricing" element={<Pricing />} />
     <Route path="/ebook/:slug" element={<PublicEbook />} />
+    <Route path="/a/:slug" element={<PublicSmartLink />} />
     <Route path="/review/:token" element={<ClientReview />} />
 
     {/*

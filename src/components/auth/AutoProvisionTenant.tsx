@@ -69,13 +69,13 @@ export function AutoProvisionTenant() {
       if (data?.status === 'already_provisioned' || data?.status === 'provisioned') {
         setStatusMessage('Conta configurada! Redirecionando...');
         
-        // Refresh tenant context
-        await refetch();
-        
         toast.success('Conta configurada com sucesso!');
         
-        // Navigate to dashboard
-        safeRedirect('/client/dashboard');
+        // Hard reload garante que TenantContext re-hidrata com o tenant já no banco.
+        // navigate() causa loop porque TenantGuard re-verifica hasTenant antes do refetch() completar.
+        setTimeout(() => {
+          window.location.replace('/client/dashboard');
+        }, 500);
         return;
       }
 

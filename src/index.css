@@ -208,6 +208,65 @@
     --sidebar-border: 0 0% 16%;
     --sidebar-ring: 277 76% 40%;
   }
+
+  /* =====================================================
+     ARTICLE PREVIEW LIGHT ISOLATION
+     Força o tema claro no preview do artigo no painel admin.
+     Necessário porque o preview simula o blog público (fundo branco),
+     mas o painel admin pode estar em dark mode onde text-foreground = branco.
+     Essa classe sobrescreve as CSS vars do dark mode com valores do light mode.
+     ===================================================== */
+  .article-preview-light {
+    /* Cores base - light mode */
+    --background: 277 40% 98%;
+    --foreground: 0 0% 6%;
+
+    --card: 277 30% 100%;
+    --card-foreground: 0 0% 6%;
+
+    --popover: 277 20% 100%;
+    --popover-foreground: 0 0% 6%;
+
+    /* Primary - FedEx Purple */
+    --primary: 277 76% 31%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 277 20% 96%;
+    --secondary-foreground: 0 0% 6%;
+
+    --muted: 277 15% 95%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 24 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 277 20% 90%;
+    --input: 277 20% 90%;
+    --ring: 270 51% 36%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Semantic tokens - light */
+    --text-main: 240 15% 12%;
+    --text-muted: 240 6% 45%;
+    --text-soft: 240 4% 60%;
+    --bg-main: 277 40% 98%;
+    --bg-card: 0 0% 100%;
+    --border-soft: 277 20% 90%;
+    --accent-primary: 270 60% 55%;
+    --accent-secondary: 25 85% 55%;
+
+    /* Garantia de fundo branco e texto escuro */
+    background-color: hsl(0 0% 100%);
+    color: hsl(0 0% 6%);
+    color-scheme: light;
+  }
 }
 
 @layer base {

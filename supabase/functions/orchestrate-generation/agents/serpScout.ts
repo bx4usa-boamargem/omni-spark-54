@@ -31,7 +31,7 @@ export async function executeSerpScout(
             console.log(`[AGENT_1_SERP_SCOUT] Fetching real SERP data for query: "${searchQuery}"`);
             const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${googleApiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&gl=br&hl=pt-BR&num=10`;
 
-            const response = await fetch(searchUrl);
+            const response = await fetch(searchUrl, { signal: AbortSignal.timeout(10_000) });
             if (response.ok) {
                 const data = await response.json();
                 customSearchResults = data.items || [];

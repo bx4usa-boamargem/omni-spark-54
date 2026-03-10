@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -41,10 +42,11 @@ serve(async (req) => {
   }
 
   try {
-    const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || Deno.env.get("GEMINI_API_KEY");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { blogId, niche, country, territory, territoryId, saveSignals = false }: TrendRequest = await req.json();
@@ -238,57 +240,20 @@ Retorne apenas o JSON, sem explicações.`;
       console.log("Using Lovable AI fallback for trends...");
       provider = "lovable_ai";
 
-      const lovableResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
+      const lovableResponseResult = await callWriter({
+        messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          temperature: 0.7,
-        }),
+        temperature: 0.7,
+        maxTokens: 4096,
       });
 
-      if (!lovableResponse.ok) {
-        const errorText = await lovableResponse.text();
-        console.error("Lovable AI error:", lovableResponse.status, errorText);
-        
-        if (lovableResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (lovableResponse.status === 402) {
-          return new Response(
-            JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        throw new Error(`AI Gateway error: ${lovableResponse.status}`);
+      if (!lovableResponseResult.success || !lovableResponseResult.data?.content) {
+        console.error("[AI] Writer failed:", lovableResponseResult.fallbackReason);
+        throw new Error(`AI error: ${lovableResponseResult.fallbackReason}`);
       }
-
-      const lovableData = await lovableResponse.json();
-      const content = lovableData.choices?.[0]?.message?.content || "";
-
-      try {
-        const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
-        trends = JSON.parse(cleanContent);
-        console.log("Lovable AI trends parsed successfully");
-      } catch (parseError) {
-        console.error("Failed to parse Lovable AI response:", content);
-        trends = { trends: [] };
-      }
-    }
-
-    if (!trends) {
-      throw new Error("No AI provider available");
-    }
+    } // end: if (!trends && LOVABLE_API_KEY)
 
     // ============================================
     // OMNICORE: Save signals to omnicore_signals table

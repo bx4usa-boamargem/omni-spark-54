@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -167,43 +168,22 @@ serve(async (req) => {
 
     console.log(`[POLISH] Pre-validation issues: ${preValidation.issues.join(', ')}`);
 
-    // Call Lovable AI Gateway for polishing
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
-    }
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: POLISHING_PROMPT
-          },
-          {
-            role: "user",
-            content: `[COLE AQUI O ARTIGO GERADO PELA IA]\n\n${content}`
-          }
-        ],
-        temperature: 0.2, // Low temperature for precision
-        max_tokens: 16000
-      })
+    // Call AI writer (agnóstico: OpenAI → Gemini fallback) for polishing
+    const polishResult = await callWriter({
+      messages: [
+        { role: 'system', content: POLISHING_PROMPT },
+        { role: 'user', content: `[COLE AQUI O ARTIGO GERADO PELA IA]\n\n${content}` }
+      ],
+      temperature: 0.2,
+      maxTokens: 16000,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[POLISH] AI Gateway error: ${response.status} - ${errorText}`);
-      throw new Error(`AI Gateway error: ${response.status}`);
+    if (!polishResult.success || !polishResult.data?.content) {
+      console.error('[POLISH] AI writer failed:', polishResult.fallbackReason);
+      throw new Error(`AI polisher error: ${polishResult.fallbackReason}`);
     }
 
-    const aiResult = await response.json();
-    let polishedContent = aiResult.choices?.[0]?.message?.content || '';
+    let polishedContent = polishResult.data.content;
 
     if (!polishedContent.trim()) {
       console.warn('[POLISH] AI returned empty content - using original');

@@ -257,20 +257,64 @@ async function orchestrate(
     articleId = saveOutput.article_id as string;
     await updatePublicStatus(supabase, jobId, 'SAVE_ARTICLE', true, lockId);
 
-    // DECOUPLED IMAGE GEN (Fire and Forget or parallel to avoid holding execution context)
+    // DECOUPLED IMAGE GEN — timeout de 90s para cobrir Google Places + upload Supabase Storage
     await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', false, lockId);
+    const imageStepId = await createStepOrFail(supabase, jobId, 'IMAGE_GEN', { article_id: articleId });
     try {
-      // Reduced image timeout heavily to prevent orchestration kill. Usually image models are fast or they hang completely.
-      await withTimeout(executeImageGenerator(articleId, articleData, outline, jobInput, supabase, userClient), 45_000, 'IMAGE_GEN');
-    } catch (e) { console.warn("[V2] ImageGen failed or timeout, continuing:", e); }
+      // 90s: Google Places textsearch(8s) + photo(8s) + Gemini IA(20s) + upload(5s) × até 6 seções
+      const imageResult = await withTimeout(
+        executeImageGenerator(articleId, articleData, outline, jobInput, supabase, userClient),
+        90_000,
+        'IMAGE_GEN'
+      );
+      await supabase.from('generation_steps').update({
+        status: 'completed',
+        output: imageResult,
+        completed_at: new Date().toISOString(),
+      }).eq('id', imageStepId);
+      console.log(`[IMAGE_GEN] ✅ heroUrl=${imageResult.heroUrl ?? 'none'} | sections=${imageResult.sectionCount ?? 0}`);
+    } catch (e) {
+      const imgErr = e instanceof Error ? e.message : String(e);
+      console.error('[IMAGE_GEN] ❌ Falhou ou timeout — artigo salvo sem imagens. Causa:', imgErr);
+      await supabase.from('generation_steps').update({
+        status: 'failed',
+        output: { error: imgErr },
+        completed_at: new Date().toISOString(),
+      }).eq('id', imageStepId);
+      // Não propaga — artigo já salvo; imagens são otimização, não bloqueio
+    }
     await updatePublicStatus(supabase, jobId, 'IMAGE_GEN', true, lockId);
 
     // STEP 8: SCHEMA & QUALITY GATE (AGENT 7 & 8)
     await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', false, lockId);
+    const qgStepId = await createStepOrFail(supabase, jobId, 'QUALITY_GATE', { article_id: articleId });
     try {
-      const seoScore = await executeSeoScoreStep(articleId, articleData.title || jobInput.keyword, articleData.html_article || '', jobInput.keyword || '', jobInput.blog_id as string, supabaseUrl, serviceKey);
-      const qgOutput = await executeSchemaAndQuality(articleId, jobInput.blog_id as string, articleData, entityCoverage.coverageScore, seoScore, jobType, jobInput, supabase, userClient);
-    } catch (e) { console.warn("[V2] QualityGate failed:", e); }
+      const seoScore = await withTimeout(
+        executeSeoScoreStep(articleId, articleData.title || jobInput.keyword, articleData.html_article || '', jobInput.keyword || '', jobInput.blog_id as string, supabaseUrl, serviceKey),
+        30_000,
+        'SEO_SCORE'
+      );
+      const qgOutput = await withTimeout(
+        executeSchemaAndQuality(articleId, jobInput.blog_id as string, articleData, entityCoverage.coverageScore, seoScore, jobType, jobInput, supabase, userClient),
+        30_000,
+        'SCHEMA_QUALITY'
+      );
+      await supabase.from('generation_steps').update({
+        status: 'completed',
+        output: { seo_score: seoScore, quality_gate: qgOutput },
+        completed_at: new Date().toISOString(),
+      }).eq('id', qgStepId);
+      console.log(`[QUALITY_GATE] ✅ SEO Score: ${seoScore}`);
+    } catch (e) {
+      const qgErr = e instanceof Error ? e.message : String(e);
+      console.error('[QUALITY_GATE] ❌ Falhou — artigo salvo sem score finalizado. Causa:', qgErr);
+      await supabase.from('generation_steps').update({
+        status: 'failed',
+        output: { error: qgErr },
+        completed_at: new Date().toISOString(),
+      }).eq('id', qgStepId);
+      // Não propaga — artigo salvo; score é otimização, não bloqueio
+    }
     await updatePublicStatus(supabase, jobId, 'QUALITY_GATE', true, lockId);
 
     // COMPLETE

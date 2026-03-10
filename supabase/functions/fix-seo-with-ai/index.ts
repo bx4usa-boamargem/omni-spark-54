@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { 
   computeSeoScore, 
@@ -62,7 +63,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -100,10 +101,6 @@ serve(async (req) => {
     const densityBefore = computeKeywordDensity(cleanContentBefore, keywords);
 
     // 3. Generate optimized content with AI
-    if (!apiKey) {
-      throw new Error("AI API key not configured");
-    }
-
     const mainKeyword = keywords[0];
     const allKeywords = keywords.join(", ");
 
@@ -134,47 +131,28 @@ REGRAS:
 
 Responda APENAS com a meta description, sem aspas ou explicações.`;
 
-    // Parallel AI calls for title and meta
-    const [titleResponse, metaResponse] = await Promise.all([
-      fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
-            { role: "user", content: titlePrompt }
-          ],
-          max_tokens: 100,
-          temperature: 0.7
-        })
+    // Parallel AI calls for title and meta via callWriter
+    const [titleResult, metaResult] = await Promise.all([
+      callWriter({
+        messages: [
+          { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
+          { role: "user", content: titlePrompt }
+        ],
+        maxTokens: 100,
+        temperature: 0.7,
       }),
-      fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
-            { role: "user", content: metaPrompt }
-          ],
-          max_tokens: 200,
-          temperature: 0.7
-        })
+      callWriter({
+        messages: [
+          { role: "system", content: "Você é um especialista em SEO. Responda de forma direta e precisa. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano." },
+          { role: "user", content: metaPrompt }
+        ],
+        maxTokens: 200,
+        temperature: 0.7,
       })
     ]);
 
-    const titleData = await titleResponse.json();
-    const metaData = await metaResponse.json();
-
-    let newTitle = titleData.choices?.[0]?.message?.content?.trim() || article.title;
-    let newMeta = metaData.choices?.[0]?.message?.content?.trim() || article.meta_description;
+    let newTitle = titleResult.data?.content?.trim() || article.title;
+    let newMeta = metaResult.data?.content?.trim() || article.meta_description;
 
     // Clean up AI responses
     newTitle = newTitle.replace(/^["']|["']$/g, '').trim();
@@ -209,24 +187,16 @@ REGRAS OBRIGATÓRIAS:
 
 Responda APENAS com o HTML expandido, sem explicações.`;
 
-      const contentResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
+      const contentResponseResult = await callWriter({
+        messages: [
             { role: "system", content: "Você é um redator SEO especialista. Expanda o conteúdo mantendo a qualidade e estrutura HTML. REGRA CRÍTICA: Mantenha TODA a estrutura HTML. NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições." },
             { role: "user", content: contentPrompt }
           ],
-          max_tokens: 4000,
-          temperature: 0.7
-        })
+        temperature: 0.7,
+        maxTokens: 4000,
       });
 
-      const contentData = await contentResponse.json();
+      const contentData = { choices: [{ message: { content: contentResponseResult.data?.content || "" } }] };
       let expandedContent = contentData.choices?.[0]?.message?.content?.trim();
       
       if (expandedContent && expandedContent.length > (article.content?.length || 0)) {

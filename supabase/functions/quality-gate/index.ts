@@ -49,16 +49,22 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { articleId, blogId } = await req.json();
+    const body = await req.json();
+
+    // Support both DAG payload format and legacy format
+    const articleId = body.payload?.article_id || body.articleId;
+    const blogId = body.payload?.blog_id || body.blogId;
+    const tenantId = body.tenant_id;
+    const jobId = body.job_id;
 
     if (!articleId || !blogId) {
       return new Response(
-        JSON.stringify({ error: "articleId and blogId are required" }),
+        JSON.stringify({ error: "articleId/article_id and blogId/blog_id are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[QUALITY-GATE] Starting validation for article ${articleId}`);
+    console.log(`[QUALITY-GATE] Starting validation for article ${articleId}${jobId ? ` (job: ${jobId})` : ''}`);
 
     // Fetch article
     const { data: article, error: articleError } = await supabase
@@ -483,6 +489,10 @@ serve(async (req) => {
       .update({
         quality_gate_status: approved ? 'approved' : 'pending',
         quality_gate_attempts: (article.quality_gate_attempts || 0) + 1,
+        ...(approved ? {
+          status: 'ready_for_publish',
+          ready_for_publish_at: new Date().toISOString(),
+        } : {}),
       })
       .eq("id", articleId);
 

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateAutoKeywords } from '../_shared/keywordGenerator.ts';
 import { 
@@ -75,11 +76,6 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -266,36 +262,19 @@ Responda APENAS com a nova meta description, sem aspas ou explicações.`;
     console.log(`Improving SEO item: ${type} with keywords: ${keywordList}, model: ${textModel}`);
     console.log(`Business context: ${businessContext.company_name} (${detectConclusionType(businessContext.niche)})`);
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: textModel,
-        messages: [
+    const responseResult = await callWriter({
+      messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: type === 'content' || type === 'density' ? 8000 : 500,
-      }),
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API Error:', errorText);
-      throw new Error(`AI API error: ${response.status}`);
+    if (!responseResult.success || !responseResult.data?.content) {
+      console.error("[AI] Writer failed:", responseResult.fallbackReason);
+      throw new Error(`AI error: ${responseResult.fallbackReason}`);
     }
-
-    const data = await response.json();
-    let improvedValue = data.choices?.[0]?.message?.content?.trim();
-
-    if (!improvedValue) {
-      throw new Error('No response from AI');
-    }
-
     // GUARDRAILS: Validate and restore images if needed
     let warning = null;
     if ((type === 'content' || type === 'density') && originalImages.length > 0) {

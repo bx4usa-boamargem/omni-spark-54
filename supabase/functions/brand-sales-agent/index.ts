@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -41,11 +42,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-
-    if (!lovableApiKey) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -232,42 +228,18 @@ Lembre-se: você é um vendedor humano da ${companyName}, não um bot.`;
       { role: "user", content: message },
     ];
 
-    // 7. Call Lovable AI Gateway
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: messagesForAI,
-        max_tokens: 200,
-        temperature: 0.7,
-      }),
+    // 7. Call AI via callWriter
+    const aiResponseResult = await callWriter({
+      messages: messagesForAI,
+      temperature: 0.7,
+      maxTokens: 600,
     });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI Gateway error:", aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Sistema temporariamente sobrecarregado. Tente novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Serviço temporariamente indisponível." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error("AI request failed");
+    if (!aiResponseResult.success || !aiResponseResult.data?.content) {
+      console.error("[AI] Writer failed:", aiResponseResult.fallbackReason);
+      throw new Error(`AI error: ${aiResponseResult.fallbackReason}`);
     }
-
-    const aiData = await aiResponse.json();
+    const aiData = { choices: [{ message: { content: aiResponseResult.data?.content || "" } }] };
     let assistantMessage = aiData.choices?.[0]?.message?.content || "Desculpe, não consegui processar sua mensagem. Pode repetir?";
     
     // Calculate tokens used

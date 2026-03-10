@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -426,12 +427,6 @@ serve(async (req) => {
       services = [],
       template_type = 'service_authority_v1'
     } = await req.json();
-    
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
 
     // Validate template type
     const validTemplates: LandingPageTemplate[] = ['service_authority_v1', 'institutional_v1', 'specialist_authority_v1'];
@@ -454,46 +449,19 @@ serve(async (req) => {
       servicesArray
     );
 
-    const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
+    const aiResResult = await callWriter({
+      messages: [
           { role: 'system', content: systemPrompt }, 
           { role: 'user', content: `Gerar Super Página ${selectedTemplate} para ${companyName} em ${cityValue}. Serviços: ${servicesArray.join(', ')}` }
         ],
-        response_format: { type: 'json_object' }
-      })
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    if (!aiRes.ok) {
-      const errorText = await aiRes.text();
-      console.error('[generate-landing-page] AI error:', errorText);
-      
-      if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Rate limit exceeded. Please try again later.' 
-        }), {
-          status: 429, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      throw new Error(`AI request failed: ${aiRes.status}`);
+    if (!aiResResult.success || !aiResResult.data?.content) {
+      console.error("[AI] Writer failed:", aiResResult.fallbackReason);
+      throw new Error(`AI error: ${aiResResult.fallbackReason}`);
     }
-
-    const aiData = await aiRes.json();
-    const content = aiData.choices?.[0]?.message?.content;
-    
-    if (!content) {
-      throw new Error('No content in AI response');
-    }
-
     const pageData = JSON.parse(content);
     
     // Ensure template field is set correctly

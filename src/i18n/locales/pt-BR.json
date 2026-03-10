@@ -55,6 +55,10 @@
         "name": "Webhook",
         "description": "Integre via API personalizada"
       },
+      "gsc": {
+        "name": "Google Search Console",
+        "description": "Monitore indexação, palavras-chave e desempenho orgânico"
+      },
       "ga": {
         "name": "Google Analytics",
         "description": "Acompanhe métricas de tráfego"

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -31,11 +32,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
 
-    if (!lovableApiKey) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -99,37 +96,22 @@ FAQ: ${JSON.stringify(article.faq || [])}
 Content (Markdown - keep this format):
 ${article.content || ''}`;
 
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
+        const responseResult = await callWriter({
+          messages: [
               { role: 'system', content: 'You are OMNISEEN AI, the intelligent virtual assistant of OMNISEEN. You are a professional translator. Always respond with valid JSON only, no markdown formatting.' },
               { role: 'user', content: prompt }
             ],
-          }),
+          temperature: 0.7,
+          maxTokens: 4096,
         });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            results[targetLang] = { success: false, error: 'Rate limit exceeded' };
-            continue;
-          }
-          if (response.status === 402) {
-            results[targetLang] = { success: false, error: 'Payment required' };
-            continue;
-          }
-          const errorText = await response.text();
-          console.error(`AI gateway error for ${targetLang}:`, response.status, errorText);
+        if (!responseResult.success || !responseResult.data?.content) {
+          console.error(`AI Writer failed for ${targetLang}:`, responseResult.fallbackReason);
           results[targetLang] = { success: false, error: 'AI translation failed' };
           continue;
         }
 
-        const aiResponse = await response.json();
+        const aiResponse = { choices: [{ message: { content: responseResult.data?.content || "" } }] };
         const translatedContent = aiResponse.choices?.[0]?.message?.content;
 
         if (!translatedContent) {

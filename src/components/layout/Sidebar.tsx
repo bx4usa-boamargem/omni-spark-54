@@ -21,6 +21,7 @@ import {
   LayoutGrid,
   Megaphone,
   Plug,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,7 @@ export function Sidebar({ blogSlug, onSignOut, userRole }: SidebarProps) {
     ...(hasPermission("team.manage") ? [{ icon: Users, label: t('sidebar.account'), path: "/client/account" }] : []),
     ...(hasPermission("blog.settings") ? [{ icon: Settings, label: t('sidebar.settings'), path: "/client/settings" }] : []),
     ...(isPlatformAdmin ? [{ icon: Shield, label: t('sidebar.adminPanel'), path: "/admin" }] : []),
+    ...(isPlatformAdmin ? [{ icon: Activity, label: t('sidebar.workflowMonitor', 'Monitor de Workflows'), path: "/admin/workflows" }] : []),
     { icon: LayoutGrid, label: t('sidebar.quickAccess'), path: "/client/quick-access" },
   ];
 

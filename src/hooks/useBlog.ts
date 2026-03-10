@@ -74,19 +74,7 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 1. Check if user is platform admin
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const adminRoles = ['admin', 'platform_admin'];
-      const hasAdminRole = roles?.some(r => adminRoles.includes(r.role as string)) ?? false;
-      if (hasAdminRole) {
-        setIsPlatformAdmin(true);
-      }
-
-      // 2. Check if user owns a blog
+      // 1. Check if user owns a blog
       const { data: ownedBlog, error: blogError } = await supabase
         .from("blogs")
         .select("*")
@@ -102,9 +90,9 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 3. Check if user is a team member
+      // 2. Check if user is a blog member (using blog_members table)
       const { data: membership, error: memberError } = await supabase
-        .from("team_members")
+        .from("blog_members")
         .select(`
           blog_id,
           role,
@@ -112,16 +100,15 @@ export function useBlog(): UseBlogResult {
             id,
             name,
             slug,
-            description,
             logo_url,
             primary_color,
-            secondary_color,
-            onboarding_completed,
-            user_id
+            user_id,
+            platform_subdomain,
+            custom_domain,
+            domain_verified
           )
         `)
         .eq("user_id", user.id)
-        .eq("status", "active")
         .maybeSingle();
 
       if (membership && membership.blogs) {
@@ -137,24 +124,8 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 4. If platform admin but no blog, get first available blog
-      if (hasAdminRole) {
-        const { data: anyBlog, error: anyBlogError } = await supabase
-          .from("blogs")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (anyBlog) {
-          setBlog(anyBlog as Blog);
-          setRole("owner");
-          setIsOwner(false);
-        }
-      }
-
-      console.log('useBlog: Fetch finalizado com sucesso');
-      setLoading(false); // [SAFE MODE] Explicit success
+      console.log('useBlog: Nenhum blog encontrado para o usuário', user.id);
+      setLoading(false);
     } catch (error) {
       console.error("useBlog: Erro na tentativa", retryCount + 1, error);
 

@@ -20,6 +20,9 @@ export default function GenerationNew() {
   const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const oppId = searchParams.get('opp_id') || '';
+  const source = searchParams.get('source') || '';
+
   const [form, setForm] = useState({
     keyword: searchParams.get('keyword') || '',
     city: searchParams.get('city') || '',
@@ -128,6 +131,9 @@ export default function GenerationNew() {
         image_count: 4,
         brand_voice: { tone: form.tone, person: form.person, avoid: form.avoid ? form.avoid.split(',').map(s => s.trim()) : [] },
       };
+      // Propaga origem Radar V3 para o job
+      if (source) payload.source = source;
+      if (oppId) payload.opportunity_id = oppId;
       if (form.business_name) {
         payload.business = { name: form.business_name, phone: form.phone || undefined, whatsapp: form.whatsapp || undefined, website: form.website || undefined };
       }
@@ -154,6 +160,19 @@ export default function GenerationNew() {
       if (data?.job_id) {
         console.log('[GenerationNew] JOB_CREATED job=', data.job_id, 'keyword=', trimmedKeyword);
         toast.success('Job criado! Acompanhe o progresso.');
+
+        // Atualiza status da oportunidade Radar V3 (não-bloqueante)
+        if (source === 'radar_v3' && oppId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from('radar_v3_opportunities')
+            .update({ status: 'generating', generation_job_id: data.job_id })
+            .eq('id', oppId)
+            .then(({ error: updErr }: { error: { message: string } | null }) => {
+              if (updErr) console.warn('[GenerationNew] radar_v3_opportunities update failed:', updErr.message);
+            });
+        }
+
         navigate(`/client/articles/engine/${data.job_id}`);
       } else {
         toast.error(data?.error || 'Erro desconhecido');

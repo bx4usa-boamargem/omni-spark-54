@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,11 +53,6 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
-    }
-
     const body = await req.json();
     const { personaName, personaDescription, profession, niche, field, existing, generatePersonas, blogId, improvePersona, improvementType, personaData, improveItems, items } = body;
 
@@ -71,23 +67,17 @@ serve(async (req) => {
 
       const prompt = typePrompts[improvementType] || typePrompts.expand_description;
 
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
+      const responseResult = await callWriter({
+        messages: [
             { role: "system", content: `Você é a OMNISEEN AI, a assistente virtual inteligente da OMNISEEN, especialista em marketing. ${prompt}\n\nRetorne APENAS um JSON válido: {"name": "...", "age_range": "...", "profession": "...", "description": "..."}` },
             { role: "user", content: `Melhore esta persona do nicho "${niche}": ${JSON.stringify(personaData)}` },
           ],
-        }),
+        temperature: 0.7,
+        maxTokens: 4096,
       });
 
       if (!response.ok) throw new Error(`AI API error: ${response.status}`);
-      const data = await response.json();
+      const data = { choices: [{ message: { content: responseResult.data?.content || "" } }] };
       const content = data.choices?.[0]?.message?.content || "";
       const parsed = parseAIJson(content);
 
@@ -104,23 +94,17 @@ serve(async (req) => {
         objections: "objeções",
       };
 
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
+      const responseResult = await callWriter({
+        messages: [
             { role: "system", content: `Você é a OMNISEEN AI, a assistente virtual inteligente da OMNISEEN, especialista em marketing. Melhore os ${fieldLabels[field] || field} tornando-os mais específicos, acionáveis e mensuráveis. Mantenha o mesmo número de itens.\n\nRetorne APENAS um JSON: {"improved": ["item melhorado 1", "item melhorado 2", ...]}` },
             { role: "user", content: `Nicho: ${niche}. Persona: ${personaName}. Itens atuais: ${JSON.stringify(items)}` },
           ],
-        }),
+        temperature: 0.7,
+        maxTokens: 4096,
       });
 
       if (!response.ok) throw new Error(`AI API error: ${response.status}`);
-      const data = await response.json();
+      const data = { choices: [{ message: { content: responseResult.data?.content || "" } }] };
       const content = data.choices?.[0]?.message?.content || "";
       const parsed = parseAIJson(content);
 
@@ -153,41 +137,19 @@ Responda APENAS com um JSON válido no formato:
   ]
 }`;
 
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
+      const responseResult = await callWriter({
+        messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: `Gere 3 personas para o nicho: ${niche}` },
           ],
-        }),
+        temperature: 0.7,
+        maxTokens: 4096,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("AI API error:", response.status, errorText);
-        throw new Error(`AI API error: ${response.status}`);
+      if (!responseResult.success || !responseResult.data?.content) {
+        console.error("[AI] Writer failed:", responseResult.fallbackReason);
+        throw new Error(`AI error: ${responseResult.fallbackReason}`);
       }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || "";
-      console.log("AI response for personas:", content.substring(0, 500));
-
-      // Parse JSON from response using robust parser
-      let personas = [];
-      const parsed = parseAIJson(content);
-      if (parsed && Array.isArray(parsed.personas)) {
-        personas = parsed.personas;
-      } else {
-        console.error("Could not parse personas from AI response");
-        throw new Error("Failed to parse AI response");
-      }
-
       return new Response(JSON.stringify({ personas }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -220,41 +182,19 @@ Responda APENAS com um JSON válido:
   "suggestions": ["sugestão 1", "sugestão 2", "sugestão 3", "sugestão 4", "sugestão 5"]
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
+    const responseResult = await callWriter({
+      messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Gere sugestões de ${fieldLabels[field] || field}` },
         ],
-      }),
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI API error:", response.status, errorText);
-      throw new Error(`AI API error: ${response.status}`);
+    if (!responseResult.success || !responseResult.data?.content) {
+      console.error("[AI] Writer failed:", responseResult.fallbackReason);
+      throw new Error(`AI error: ${responseResult.fallbackReason}`);
     }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
-    console.log("AI response for suggestions:", content.substring(0, 500));
-
-    // Parse JSON from response using robust parser
-    let suggestions: string[] = [];
-    const parsed = parseAIJson(content);
-    if (parsed && Array.isArray(parsed.suggestions)) {
-      suggestions = parsed.suggestions;
-    } else {
-      console.error("Could not parse suggestions from AI response");
-      throw new Error("Failed to parse AI response");
-    }
-
     return new Response(JSON.stringify({ suggestions }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

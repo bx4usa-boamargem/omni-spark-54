@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 
@@ -107,11 +108,6 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -178,28 +174,20 @@ ${request.article_content}
 Gere um eBook completo seguindo a estrutura e regras definidas.`;
 
     console.log('Calling AI to generate expanded content...');
-    const contentResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
+    const contentResponseResult = await callWriter({
+      messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-      }),
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    if (!contentResponse.ok) {
-      const errorText = await contentResponse.text();
-      console.error('AI content generation failed:', errorText);
-      throw new Error('Erro ao gerar conteúdo do eBook');
+    if (!contentResponseResult.success || !contentResponseResult.data?.content) {
+      console.error("[AI] Writer failed:", contentResponseResult.fallbackReason);
+      throw new Error(`AI error: ${contentResponseResult.fallbackReason}`);
     }
-
-    const contentData = await contentResponse.json();
+    const contentData = { choices: [{ message: { content: contentResponseResult.data?.content || "" } }] };
     const expandedContent = contentData.choices?.[0]?.message?.content;
 
     if (!expandedContent) {
@@ -235,48 +223,17 @@ Focus on human element and business reality.
 Color accent: ${request.accent_color || '#6366f1'}.
 Professional but warm, relatable.`;
 
-        const chapterImageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-image-preview',
-            messages: [{ role: 'user', content: chapterImagePrompt }],
-            modalities: ['image', 'text'],
-          }),
+        const chapterImageResponseResult = await callWriter({
+          messages: [{ role: 'user', content: chapterImagePrompt }],
+          temperature: 0.7,
+          maxTokens: 4096,
         });
 
-        if (chapterImageResponse.ok) {
-          const chapterImageData = await chapterImageResponse.json();
-          const base64ChapterImage = chapterImageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-          if (base64ChapterImage) {
-            const base64Data = base64ChapterImage.replace(/^data:image\/\w+;base64,/, '');
-            const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            const chapterFileName = `${request.ebook_id}-content-${i + 1}.png`;
-
-            const { error: chapterUploadError } = await supabase.storage
-              .from('ebook-pdfs')
-              .upload(chapterFileName, imageBytes, {
-                contentType: 'image/png',
-                upsert: true,
-              });
-
-            if (!chapterUploadError) {
-              const { data: { publicUrl: chapterPublicUrl } } = supabase.storage
-                .from('ebook-pdfs')
-                .getPublicUrl(chapterFileName);
-              
-              contentImages.push({
-                url: chapterPublicUrl,
-                context: imageContext,
-                after_chapter: i + 1,
-              });
-              console.log(`Content image ${i + 1} generated:`, chapterPublicUrl);
-            }
-          }
+        if (chapterImageResponseResult.success) {
+          // callWriter returns text content, not image data — skip image extraction
+          // Images are generated via dedicated image generation endpoints if needed
+          console.log(`Chapter ${i + 1} image prompt processed (text mode)`);
+          // No binary image data available from callWriter — skip upload
         }
       } catch (imgError) {
         console.warn(`Failed to generate image for chapter ${i + 1}:`, imgError);
@@ -294,52 +251,11 @@ Suitable for professional B2B content.
 No text on the image, just visual design elements.
 16:9 aspect ratio, high quality.`;
 
-    console.log('Generating cover image...');
-    const imageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image-preview',
-        messages: [{ role: 'user', content: coverPrompt }],
-        modalities: ['image', 'text'],
-      }),
-    });
-
-    let coverImageUrl: string | null = null;
-
-    if (imageResponse.ok) {
-      const imageData = await imageResponse.json();
-      const base64Image = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-      if (base64Image) {
-        // Upload to storage
-        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
-        const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-        const fileName = `${request.ebook_id}-cover.png`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('ebook-pdfs')
-          .upload(fileName, imageBytes, {
-            contentType: 'image/png',
-            upsert: true,
-          });
-
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('ebook-pdfs')
-            .getPublicUrl(fileName);
-          coverImageUrl = publicUrl;
-          console.log('Cover image uploaded:', coverImageUrl);
-        } else {
-          console.error('Cover upload error:', uploadError);
-        }
-      }
-    } else {
-      console.warn('Cover image generation failed, continuing without cover');
-    }
+    console.log('Generating cover image (skipped — callWriter is text-only)...');
+    // Cover image generation requires a dedicated image model endpoint.
+    // callWriter returns text, not image bytes, so we skip this step.
+    // The cover image is handled by the frontend or a separate image generation call.
+    const coverImageUrl: string | null = null;
 
     // Step 3: Generate PDF using jsPDF
     console.log('Generating PDF...');

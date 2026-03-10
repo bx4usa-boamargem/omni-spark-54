@@ -1,12 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════
 // BOOST-CONTENT-SCORE: Otimização Automática de Conteúdo
 // Combina: optimize-for-serp + adjust-structure + semantic-enrichment
-// 
-// ARQUITETURA DETERMINÍSTICA:
+//
+// ARQUITETURA — CONTENT ENGINE (lê, nunca executa Discovery)
 // - Perfil de Nicho dinâmico via banco de dados
 // - Piso de score por nicho
 // - Feature flag para controle de versionamento
 // - Log de alterações de score
+// - NUNCA invoca analyze-serp, analyze-competitors ou fetch-real-trends
+// - Dados de mercado lidos de market_radar_cache (via discovery-engine)
 // ═══════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -92,7 +94,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY") || Deno.env.get("GEMINI_API_KEY");
 
     // Verificar feature flag
     const versionedContentEnabled = await isVersionedContentEnabled(supabase, blogId);
@@ -107,108 +109,55 @@ serve(async (req) => {
     // Usar target do nicho se não especificado
     const effectiveTarget = targetScore || nicheProfile.targetScore;
 
-    // Fetch SERP matrix - try exact match first, then fuzzy match (keyword may be enriched with city)
-    let serpData = await supabase
-      .from("serp_analysis_cache")
-      .select("matrix, id, keyword")
+    // =========================================================================
+    // MARKET DATA: Ler de market_radar_cache (Discovery Engine)
+    // REGRA ARQUITETURAL: O Content Engine NUNCA invoca analyze-serp.
+    // Dados de mercado chegam apenas via discovery-engine → market_radar_cache.
+    // =========================================================================
+
+    // Buscar segment+city do business_profile para lookup no cache
+    const { data: businessProfile } = await supabase
+      .from("business_profile")
+      .select("niche, city")
       .eq("blog_id", blogId)
-      .eq("keyword", keyword)
+      .maybeSingle();
+
+    const segmentKey = (businessProfile?.niche || keyword).toLowerCase().trim();
+    const cityKey = (businessProfile?.city || "").toLowerCase().trim();
+
+    console.log(`[BOOST-SCORE] Looking up market_radar_cache: segment="${segmentKey}" city="${cityKey}"`);
+
+    // Buscar cache de discovery (read-only — nunca trigger)
+    const { data: radarCache } = await supabase
+      .from("market_radar_cache")
+      .select("serp_results, entities, questions, opportunity_scores, id")
+      .ilike("segment", segmentKey)
+      .eq("radar_status", "ready")
       .gt("expires_at", new Date().toISOString())
-      .order("analyzed_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
-      .single()
-      .then(res => res.data);
+      .maybeSingle();
 
-    // If not found with exact match, try fuzzy match (keyword may have city appended by analyze-serp)
-    if (!serpData) {
-      console.log(`[BOOST-SCORE] Exact keyword match not found, trying fuzzy search...`);
-      const fuzzyResult = await supabase
-        .from("serp_analysis_cache")
-        .select("matrix, id, keyword")
-        .eq("blog_id", blogId)
-        .ilike("keyword", `${keyword}%`)
-        .gt("expires_at", new Date().toISOString())
-        .order("analyzed_at", { ascending: false })
-        .limit(1)
-        .single();
-      
-      serpData = fuzzyResult.data;
-      if (serpData) {
-        console.log(`[BOOST-SCORE] Found SERP with enriched keyword: "${serpData.keyword}"`);
-      }
+    if (!radarCache) {
+      // Discovery não foi executado — Content Engine não tenta executar sozinho
+      console.warn(`[BOOST-SCORE] No market_radar_cache found for segment="${segmentKey}". Discovery must run first.`);
+      return new Response(
+        JSON.stringify({
+          error: "Dados de mercado não encontrados. Execute o Radar de Mercado antes de otimizar o conteúdo.",
+          code: "DISCOVERY_NOT_RAN",
+          action: "run_discovery_engine",
+          segment: segmentKey,
+          city: cityKey,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Auto-trigger SERP analysis if not found or expired
-    if (!serpData) {
-      console.log(`[BOOST-SCORE] No valid SERP cache found, auto-triggering analyze-serp for "${keyword}"...`);
-      
-      try {
-        const serpResponse = await supabase.functions.invoke('analyze-serp', {
-          body: { keyword, blogId, forceRefresh: false, articleId }
-        });
-        
-        if (serpResponse.error) {
-          console.error('[BOOST-SCORE] analyze-serp failed:', serpResponse.error);
-          return new Response(
-            JSON.stringify({ 
-              error: "Failed to analyze SERP automatically. Please try again.",
-              code: "SERP_ANALYSIS_FAILED",
-              details: serpResponse.error
-            }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+    console.log(`[BOOST-SCORE] Market cache loaded: id=${radarCache.id}`);
 
-        // Refetch the newly created SERP data - use fuzzy match since analyze-serp enriches keyword with city
-        const refetch = await supabase
-          .from("serp_analysis_cache")
-          .select("matrix, id, keyword")
-          .eq("blog_id", blogId)
-          .ilike("keyword", `${keyword}%`)
-          .order("analyzed_at", { ascending: false })
-          .limit(1)
-          .single();
-          
-        serpData = refetch.data;
-        
-        if (!serpData) {
-          // Last resort: get the most recent SERP for this blog
-          console.log(`[BOOST-SCORE] Fuzzy match failed, fetching most recent SERP for blog...`);
-          const latestResult = await supabase
-            .from("serp_analysis_cache")
-            .select("matrix, id, keyword")
-            .eq("blog_id", blogId)
-            .order("analyzed_at", { ascending: false })
-            .limit(1)
-            .single();
-          
-          serpData = latestResult.data;
-        }
-        
-        if (!serpData) {
-          return new Response(
-            JSON.stringify({ 
-              error: "SERP analysis completed but no data found. Please try again.",
-              code: "SERP_DATA_MISSING"
-            }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        
-        console.log(`[BOOST-SCORE] Auto-SERP analysis complete, using keyword: "${serpData.keyword}"`);
-      } catch (serpError) {
-        console.error('[BOOST-SCORE] Auto-SERP error:', serpError);
-        return new Response(
-          JSON.stringify({ 
-            error: "No SERP analysis found and auto-analysis failed.",
-            code: "SERP_NOT_FOUND"
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    const serpMatrix = serpData.matrix as SERPMatrix;
+    // Construir SERPMatrix a partir do radarCache
+    // O market_radar_cache armazena serp_results que é o matrix do analyze-serp
+    const serpMatrix = (radarCache.serp_results || {}) as SERPMatrix;
     
     // =========================================================================
     // FILTRO DE NICHO: Remover termos genéricos que não pertencem ao nicho
@@ -354,25 +303,23 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
     let aiResponse: Response | null = null;
     let lastError: string = '';
 
+    if (!GOOGLE_API_KEY) {
+      throw new Error("GOOGLE_API_KEY is required for AI optimization");
+    }
+
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        aiResponse = await fetch(geminiEndpoint, {
           method: "POST",
-          headers: {
-            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              {
-                role: "system",
-                content: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários. REGRA CRÍTICA: Mantenha TODA a estrutura HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>). NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições."
-              },
-              { role: "user", content: optimizePrompt }
-            ],
-            max_tokens: 8000,
-            temperature: 0.3
+            systemInstruction: {
+              parts: [{ text: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários. REGRA CRÍTICA: Mantenha TODA a estrutura HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>). NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições." }]
+            },
+            contents: [{ role: "user", parts: [{ text: optimizePrompt }] }],
+            generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
           }),
         });
 
@@ -411,7 +358,7 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
     }
 
     const aiData = await aiResponse.json();
-    let optimizedContent = aiData.choices?.[0]?.message?.content || content;
+    let optimizedContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || content;
 
     // =========================================================================
     // IMAGE RE-INJECTION: Restaurar imagens após IA
@@ -544,7 +491,7 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
         .from("article_content_scores")
         .upsert({
           article_id: articleId,
-          serp_analysis_id: serpData.id,
+          serp_analysis_id: radarCache.id,  // referência ao market_radar_cache
           total_score: newScore.total,
           breakdown: newScore.breakdown,
           comparison: newScore.comparison,
@@ -566,15 +513,15 @@ Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem altera
     const durationMs = Date.now() - startTime;
     await supabase.from("ai_usage_logs").insert({
       blog_id: blogId,
-      provider: "lovable",
+      provider: "google",
       endpoint: "boost-content-score",
-      cost_usd: 0.03,
+      cost_usd: 0.01,
       tokens_used: 8000,
       success: true,
       metadata: {
         phase: "optimization",
-        model: "google/gemini-2.5-flash",
-        source: "PromptPy",
+        model: "gemini-2.5-flash",
+        source: "google-api",
         optimization_type: optimizationType,
         score_before: currentScore.total,
         score_after: newScore.total,

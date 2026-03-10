@@ -161,12 +161,14 @@ export function NavItem({
   // Tooltip quando recolhido
   if (!isExpanded) {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
-        <TooltipContent side="right" className="font-medium z-[150]">
-          {label}
-        </TooltipContent>
-      </Tooltip>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
+          <TooltipContent side="right" className="font-medium z-[150]">
+            {label}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 

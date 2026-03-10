@@ -10,14 +10,13 @@ import {
   LineChart,
   Tag,
   Target,
-  Linkedin,
-  Instagram,
   Music,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useBlog } from "@/hooks/useBlog";
 import { IntegrationCard, IntegrationStatus } from "@/components/integrations/IntegrationCard";
 import { IntegrationSection } from "@/components/integrations/IntegrationSection";
+import { SocialConnectionsSection } from "@/components/integrations/SocialConnectionsSection";
 
 interface TrackingConfig {
   ga_id?: string;
@@ -190,38 +189,34 @@ export default function Integrations() {
         />
       </IntegrationSection>
 
-      {/* Content Distribution */}
-      <IntegrationSection
-        title={t("integrations.categories.distribution")}
-        description={t("integrations.categories.distributionDescription")}
-        icon={<Share2 className="h-5 w-5" />}
-      >
-        <IntegrationCard
-          name={t("integrations.items.linkedin.name")}
-          description={t("integrations.items.linkedin.description")}
-          icon={Linkedin}
-          iconBgColor="bg-blue-800"
-          status="active"
-          onAction={navigateToArticles}
-          actionLabel={t("integrations.actions.use")}
-        />
-        <IntegrationCard
-          name={t("integrations.items.instagram.name")}
-          description={t("integrations.items.instagram.description")}
-          icon={Instagram}
-          iconBgColor="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400"
-          status="active"
-          onAction={navigateToNewArticle}
-          actionLabel={t("integrations.actions.use")}
-        />
-        <IntegrationCard
-          name={t("integrations.items.soundcloud.name")}
-          description={t("integrations.items.soundcloud.description")}
-          icon={Music}
-          iconBgColor="bg-orange-600"
-          status="coming_soon"
-        />
-      </IntegrationSection>
+      {/* Content Distribution — Real OAuth Connections */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="text-primary"><Share2 className="h-5 w-5" /></div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">{t("integrations.categories.distribution")}</h2>
+            <p className="text-sm text-muted-foreground">{t("integrations.categories.distributionDescription")}</p>
+          </div>
+        </div>
+
+        {/* OAuth social connections — full width */}
+        {blog?.id ? (
+          <SocialConnectionsSection blogId={blog.id} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Selecione um blog para gerenciar conexões.</p>
+        )}
+
+        {/* Other distribution tools — grid */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <IntegrationCard
+            name={t("integrations.items.soundcloud.name")}
+            description={t("integrations.items.soundcloud.description")}
+            icon={Music}
+            iconBgColor="bg-orange-600"
+            status="coming_soon"
+          />
+        </div>
+      </section>
     </div>
   );
 }

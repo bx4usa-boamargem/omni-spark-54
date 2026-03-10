@@ -37,6 +37,8 @@ interface BackgroundImageRequest {
   image_prompts: ImagePrompt[];
   niche: string;
   city: string;
+  language?: string;  // ex: 'en', 'pt-BR', 'es', 'ja'
+  country?: string;  // ISO 3166-1 alpha-2 ex: 'us', 'br', 'jp'
 }
 
 // Retry delays in ms (exponential backoff)
@@ -47,7 +49,9 @@ async function generateImageWithRetry(
   niche: string,
   city: string,
   requestId: string,
-  imageIndex: number
+  imageIndex: number,
+  language = 'en',
+  country?: string
 ): Promise<{ url: string | null; generatedBy: string | null }> {
   let lastError: Error | null = null;
   
@@ -57,7 +61,9 @@ async function generateImageWithRetry(
         prompt: imgPrompt.prompt || `Professional ${imgPrompt.context} image`,
         context: imgPrompt.context,
         niche,
-        city
+        city,
+        language,
+        country
       });
       
       if (result.success && result.data) {
@@ -94,7 +100,7 @@ serve(async (req) => {
 
   try {
     const body: BackgroundImageRequest = await req.json();
-    const { article_id, blog_id, request_id, image_prompts, niche, city } = body;
+    const { article_id, blog_id, request_id, image_prompts, niche, city, language, country } = body;
     
     console.log(`[${request_id}][ImageJob] Starting background generation for ${image_prompts.length} images`);
     console.log(`[${request_id}][ImageJob] Article: ${article_id}, Niche: ${niche}, City: ${city}`);
@@ -122,7 +128,7 @@ serve(async (req) => {
       console.log(`[${request_id}][IMAGES LOOP] index=${imageIndex}/${totalImages}`);
       
       try {
-        const result = await generateImageWithRetry(imgPrompt, niche, city, request_id, imageIndex);
+        const result = await generateImageWithRetry(imgPrompt, niche, city, request_id, imageIndex, language || 'en', country);
         
         if (result.url) {
           imgPrompt.url = result.url;

@@ -91,7 +91,7 @@ async function generateIntelForTerritory(
 ): Promise<{ success: boolean; id?: string; error?: string; intelPackage?: MarketIntelPackage }> {
   
   const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY") || Deno.env.get("GEMINI_API_KEY");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -281,43 +281,39 @@ Return only valid JSON, no markdown.`;
         throw new Error(`Perplexity API error: ${perplexityResponse.status}`);
       }
     } catch (perplexityError) {
-      console.log("Perplexity failed, falling back to Lovable AI:", perplexityError);
+      console.log("Perplexity failed, falling back to Google Gemini API:", perplexityError);
       provider = "fallback";
     }
   } else {
-    console.log("No Perplexity API key, using Lovable AI");
+    console.log("No Perplexity API key, using Google Gemini API fallback");
     provider = "fallback";
   }
 
-  // Fallback to Lovable AI
-  if (!intelPackage && LOVABLE_API_KEY) {
-    console.log(`Using Lovable AI fallback for territory: ${territoryLocation || 'default'}...`);
+  // Fallback to Google Gemini API
+  if (!intelPackage && GOOGLE_API_KEY) {
+    console.log(`Using Google Gemini API fallback for territory: ${territoryLocation || 'default'}...`);
     provider = "fallback";
 
-    const lovableResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
+
+    const geminiResponse = await fetch(geminiEndpoint, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.5,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.5 }
       }),
     });
 
-    if (!lovableResponse.ok) {
-      const errorText = await lovableResponse.text();
-      console.error("Lovable AI error:", lovableResponse.status, errorText);
-      return { success: false, error: `AI Gateway error: ${lovableResponse.status}` };
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error("Google Gemini API error:", geminiResponse.status, errorText);
+      return { success: false, error: `Google Gemini API error: ${geminiResponse.status}` };
     }
 
-    const lovableData = await lovableResponse.json();
-    const content = lovableData.choices?.[0]?.message?.content || "";
+    const geminiData = await geminiResponse.json();
+    const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     try {
       const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
@@ -341,9 +337,9 @@ Return only valid JSON, no markdown.`;
         content_ideas: parsed.content_ideas || []
       };
 
-      console.log(`Lovable AI response parsed successfully for territory: ${territoryLocation || 'default'}`);
+      console.log(`Google Gemini API response parsed successfully for territory: ${territoryLocation || 'default'}`);
     } catch (parseError) {
-      console.error("Failed to parse Lovable AI response:", content);
+      console.error("Failed to parse Google Gemini API response:", content);
       return { success: false, error: "Failed to parse AI response" };
     }
   }
@@ -402,16 +398,17 @@ Return only valid JSON, no markdown.`;
       user_id: null, // Sistema
       blog_id: blogId,
       action_type: 'market_intel_fallback',
-      model_used: 'google/gemini-2.5-flash',
+      model_used: 'gemini-2.5-flash',
       estimated_cost_usd: 0,
       metadata: {
         original_provider: 'perplexity',
+        fallback_provider: 'google-gemini',
         fallback_reason: 'API error or key missing',
         territory_id: territoryId,
         territory_location: territoryLocation
       }
     });
-    console.log(`[FALLBACK LOG] Logged consumption for fallback provider - territory: ${territoryLocation || 'default'}`);
+    console.log(`[FALLBACK LOG] Logged consumption for fallback provider (Google Gemini) - territory: ${territoryLocation || 'default'}`);
   }
 
   // Map goal to funnel_stage

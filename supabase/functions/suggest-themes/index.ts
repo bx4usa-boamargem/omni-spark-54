@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -21,11 +22,6 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
-
     const { niche, keywords, existingTitles, count = 5, tone = 'professional', blog_id }: ThemeRequest = await req.json();
 
     if (!niche) {
@@ -99,15 +95,8 @@ Retorne APENAS o JSON, sem markdown ou explicações.
 
     console.log(`Suggesting ${count} themes for niche: ${niche}, model: ${textModel}`);
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: textModel,
-        messages: [
+    const responseResult = await callWriter({
+      messages: [
           {
             role: 'system',
             content: 'Você é a OMNISEEN AI, a assistente virtual inteligente da OMNISEEN, especialista em SEO e marketing de conteúdo. Sempre responda em JSON válido.'
@@ -117,37 +106,14 @@ Retorne APENAS o JSON, sem markdown ou explicações.
             content: prompt
           }
         ],
-      }),
+      temperature: 0.7,
+      maxTokens: 4096,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Theme suggestion error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      throw new Error(`Theme suggestion failed: ${response.status}`);
+    if (!responseResult.success || !responseResult.data?.content) {
+      console.error("[AI] Writer failed:", responseResult.fallbackReason);
+      throw new Error(`AI error: ${responseResult.fallbackReason}`);
     }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content in response');
-    }
-
     // Parse the JSON response
     let themes;
     try {

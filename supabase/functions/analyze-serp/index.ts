@@ -439,7 +439,6 @@ Retorne APENAS um JSON válido no formato:
       console.error('[SERP] ⏱️ Perplexity TIMEOUT (30s) - aborting URL discovery');
       throw new Error('PERPLEXITY_TIMEOUT: URL discovery exceeded 30 seconds');
     }
-    ```
     throw error;
   }
   clearTimeout(timeoutId);

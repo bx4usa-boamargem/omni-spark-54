@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Pencil, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ export function PremiumSidebar({ isPlatformAdmin, onHelpClick }: PremiumSidebarP
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const expandTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Determinar hub/item ativo baseado na rota
   const getActiveHub = useCallback(() => {
@@ -72,8 +73,17 @@ export function PremiumSidebar({ isPlatformAdmin, onHelpClick }: PremiumSidebarP
     <>
       {/* ========== SIDEBAR DESKTOP ========== */}
       <aside
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
+        onMouseEnter={() => {
+          if (expandTimeoutRef.current) {
+            clearTimeout(expandTimeoutRef.current);
+            expandTimeoutRef.current = undefined;
+          }
+          setIsExpanded(true);
+        }}
+        onMouseLeave={() => {
+          // Delay para não fechar antes do painel flutuante (HubMenuItem) capturar o mouse
+          expandTimeoutRef.current = setTimeout(() => setIsExpanded(false), 250);
+        }}
         className={cn(
           'flex flex-col fixed left-0 top-0 h-screen z-[100]',
           'bg-white dark:bg-gray-900',

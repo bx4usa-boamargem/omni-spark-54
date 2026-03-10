@@ -19,6 +19,75 @@
     "signOut": "Esci",
     "createContent": "Crea contenuto"
   },
+  "integrations": {
+    "title": "Integrazioni",
+    "subtitle": "Collega Omniseen a vari strumenti",
+    "categories": {
+      "blog": "Piattaforme Blog",
+      "blogDescription": "Collega il tuo blog per la pubblicazione automatica",
+      "monitoring": "Monitoraggio e Marketing",
+      "monitoringDescription": "Monitora le performance e i visitatori",
+      "distribution": "Distribuzione Contenuti",
+      "distributionDescription": "Condividi i tuoi contenuti su più canali"
+    },
+    "status": {
+      "active": "Attivo",
+      "inactive": "Inattivo",
+      "comingSoon": "Prossimamente"
+    },
+    "actions": {
+      "configure": "Configura",
+      "edit": "Modifica",
+      "activate": "Attiva",
+      "use": "Usa"
+    },
+    "items": {
+      "wordpress": {
+        "name": "WordPress",
+        "description": "Pubblica automaticamente articoli su WordPress"
+      },
+      "wix": {
+        "name": "Wix",
+        "description": "Sincronizza i contenuti con il tuo sito Wix"
+      },
+      "webhook": {
+        "name": "Webhook",
+        "description": "Integra tramite API personalizzata"
+      },
+      "gsc": {
+        "name": "Google Search Console",
+        "description": "Importa parole chiave e monitora le posizioni"
+      },
+      "ga": {
+        "name": "Google Analytics",
+        "description": "Monitora le metriche di traffico"
+      },
+      "gtm": {
+        "name": "Google Tag Manager",
+        "description": "Gestisci tag e script"
+      },
+      "meta": {
+        "name": "Meta Pixel",
+        "description": "Monitora le conversioni Facebook/Instagram"
+      },
+      "googleAds": {
+        "name": "Google Ads",
+        "description": "Monitora le conversioni pubblicitarie"
+      },
+      "linkedin": {
+        "name": "LinkedIn",
+        "description": "Condividi articoli su LinkedIn"
+      },
+      "instagram": {
+        "name": "Instagram",
+        "description": "Importa contenuti dai post"
+      },
+      "soundcloud": {
+        "name": "Soundcloud",
+        "description": "Pubblica la versione audio degli articoli"
+      }
+    }
+  },
   "landing": {
     "header": {
       "home": "Home",

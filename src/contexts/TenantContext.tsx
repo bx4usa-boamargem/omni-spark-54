@@ -23,7 +23,7 @@ export interface TenantMembership {
   tenant_id: string;
   user_id: string;
   role: 'owner' | 'admin' | 'member';
-  joined_at: string | null;
+  created_at: string | null;
   tenant: Tenant;
 }
 
@@ -83,7 +83,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
           tenant_id,
           user_id,
           role,
-          joined_at,
+          created_at,
           tenant:tenants (
             id,
             name,
@@ -120,7 +120,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
           tenant_id: m.tenant_id,
           user_id: m.user_id,
           role: m.role as 'owner' | 'admin' | 'member',
-          joined_at: m.joined_at,
+          created_at: m.created_at,
           tenant: m.tenant as unknown as Tenant,
         }));
 
@@ -155,7 +155,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
             tenant_id: bioneTenantId,
             user_id: user.id,
             role: 'owner',
-            joined_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
             tenant: {
               id: bioneTenantId,
               name: 'Bione Advocacia (DEV_OPERATOR)',

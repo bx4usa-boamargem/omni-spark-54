@@ -1,0 +1,16 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Vite logo" [ref=e4] [cursor=pointer]:
+      - /url: https://vite.dev
+      - img "Vite logo" [ref=e5]
+    - link "React logo" [ref=e6] [cursor=pointer]:
+      - /url: https://react.dev
+      - img "React logo" [ref=e7]
+  - heading "Vite + React" [level=1] [ref=e8]
+  - generic [ref=e9]:
+    - button "count is 0" [ref=e10] [cursor=pointer]
+    - paragraph [ref=e11]:
+      - text: Edit
+      - code [ref=e12]: src/App.tsx
+      - text: and save to test HMR
+  - paragraph [ref=e13]: Click on the Vite and React logos to learn more

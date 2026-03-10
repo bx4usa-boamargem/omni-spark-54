@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   ANTI_FUTURISTIC_IMAGE_RULES,
@@ -271,11 +272,6 @@ serve(async (req) => {
   console.log(`[${requestId}] Starting image generation request`);
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -537,15 +533,8 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: actualModel,
-            messages: [
+        const responseResult = await callWriter({
+          messages: [
               {
                 role: 'user',
                 content: attempt === 1
@@ -553,56 +542,48 @@ ${allowTechElements ? '' : 'NÃO inclua: hologramas, interfaces futuristas, elem
                   : `IMPORTANTE: Você DEVE gerar uma imagem. Não responda com texto, apenas gere a imagem.\n\n${enhancedPrompt}`
               }
             ],
-            modalities: ['image', 'text']
-          }),
+          temperature: 0.7,
+          maxTokens: 4096,
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Image generation error (attempt ${attempt}):`, response.status, errorText);
-
-          if (response.status === 429) {
-            return new Response(
-              JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-              { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-
-          if (response.status === 402) {
-            return new Response(
-              JSON.stringify({ error: 'Insufficient credits. Please add credits to continue.' }),
-              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-
-          lastError = `API error: ${response.status}`;
-          continue;
+        if (!responseResult.success || !responseResult.data?.content) {
+          console.error("[AI] Writer failed:", responseResult.fallbackReason);
+          lastError = responseResult.fallbackReason || 'AI failed';
+          continue; // Try next attempt
         }
 
-        const data = await response.json();
-        imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+        // Extract imageData from response
+        const content = responseResult.data.content;
+        if (typeof content === 'string' && content.startsWith('data:image')) {
+          imageData = content;
+        } else if (Array.isArray(content)) {
+          for (const part of content) {
+            if (part?.type === 'image' && part?.source?.data) {
+              imageData = `data:${part.source.media_type || 'image/png'};base64,${part.source.data}`;
+              break;
+            } else if (part?.inline_data?.data) {
+              imageData = `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`;
+              break;
+            }
+          }
+        }
 
         if (imageData) {
-          console.log(`Image generated successfully on attempt ${attempt}`);
-          break;
+          console.log(`[${requestId}] Image data extracted on attempt ${attempt}`);
+          break; // Success
         } else {
-          lastError = `No image in response (attempt ${attempt}): ${JSON.stringify(data).substring(0, 200)}`;
-          console.warn(lastError);
-
-          // Wait a bit before retrying
-          if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+          console.warn(`[${requestId}] Attempt ${attempt}: no image data in response, retrying...`);
+          lastError = 'No image data in response';
         }
-      } catch (fetchError) {
-        lastError = `Fetch error: ${fetchError instanceof Error ? fetchError.message : 'Unknown'}`;
-        console.error(`Attempt ${attempt} failed:`, lastError);
+      } catch (retryError) {
+        lastError = retryError instanceof Error ? retryError.message : 'Unknown error';
+        console.error(`[${requestId}] Attempt ${attempt} error:`, retryError);
+        if (attempt === maxRetries) throw retryError;
       }
-    }
+    } // end retry loop
 
     if (!imageData) {
-      console.error('All attempts failed. Last error:', lastError);
-      throw new Error('No image generated after multiple attempts');
+      throw new Error(`Failed to generate image after ${maxRetries} attempts: ${lastError}`);
     }
 
     const estimatedCost = 0.02;

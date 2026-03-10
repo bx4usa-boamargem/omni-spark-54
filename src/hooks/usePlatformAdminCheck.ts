@@ -14,6 +14,13 @@ export function usePlatformAdminCheck(): PlatformAdminCheckResult {
 
   useEffect(() => {
     const checkAdminStatus = async () => {
+      // OVERRIDE LOCAL: Se estivermos rodando no localhost, damos permissão de admin para facilitar os testes
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        setIsPlatformAdmin(true);
+        setLoading(false);
+        return;
+      }
+
       if (!user) {
         setIsPlatformAdmin(false);
         setLoading(false);

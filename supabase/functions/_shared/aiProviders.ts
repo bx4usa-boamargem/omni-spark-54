@@ -15,6 +15,7 @@ import {
   type SupportedProvider
 } from './aiConfig.ts';
 import { getAdminSupabaseClient, getIntegrationKey } from "./getIntegrationKey.ts";
+import { fetchLocalEditorialImage } from './localImageSearch.ts';
 
 // ============================================================================
 // TYPES
@@ -84,11 +85,13 @@ export interface ImageRequest {
   context: string;
   niche: string;
   city: string;
+  language?: string;  // ex: 'en', 'pt-BR', 'es', 'ja', 'ar'
+  country?: string;  // ISO 3166-1 alpha-2 ex: 'us', 'br', 'jp'
 }
 
 export interface ImageResponse {
   url: string;
-  generatedBy: 'gemini_image' | 'unsplash_fallback';
+  generatedBy: 'gemini_image' | 'unsplash_fallback' | 'places_photo';
 }
 
 // ============================================================================
@@ -703,36 +706,41 @@ export async function callQA(request: QARequest): Promise<AICallResult<QARespons
 }
 
 // ============================================================================
-// IMAGES: Lovable Gateway (Primary) → Unsplash (Fallback)
+// IMAGES: Google Imagen 3 (Primary) → Google Places Photos (Fallback)
 // ============================================================================
 
-async function callLovableGatewayImage(request: ImageRequest): Promise<ImageResponse> {
+/**
+ * Chama Google Imagen 3 via API nativa do Google AI.
+ * Usa GOOGLE_API_KEY (env) ou chave por tenant via api_integrations.
+ */
+async function callGeminiImagenImage(request: ImageRequest): Promise<ImageResponse> {
   const config = AI_CONFIG.images.primary;
-  const apiKey = getProviderApiKey('lovable-gateway');
+  // Tenta chave de env (global), senão retorna erro para cair no fallback
+  const apiKey = Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('GEMINI_API_KEY');
 
   if (!apiKey) {
-    throw new Error('LOVABLE_API_KEY not configured');
+    throw new Error('GOOGLE_API_KEY not configured for image generation');
   }
 
-  const enhancedPrompt = `Professional business photography: ${request.prompt}. 
-Context: ${request.context} service in ${request.city}, Brazil. 
-Industry: ${request.niche}.
-Style: High-quality, photorealistic, modern, professional lighting. 
-${config.aspectRatio} aspect ratio for web.
-No text, no watermarks, no logos.`;
+  const enhancedPrompt = [
+    `Professional business photography: ${request.prompt}.`,
+    `Context: ${request.context} service in ${request.city}, Brazil.`,
+    `Industry: ${request.niche}.`,
+    'Style: High-quality, photorealistic, modern, professional lighting.',
+    `${config.aspectRatio} aspect ratio for web.`,
+    'No text, no watermarks, no logos.'
+  ].join(' ');
+
+  const endpoint = `${config.endpoint}/${config.model}:predict?key=${apiKey}`;
 
   const response = await fetchWithTimeout(
-    config.gateway,
+    endpoint,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: config.model,
-        messages: [{ role: 'user', content: enhancedPrompt }],
-        modalities: config.modalities
+        instances: [{ prompt: enhancedPrompt }],
+        parameters: { sampleCount: 1, aspectRatio: config.aspectRatio }
       })
     },
     30000
@@ -740,78 +748,97 @@ No text, no watermarks, no logos.`;
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
-    throw new Error(`Lovable Gateway error ${response.status}: ${errorText.substring(0, 200)}`);
+    throw new Error(`Imagen 3 API error ${response.status}: ${errorText.substring(0, 200)}`);
   }
 
   const data = await response.json();
-  const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
+  const mimeType = data.predictions?.[0]?.mimeType || 'image/png';
 
-  if (!imageUrl) {
-    throw new Error('No image URL in Lovable Gateway response');
+  if (!base64Image) {
+    throw new Error('No image data in Imagen 3 response');
   }
 
-  return { url: imageUrl, generatedBy: 'gemini_image' };
+  // Retorna como data URI (base64) — as funções que fazem upload tratam isso
+  const url = `data:${mimeType};base64,${base64Image}`;
+  return { url, generatedBy: 'gemini_image' };
 }
 
-// V4.1: Exported for use in main flow for image timeout fallback
-export function generateUnsplashFallback(request: ImageRequest): ImageResponse {
-  const nicheKeywords: Record<string, string> = {
-    'pest_control': 'pest control,exterminator,professional cleaning',
-    'plumbing': 'plumber,plumbing,pipes,water',
-    'dental': 'dentist,dental clinic,smile,teeth',
-    'legal': 'lawyer,law office,legal,justice',
-    'accounting': 'accountant,finance,business,office',
-    'real_estate': 'real estate,house,property,home',
-    'technology': 'technology,software,computer,office'
+/**
+ * Busca editorial local global — delega para localImageSearch.
+ * Suporta qualquer cidade/país/idioma do mundo.
+ * Substitui a implementação anterior com pt-BR hardcoded.
+ */
+export async function fetchPlacesPhotoFallback(request: ImageRequest): Promise<ImageResponse | null> {
+  if (!request.city) return null;
+
+  const result = await fetchLocalEditorialImage({
+    niche: request.niche,
+    city: request.city,
+    country: request.country,
+    language: request.language || 'en',
+    articleContext: request.context || '',
+    imageIndex: 0,
+  });
+
+  if (!result.url) return null;
+
+  return {
+    url: result.url,
+    generatedBy: result.source === 'none' ? 'unsplash_fallback' : 'places_photo',
   };
-
-  const nicheQuery = nicheKeywords[request.niche] || request.niche || 'professional,business';
-  const keywords = [nicheQuery, 'professional', request.context || 'service']
-    .filter(Boolean)
-    .join(',');
-
-  const config = AI_CONFIG.images.fallback;
-  const url = `${config.apiUrl}/${config.size}/?${encodeURIComponent(keywords)}&sig=${Date.now()}-${Math.random().toString(36).substring(7)}`;
-
-  return { url, generatedBy: 'unsplash_fallback' };
 }
 
 /**
  * IMAGE GENERATION ENTRY POINT
- * Primary: Lovable Gateway (Gemini Image)
- * Fallback: Unsplash
+ * Primary: Google Imagen 3 (via API nativa)
+ * Fallback: Google Places Photos (foto real da localidade)
+ * Sem fallback para fotos aleatórias — prefere ausência a imagem errônea
  */
 export async function callImageGeneration(request: ImageRequest): Promise<AICallResult<ImageResponse>> {
   const start = Date.now();
 
-  // Try Lovable Gateway first
+  // Tenta Google Imagen 3
   try {
-    console.log('[AI_CONFIG] Images: Calling Lovable Gateway...');
-    const result = await callLovableGatewayImage(request);
+    console.log('[AI_CONFIG] Images: Calling Google Imagen 3...');
+    const result = await callGeminiImagenImage(request);
     const duration = Date.now() - start;
-    logAICall('images', 'lovable-gateway', true, duration);
+    logAICall('images', 'google-imagen', true, duration);
 
     return {
       success: true,
       data: result,
-      provider: 'lovable-gateway',
+      provider: 'google-imagen',
       usedFallback: false,
       durationMs: duration
     };
-  } catch (gatewayError) {
-    const errorMsg = gatewayError instanceof Error ? gatewayError.message : 'Unknown error';
-    console.warn(`[AI_CONFIG] Images: Lovable Gateway failed - ${errorMsg}`);
-    console.log('[AI_CONFIG] Images: Falling back to Unsplash...');
+  } catch (imagenError) {
+    const errorMsg = imagenError instanceof Error ? imagenError.message : 'Unknown error';
+    console.warn(`[AI_CONFIG] Images: Google Imagen 3 failed - ${errorMsg}`);
 
-    // Fallback to Unsplash (always succeeds)
-    const result = generateUnsplashFallback(request);
+    // Fallback: Google Places Photos (foto real da localidade)
+    try {
+      const placesResult = await fetchPlacesPhotoFallback(request);
+      const duration = Date.now() - start;
+      if (placesResult) {
+        console.log('[AI_CONFIG] Images: Google Places foto obtida como fallback.');
+        logAICall('images', 'google-places', true, duration, true);
+        return {
+          success: true,
+          data: placesResult,
+          provider: 'google-places',
+          usedFallback: true,
+          fallbackReason: errorMsg,
+          durationMs: duration
+        };
+      }
+    } catch (_) { /* ignora e retorna sem imagem */ }
+
     const duration = Date.now() - start;
-    logAICall('images', 'unsplash', true, duration, true);
-
+    console.warn('[AI_CONFIG] Images: Nenhuma imagem disponível — artigo ficará sem imagem.');
     return {
-      success: true,
-      data: result,
-      provider: 'unsplash',
+      success: false,
+      provider: 'none',
       usedFallback: true,
       fallbackReason: errorMsg,
       durationMs: duration
@@ -853,10 +880,17 @@ export async function generateArticleImagesViaProvider(
       imgPrompt.url = result.data.url;
       imgPrompt.generated_by = result.data.generatedBy;
     } else {
-      // Use fallback directly if both failed
-      const fallback = generateUnsplashFallback({ prompt: '', context: imgPrompt.context || 'business', niche, city });
-      imgPrompt.url = fallback.url;
-      imgPrompt.generated_by = fallback.generatedBy;
+      // Tenta Google Places como último recurso antes de deixar sem imagem
+      const placesResult = await fetchPlacesPhotoFallback({ prompt: '', context: imgPrompt.context || 'business', niche, city });
+      if (placesResult) {
+        imgPrompt.url = placesResult.url;
+        imgPrompt.generated_by = placesResult.generatedBy;
+      } else {
+        // Sem imagem é melhor que imagem aleatória irrelevante
+        imgPrompt.url = null;
+        imgPrompt.generated_by = 'none';
+        console.warn(`[AI_CONFIG] Images: prompt ${i + 1} sem imagem — nenhum provider disponível.`);
+      }
     }
 
     // Small delay between requests

@@ -57,23 +57,14 @@ Requisitos OBRIGATÓRIOS:
 Responda APENAS com a meta description, sem explicações ou aspas.`;
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model.replace('google/', '')}:generateContent?key=${apiKey}`;
+    const response = await fetch(geminiEndpoint, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model,
-        messages: [
-          { 
-            role: 'system', 
-            content: 'Você é um especialista em SEO. Responda apenas com a meta description solicitada, sem explicações adicionais.' 
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
+        systemInstruction: { parts: [{ text: 'Você é um especialista em SEO. Responda apenas com a meta description solicitada, sem explicações adicionais.' }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 200 }
       }),
     });
 
@@ -83,7 +74,7 @@ Responda APENAS com a meta description, sem explicações ou aspas.`;
     }
 
     const data = await response.json();
-    let generatedMeta = data.choices?.[0]?.message?.content?.trim() || '';
+    let generatedMeta = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 
     // Remover aspas se presentes
     generatedMeta = generatedMeta.replace(/^["']|["']$/g, '');

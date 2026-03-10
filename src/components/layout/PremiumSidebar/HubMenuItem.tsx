@@ -24,6 +24,11 @@ interface PanelPosition {
  * - Fecha ao sair ou clicar fora
  * - Faixa lateral roxo→laranja quando ativo
  * - Usa position: fixed para evitar clipping por overflow
+ *
+ * CORREÇÃO: O painel usa position:fixed e fica fora do DOM pai.
+ * Para manter hover contínuo, os events onMouseEnter/Leave são
+ * gerenciados por um timeout compartilhado que ambos (trigger e
+ * painel) podem cancelar.
  */
 export function HubMenuItem({
   id,
@@ -45,14 +50,16 @@ export function HubMenuItem({
       const rect = containerRef.current.getBoundingClientRect();
       setPanelPosition({
         top: rect.top,
-        left: rect.right + 12, // 12px de margem (ml-3)
+        left: rect.right + 8, // 8px de margem — menor para facilitar hover
       });
     }
   }, [isOpen]);
 
+  // Handlers compartilhados entre trigger e painel flutuante
   const handleMouseEnter = () => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
+      timeoutRef.current = undefined;
     }
     if (isExpanded) {
       setIsOpen(true);
@@ -60,9 +67,10 @@ export function HubMenuItem({
   };
 
   const handleMouseLeave = () => {
+    // Delay generoso: 300ms para dar tempo de mover o mouse até o painel
     timeoutRef.current = setTimeout(() => {
       setIsOpen(false);
-    }, 150);
+    }, 300);
   };
 
   const handleClick = () => {
@@ -73,6 +81,13 @@ export function HubMenuItem({
     setIsOpen(false);
     onClose?.();
   };
+
+  // Cleanup no unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   return (
     <div
@@ -135,12 +150,14 @@ export function HubMenuItem({
 
         if (!isExpanded) {
           return (
-            <Tooltip>
-              <TooltipTrigger asChild>{btn}</TooltipTrigger>
-              <TooltipContent side="right" className="font-medium">
-                {label}
-              </TooltipContent>
-            </Tooltip>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>{btn}</TooltipTrigger>
+                <TooltipContent side="right" className="font-medium">
+                  {label}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           );
         }
 
@@ -150,10 +167,26 @@ export function HubMenuItem({
       {/* Menu Flutuante - Position Fixed */}
       {isOpen && (
         <>
-          {/* Overlay invisível para detectar click fora */}
+          {/* Overlay invisível para detectar click fora - z menor que o card e a ponte */}
           <div
-            className="fixed inset-0 z-[100]"
+            className="fixed inset-0 z-[108]"
             onClick={handleCloseMenu}
+            aria-hidden="true"
+          />
+
+          {/* Ponte invisível: cobre o gap de 8px entre sidebar e painel
+              para que o onMouseLeave do painel não dispare ao cruzar o gap */}
+          <div
+            className="fixed z-[115]"
+            style={{
+              top: panelPosition.top,
+              left: panelPosition.left - 12,
+              width: 12,
+              height: '100%',
+              maxHeight: '80vh',
+            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             aria-hidden="true"
           />
 

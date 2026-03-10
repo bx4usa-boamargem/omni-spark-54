@@ -330,11 +330,12 @@ const SIZE_CONTROL = {
 const VISUAL_INSTRUCTIONS = {
   cover_image: {
     description: "Representa o PROBLEMA CENTRAL do artigo",
-    style: "Fotografia realista e profissional (NÃO ilustração)",
+    style: "Fotografia realista e profissional (NÃO ilustração, NÃO conteúda pessoas)",
     requirements: [
       "Apelo emocional moderado (problema real, não exagerado)",
       "Adequada para uso em blog corporativo",
-      "Considerar contexto local quando aplicável (cidade/região)"
+      "Considerar contexto local quando aplicável (cidade/região)",
+      "SEM PESSOAS: foco em ambiente, equipamentos, produto, local ou resultado do serviço"
     ]
   },
   content_images: {
@@ -344,41 +345,43 @@ const VISUAL_INSTRUCTIONS = {
       "Reforçar o argumento do texto",
       "Não usar imagens genéricas de banco",
       "Não usar ilustrações cartunizadas",
-      "Priorizar cenas reais de ambientes, pessoas ou situações do setor"
+      "REGRA DOS 40%: Apenas 1 das 3 imagens de apoio pode conter pessoas/profissionais",
+      "As outras 2 imagens: focar em ambientes, equipamentos, processos, antes/depois ou resultados visuais"
     ]
   },
   niche_styles: {
     servicos: {
       label: "Serviços (controle de pragas, limpeza, manutenção, construção, HVAC)",
       guidelines: [
-        "Ambientes reais (casas, empresas, obras, cozinhas, fachadas)",
-        "Profissionais uniformizados em ação",
-        "Situações de problema vs. solução",
+        "Ambientes reais (casas, empresas, obras, cozinhas, fachadas) SEM pessoas na imagem de capa",
+        "Para imagens de apoio: 2 de 3 devem ser sem pessoas (equipamentos, antes/depois, materiais)",
+        "Quando permitir profissional: uniformizado em ação (parcial, de costas, sem rosto focado)",
         "Estilo: fotografia realista, luz natural"
       ]
     },
     saude: {
       label: "Clínicas, saúde, estética",
       guidelines: [
-        "Ambientes limpos e organizados",
-        "Pessoas reais (pacientes ou profissionais)",
-        "Sensação de segurança e cuidado",
+        "Ambientes limpos e organizados SEM pessoas para a capa",
+        "Para imagens de apoio: priorizar equipamentos médicos, ambiente clínico, materiais",
+        "Apenas 1 imagem de apoio pode ter paciente ou profissional (de forma discreta)",
         "Estilo: clean, profissional, acolhedor"
       ]
     },
     b2b: {
       label: "Negócios B2B / Escritórios / Consultoria",
       guidelines: [
-        "Escritórios reais, reuniões, profissionais trabalhando",
-        "Linguagem visual sóbria",
+        "Escritórios reais, mesas de trabalho, telas, documentos — sem pessoas para a capa",
+        "Para imagens de apoio: 2 de 3 foco em ambiente/tecnologia, apenas 1 com profissional discreto",
         "Estilo: corporativo, moderno, confiável"
       ]
     },
     comercio: {
       label: "Restaurantes, hotéis, comércio local",
       guidelines: [
-        "Ambientes reais do estabelecimento",
-        "Foco em higiene, organização e experiência do cliente",
+        "Ambientes reais do estabelecimento SEM pessoas na capa",
+        "Foco em pratos, produtos, higiene, organização e experiência do cliente",
+        "Apenas 1 imagem de apoio pode mostrar interação humana",
         "Estilo: realista, iluminação quente, convidativo"
       ]
     }
@@ -411,15 +414,26 @@ function buildVisualInstructionsPrompt(tipoNegocio: string): string {
 
 ## INSTRUÇÕES VISUAIS OBRIGATÓRIAS (IMAGENS)
 
-### IMAGEM DE CAPA (OBRIGATÓRIA)
+### ⚠️ REGRA DOS 40% (OBRIGATÓRIA): Controle de Pessoas nas Imagens
+No máximo 40% das imagens podem conter pessoas/profissionais/rostos.
+Para um artigo com 4 imagens (capa + 3 apoio): **apenas 1 imagem pode ter pessoas**.
+
+### IMAGEM DE CAPA (OBRIGATÓRIA — SEM PESSOAS)
 Gere uma descrição detalhada de uma imagem de capa que:
 - ${VISUAL_INSTRUCTIONS.cover_image.description}
 - ${VISUAL_INSTRUCTIONS.cover_image.style}
 ${VISUAL_INSTRUCTIONS.cover_image.requirements.map(r => `- ${r}`).join('\n')}
+⛔ A imagem de CAPA NÃO deve conter pessoas, rostos ou figuras humanas identificáveis.
+Foque em: ambientes, equipamentos, produtos, materiais, antes/depois, cenografias do setor.
 
-### IMAGENS DE APOIO (3 IMAGENS OBRIGATÓRIAS)
+### IMAGENS DE APOIO (3 IMAGENS — REGRA DOS 40%)
 Gere 3 descrições de imagens vinculadas a seções-chave do artigo:
 ${VISUAL_INSTRUCTIONS.content_images.requirements.map(r => `- ${r}`).join('\n')}
+
+**Distribuição OBRIGATÓRIA para as 3 imagens de apoio:**
+- **Imagem 1 de apoio** (index 1): PODE ter profissional ou pessoa (de forma natural, não posada)
+- **Imagem 2 de apoio** (index 2): SEM pessoas — foco em ambiente, equipamento, processo ou resultado
+- **Imagem 3 de apoio** (index 3): SEM pessoas — foco em detalhe técnico, material, ambiente ou contexto
 
 ### PADRÃO VISUAL DETECTADO: ${nicheStyle.label.toUpperCase()}
 ${nicheStyle.guidelines.map(g => `- ${g}`).join('\n')}
@@ -428,8 +442,8 @@ ${nicheStyle.guidelines.map(g => `- ${g}`).join('\n')}
 {
   "images": {
     "cover_image": {
-      "description": "Descrição detalhada da imagem de capa representando o problema central",
-      "style": "fotografia realista, profissional",
+      "description": "Descrição detalhada SEM pessoas — foco em ambiente ou contexto do problema",
+      "style": "fotografia realista, profissional, sem pessoas",
       "use_case": "capa do artigo"
     },
     "content_images": [
@@ -444,7 +458,8 @@ ${nicheStyle.guidelines.map(g => `- ${g}`).join('\n')}
   }
 }
 
-⚠️ O bloco "images" é OBRIGATÓRIO. Sem ele, o output é INVÁLIDO.`;
+⚠️ O bloco "images" é OBRIGATÓRIO. Sem ele, o output é INVÁLIDO.
+⚠️ REGRA DOS 40% é INVIOLÁVEL: máximo 1 imagem com pessoas (capa nunca tem pessoas).`;
 }
 
 /**

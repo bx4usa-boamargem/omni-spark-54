@@ -19,6 +19,75 @@
     "signOut": "Déconnexion",
     "createContent": "Créer du contenu"
   },
+  "integrations": {
+    "title": "Integrations",
+    "subtitle": "Connectez Omniseen à divers outils",
+    "categories": {
+      "blog": "Plateformes de Blog",
+      "blogDescription": "Connectez votre blog pour la publication automatique",
+      "monitoring": "Surveillance et Marketing",
+      "monitoringDescription": "Surveillez les performances et les visiteurs",
+      "distribution": "Distribution de Contenu",
+      "distributionDescription": "Diffusez votre contenu sur plusieurs canaux"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "comingSoon": "Bientôt disponible"
+    },
+    "actions": {
+      "configure": "Configurer",
+      "edit": "Modifier",
+      "activate": "Activer",
+      "use": "Utiliser"
+    },
+    "items": {
+      "wordpress": {
+        "name": "WordPress",
+        "description": "Publiez automatiquement des articles sur WordPress"
+      },
+      "wix": {
+        "name": "Wix",
+        "description": "Synchronisez le contenu avec votre site Wix"
+      },
+      "webhook": {
+        "name": "Webhook",
+        "description": "Intégrez via API personnalisée"
+      },
+      "gsc": {
+        "name": "Google Search Console",
+        "description": "Importez des mots-clés et surveillez le classement"
+      },
+      "ga": {
+        "name": "Google Analytics",
+        "description": "Suivez les métriques de trafic"
+      },
+      "gtm": {
+        "name": "Google Tag Manager",
+        "description": "Gérez les balises et les scripts"
+      },
+      "meta": {
+        "name": "Pixel Meta",
+        "description": "Suivez les conversions Facebook/Instagram"
+      },
+      "googleAds": {
+        "name": "Google Ads",
+        "description": "Suivez les conversions publicitaires"
+      },
+      "linkedin": {
+        "name": "LinkedIn",
+        "description": "Partagez des articles sur LinkedIn"
+      },
+      "instagram": {
+        "name": "Instagram",
+        "description": "Importez du contenu depuis des posts"
+      },
+      "soundcloud": {
+        "name": "Soundcloud",
+        "description": "Publiez la version audio des articles"
+      }
+    }
+  },
   "landing": {
     "header": {
       "home": "Accueil",

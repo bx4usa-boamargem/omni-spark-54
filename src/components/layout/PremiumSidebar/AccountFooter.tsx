@@ -88,17 +88,17 @@ export function AccountFooter({ onNavigate, onLogout, currentPath, isExpanded = 
       {/* Menu Flutuante - Abre para CIMA */}
       {isOpen && (
         <>
-          {/* Overlay */}
+          {/* Overlay - z menor que o card para não bloquear cliques no painel */}
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[98]"
             onClick={() => setIsOpen(false)}
             aria-hidden="true"
           />
 
-          {/* Card flutuante - posicionado ACIMA do botão */}
+          {/* Card flutuante - posicionado ACIMA do botão, z maior que overlay */}
           <div
             className={cn(
-              'absolute bottom-full left-0 right-0 mb-2 z-50',
+              'absolute bottom-full left-0 right-0 mb-2 z-[99]',
               'bg-white dark:bg-gray-900 rounded-xl',
               'shadow-[0_-10px_40px_rgba(0,0,0,0.15),0_0_1px_rgba(0,0,0,0.1)]',
               'border border-[#E5E7EB] dark:border-gray-700',

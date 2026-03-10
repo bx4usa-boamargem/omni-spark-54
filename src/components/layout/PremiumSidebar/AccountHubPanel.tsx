@@ -184,6 +184,30 @@ export function AccountHubPanel({ onNavigate, onLogout, currentPath, isPlatformA
             </div>
           </button>
         )}
+        {isPlatformAdmin && (
+          <button
+            onClick={() => onNavigate('/admin/workflows')}
+            className={cn(
+              'w-full flex items-start gap-3 px-3 py-2.5 rounded-lg',
+              'hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors',
+              'focus:outline-none focus:ring-2 focus:ring-indigo-500/50',
+              currentPath?.includes('/admin/workflows') && 'bg-indigo-50 dark:bg-indigo-900/20'
+            )}
+            role="menuitem"
+          >
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+              <svg xmlns="http://www.2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-network"><rect x="16" y="16" width="6" height="6" rx="1" /><rect x="2" y="16" width="6" height="6" rx="1" /><rect x="9" y="2" width="6" height="6" rx="1" /><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" /><path d="M12 12V8" /></svg>
+            </div>
+            <div className="flex-1 text-left min-w-0">
+              <span className="text-sm font-medium text-[#111827] dark:text-white block">
+                Workflows
+              </span>
+              <p className="text-xs text-[#6B7280] dark:text-gray-500 truncate">
+                Monitor de Jobs e Filas
+              </p>
+            </div>
+          </button>
+        )}
         {settingsItems.map(renderItem)}
       </div>
 

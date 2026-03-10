@@ -30,10 +30,10 @@ export function SidebarNavItem({
   };
 
   const handleMouseLeave = () => {
-    // Small delay to allow moving to the panel
+    // Delay generoso para cobrir o gap visual (ml-3 = 12px) entre o ícone e o painel
     timeoutRef.current = setTimeout(() => {
       setIsHovered(false);
-    }, 150);
+    }, 300);
   };
 
   return (
@@ -67,14 +67,22 @@ export function SidebarNavItem({
       {panel && (
         <div
           className={cn(
-            'absolute left-full top-0 ml-3 z-50',
+            'absolute left-full top-0 z-50',
+            // Sem ml-3 aqui — a ponte cobre o gap
             'transition-all duration-200',
             isHovered
               ? 'opacity-100 visible translate-x-0'
               : 'opacity-0 invisible -translate-x-2 pointer-events-none'
           )}
         >
-          {panel}
+          {/* Ponte invisível que cobre o gap entre o ícone e o painel.
+              Sem ela, o mouse "sai" do hover ao atravessar o espaço vazio. */}
+          <div className="absolute right-full top-0 h-full w-3" aria-hidden="true" />
+
+          {/* Offset visual: desloca o painel 12px para a direita */}
+          <div className="ml-3">
+            {panel}
+          </div>
         </div>
       )}
     </div>

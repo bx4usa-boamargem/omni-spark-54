@@ -173,35 +173,40 @@ export function ArticlePreview({
           <span>Simulação do post publicado</span>
         </div>
 
-        {/* Usar o mesmo componente do blog público */}
-        <ArticleContent
-          content={article.content}
-          contentImages={contentImages}
-        />
+        {/* Wrapper article-preview-light: força tema claro no preview para simular o blog público.
+            Sem isso, em dark mode o texto (foreground = branco) fica invisível
+            sobre o fundo branco do preview. */}
+        <div className="article-preview-light rounded-xl p-4">
+          {/* Usar o mesmo componente do blog público */}
+          <ArticleContent
+            content={article.content}
+            contentImages={contentImages}
+          />
 
-        {article.faq && article.faq.length > 0 && (
-          <div className="mt-8 pt-6 border-t">
-            <div className="flex items-center gap-2 mb-4">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-bold">Perguntas Frequentes</h2>
+          {article.faq && article.faq.length > 0 && (
+            <div className="mt-8 pt-6 border-t">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-bold text-gray-900">Perguntas Frequentes</h2>
+              </div>
+              <div className="space-y-4">
+                {article.faq.map((item, index) => (
+                  <div key={index} className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold mb-2 text-gray-900">{item.question}</h3>
+                    <p className="text-sm text-gray-600">{item.answer}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-4">
-              {article.faq.map((item, index) => (
-                <div key={index} className="bg-muted/50 rounded-lg p-4">
-                  <h3 className="font-semibold mb-2">{item.question}</h3>
-                  <p className="text-sm text-muted-foreground">{item.answer}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* CTA da subconta */}
-        {(article as any).cta && (
-          <div className="mt-8 pt-6 border-t">
-            <ArticleCTARenderer cta={(article as any).cta} />
-          </div>
-        )}
+          {/* CTA da subconta */}
+          {(article as any).cta && (
+            <div className="mt-8 pt-6 border-t">
+              <ArticleCTARenderer cta={(article as any).cta} />
+            </div>
+          )}
+        </div>
 
         <SdrChatbotWidget
           articleId={article.id}

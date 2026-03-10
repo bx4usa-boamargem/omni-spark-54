@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { 
-  buildDiagnosticPrompt, 
-  buildSuggestionsPrompt, 
+import { callWriter } from "../_shared/aiProviders.ts";
+import {
+  buildDiagnosticPrompt,
+  buildSuggestionsPrompt,
   buildAutonomousRewritePrompt,
   calculatePredictiveMetrics,
   type PerformanceDiagnosis,
   type OptimizationSuggestions,
-  type KPIImprovements
+  type KPIImprovements,
 } from '../_shared/performanceOptimizer.ts';
 
 const corsHeaders = {
@@ -37,17 +38,24 @@ interface AutonomousResponse {
   kpi_improvements: KPIImprovements;
 }
 
+function parseJSON<T>(raw: string, fallback: T): T {
+  try {
+    const clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start === -1 || end === -1) return fallback;
+    return JSON.parse(clean.substring(start, end + 1));
+  } catch {
+    return fallback;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const request: OptimizeRequest = await req.json();
     const { title, content, metaDescription, mode, companyName } = request;
 
@@ -63,110 +71,67 @@ serve(async (req) => {
 
     // STEP 2: Run AI diagnosis
     const diagnosticPrompt = buildDiagnosticPrompt(title, content, metaDescription);
-    
-    const diagnosisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
+
+    const diagnosisResultRaw = await callWriter({
+      messages: [
           {
             role: 'system',
             content: 'Você é um especialista em análise de performance de conteúdo. Retorne APENAS JSON válido, sem markdown ou explicações.'
           },
           { role: 'user', content: diagnosticPrompt }
         ],
-        temperature: 0.3,
-      }),
+      temperature: 0.3,
+      maxTokens: 4096,
     });
 
-    if (!diagnosisResponse.ok) {
-      throw new Error(`Diagnosis API error: ${diagnosisResponse.status}`);
+    if (!diagnosisResultRaw.success || !diagnosisResultRaw.data?.content) {
+      console.error("[AI] Writer failed:", diagnosisResultRaw.fallbackReason);
+      throw new Error(`AI error: ${diagnosisResultRaw.fallbackReason}`);
     }
 
-    const diagnosisData = await diagnosisResponse.json();
-    let diagnosisRaw = diagnosisData.choices?.[0]?.message?.content || '{}';
-    
-    // Clean JSON response
-    diagnosisRaw = diagnosisRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
-    let diagnosis: PerformanceDiagnosis;
-    try {
-      diagnosis = JSON.parse(diagnosisRaw);
-    } catch {
-      console.error('[Performance Optimizer] Failed to parse diagnosis, using defaults');
-      diagnosis = {
-        overall_health: 'moderate',
-        score: 50,
-        estimated_read_time_seconds: predictiveMetrics.estimated_read_time_seconds,
-        predicted_scroll_depth: predictiveMetrics.predicted_scroll_depth,
-        predicted_bounce_rate: predictiveMetrics.predicted_bounce_rate,
-        issues: []
-      };
-    }
+    const rawDiagnosisContent = typeof diagnosisResultRaw.data.content === 'string'
+      ? diagnosisResultRaw.data.content
+      : JSON.stringify(diagnosisResultRaw.data.content);
 
-    // Merge predictive metrics with AI diagnosis
-    diagnosis.estimated_read_time_seconds = predictiveMetrics.estimated_read_time_seconds;
-    diagnosis.predicted_scroll_depth = diagnosis.predicted_scroll_depth || predictiveMetrics.predicted_scroll_depth;
-    diagnosis.predicted_bounce_rate = diagnosis.predicted_bounce_rate || predictiveMetrics.predicted_bounce_rate;
+    const defaultDiagnosis: PerformanceDiagnosis = {
+      score: 50,
+      issues: [],
+      strengths: [],
+    } as unknown as PerformanceDiagnosis;
 
-    console.log('[Performance Optimizer] Diagnosis complete:', {
-      health: diagnosis.overall_health,
-      score: diagnosis.score,
-      issues_count: diagnosis.issues?.length || 0
-    });
+    const diagnosis: PerformanceDiagnosis = parseJSON<PerformanceDiagnosis>(rawDiagnosisContent, defaultDiagnosis);
 
-    // STEP 3: Mode-specific processing
     if (mode === 'assisted') {
-      // Generate suggestions
-      const suggestionsPrompt = buildSuggestionsPrompt(title, content, diagnosis, companyName);
-      
-      const suggestionsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
+      // STEP 3a: Generate suggestions
+      const suggestionsPrompt = buildSuggestionsPrompt(title, content, diagnosis);
+
+      const suggestionsResultRaw = await callWriter({
+        messages: [
             {
               role: 'system',
-              content: 'Você é um especialista em otimização de conteúdo. Retorne APENAS JSON válido, sem markdown ou explicações.'
+              content: 'Você é um especialista em otimização de conteúdo SEO. Retorne APENAS JSON válido, sem markdown ou explicações.'
             },
             { role: 'user', content: suggestionsPrompt }
           ],
-          temperature: 0.5,
-        }),
+        temperature: 0.5,
+        maxTokens: 4096,
       });
 
-      if (!suggestionsResponse.ok) {
-        throw new Error(`Suggestions API error: ${suggestionsResponse.status}`);
-      }
+      const rawSuggestionsContent = suggestionsResultRaw.success && suggestionsResultRaw.data?.content
+        ? (typeof suggestionsResultRaw.data.content === 'string'
+            ? suggestionsResultRaw.data.content
+            : JSON.stringify(suggestionsResultRaw.data.content))
+        : '{}';
 
-      const suggestionsData = await suggestionsResponse.json();
-      let suggestionsRaw = suggestionsData.choices?.[0]?.message?.content || '{}';
-      suggestionsRaw = suggestionsRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      
-      let suggestions: OptimizationSuggestions;
-      try {
-        suggestions = JSON.parse(suggestionsRaw);
-      } catch {
-        console.error('[Performance Optimizer] Failed to parse suggestions');
-        suggestions = {
-          title_alternatives: [],
-          sections_to_fix: [],
-          highlight_blocks_to_add: []
-        };
-      }
+      const suggestions: OptimizationSuggestions = parseJSON<OptimizationSuggestions>(
+        rawSuggestionsContent,
+        {} as OptimizationSuggestions
+      );
 
       const response: AssistedResponse = {
         mode: 'assisted',
         diagnosis,
-        suggestions
+        suggestions,
       };
 
       return new Response(JSON.stringify(response), {
@@ -174,49 +139,33 @@ serve(async (req) => {
       });
 
     } else {
-      // Autonomous rewrite
+      // STEP 3b: Autonomous rewrite
       const rewritePrompt = buildAutonomousRewritePrompt(title, content, diagnosis, companyName);
-      
-      const rewriteResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-pro',
-          messages: [
+
+      const rewriteResultRaw = await callWriter({
+        messages: [
             {
               role: 'system',
-              content: 'Você é um especialista em reescrita de conteúdo para performance. Retorne APENAS JSON válido, sem markdown ou explicações. O campo optimized_content deve conter o artigo completo em Markdown. REGRA CRÍTICA: Mantenha TODA a estrutura HTML/Markdown original. NÃO remova tags <figure>, <img> ou blocos de imagem. Preserve headings, listas e formatação.'
+              content: 'Você é um especialista em otimização de conteúdo. Retorne APENAS JSON válido com o conteúdo reescrito.'
             },
             { role: 'user', content: rewritePrompt }
           ],
-          temperature: 0.6,
-        }),
+        temperature: 0.6,
+        maxTokens: 8192,
       });
 
-      if (!rewriteResponse.ok) {
-        throw new Error(`Rewrite API error: ${rewriteResponse.status}`);
-      }
+      const rawRewriteContent = rewriteResultRaw.success && rewriteResultRaw.data?.content
+        ? (typeof rewriteResultRaw.data.content === 'string'
+            ? rewriteResultRaw.data.content
+            : JSON.stringify(rewriteResultRaw.data.content))
+        : '{}';
 
-      const rewriteData = await rewriteResponse.json();
-      let rewriteRaw = rewriteData.choices?.[0]?.message?.content || '{}';
-      rewriteRaw = rewriteRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      
-      let rewriteResult: {
-        optimized_title: string;
-        optimized_content: string;
-        changes_summary: string[];
-        kpi_improvements: KPIImprovements;
-      };
-
-      try {
-        rewriteResult = JSON.parse(rewriteRaw);
-      } catch {
-        console.error('[Performance Optimizer] Failed to parse rewrite result');
-        throw new Error('Failed to generate optimized content');
-      }
+      const rewriteResult = parseJSON<{
+        optimized_title?: string;
+        optimized_content?: string;
+        changes_summary?: string[];
+        kpi_improvements?: KPIImprovements;
+      }>(rawRewriteContent, {});
 
       const response: AutonomousResponse = {
         mode: 'autonomous',
@@ -227,8 +176,8 @@ serve(async (req) => {
         kpi_improvements: rewriteResult.kpi_improvements || {
           estimated_read_time_delta: 0,
           predicted_scroll_depth_delta: 0,
-          predicted_bounce_rate_delta: 0
-        }
+          predicted_bounce_rate_delta: 0,
+        } as unknown as KPIImprovements,
       };
 
       return new Response(JSON.stringify(response), {

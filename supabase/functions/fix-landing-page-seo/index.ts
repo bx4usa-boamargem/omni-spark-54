@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -108,7 +109,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { landing_page_id, fix_types = ["title", "meta", "content", "keywords"] }: FixRequest = await req.json();
@@ -172,7 +173,7 @@ serve(async (req) => {
     let updatedPageData = JSON.parse(JSON.stringify(pageData)); // Deep clone
 
     // Use Lovable AI for comprehensive improvements
-    if (lovableApiKey) {
+    {
       const needsContentExpansion = fix_types.includes("content") && currentWordCount < targetWordCount;
       const needsKeywordInjection = fix_types.includes("keywords");
       const needsStructure = fix_types.includes("structure");
@@ -227,24 +228,16 @@ ${fix_types.includes("structure") ? `5. FAQ: Adicione 3-5 perguntas frequentes r
       try {
         console.log(`[FIX-LP-SEO] Calling AI for optimization...`);
         
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${lovableApiKey}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [{ role: "user", content: aiPrompt }],
-            response_format: { type: "json_object" },
-          }),
+        const aiResponseResult = await callWriter({
+          messages: [{ role: "user", content: aiPrompt }],
+          temperature: 0.7,
+          maxTokens: 4096,
         });
 
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          const content = aiData.choices?.[0]?.message?.content;
+        if (aiResponseResult.success && aiResponseResult.data?.content) {
+          const content = aiResponseResult.data.content;
           
-          if (content) {
+          try {
             const parsed = JSON.parse(content);
             
             // Apply SEO title fix
@@ -278,16 +271,12 @@ ${fix_types.includes("structure") ? `5. FAQ: Adicione 3-5 perguntas frequentes r
             
             // Apply FAQ improvements
             if (parsed.faq && fix_types.includes("structure")) {
-              // Merge with existing FAQ
               const existingFaq = pageData.faq || [];
               const newFaq = parsed.faq || [];
-              
-              // Add new FAQs that don't duplicate existing
               const existingQuestions = existingFaq.map((f: any) => f.question?.toLowerCase());
               const uniqueNewFaq = newFaq.filter((f: any) => 
                 !existingQuestions.includes(f.question?.toLowerCase())
               );
-              
               if (uniqueNewFaq.length > 0) {
                 updatedPageData.faq = [...existingFaq, ...uniqueNewFaq];
                 fixes.push("faq_added");
@@ -298,9 +287,11 @@ ${fix_types.includes("structure") ? `5. FAQ: Adicione 3-5 perguntas frequentes r
             if (parsed.improvements_made) {
               console.log(`[FIX-LP-SEO] Improvements: ${parsed.improvements_made.join(', ')}`);
             }
+          } catch (parseErr) {
+            console.error("[FIX-LP-SEO] Failed to parse AI response:", parseErr);
           }
         } else {
-          console.error("[FIX-LP-SEO] AI request failed:", await aiResponse.text());
+          console.error("[FIX-LP-SEO] AI request failed:", aiResponseResult.fallbackReason);
         }
       } catch (aiError) {
         console.error("[FIX-LP-SEO] AI call failed:", aiError);

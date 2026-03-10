@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -84,8 +85,7 @@ FORMATO OBRIGATÓRIO (array JSON puro):
 async function processArticleBatch(
   articles: ArticleInput[],
   type: string,
-  systemPrompt: string,
-  apiKey: string
+  systemPrompt: string
 ): Promise<SuggestionOutput[]> {
   const articlesData = articles.map((a: ArticleInput) => {
     const data: Record<string, any> = {
@@ -109,34 +109,26 @@ async function processArticleBatch(
 
   console.log(`[Batch] Processing ${articles.length} articles for ${type}`);
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
+  const responseResult = await callWriter({
+    messages: [
         { role: 'system', content: systemPrompt },
         { 
           role: 'user', 
           content: `Analise estes ${articles.length} artigos e gere sugestões de otimização. Responda APENAS o array JSON:\n\n${JSON.stringify(articlesData, null, 2)}`
         }
       ],
-      temperature: 0.3, // Lower temperature for more consistent JSON
-      max_tokens: 4000 // Per batch, not total
-    }),
+    temperature: 0.3,
+    maxTokens: 4000,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('AI Gateway error:', response.status, errorText);
-    throw new Error(`AI Gateway error: ${response.status}`);
+  if (!responseResult.success || !responseResult.data?.content) {
+    console.error('[Batch] AI Writer failed:', responseResult.fallbackReason);
+    throw new Error(`AI error: ${responseResult.fallbackReason}`);
   }
 
-  const aiResponse = await response.json();
-  const content = aiResponse.choices?.[0]?.message?.content || '';
+  const content = typeof responseResult.data.content === 'string'
+    ? responseResult.data.content
+    : JSON.stringify(responseResult.data.content);
 
   console.log('[Batch] Raw AI response length:', content.length);
 
@@ -269,11 +261,6 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const { type, articles, blog_id, user_id } = await req.json();
 
     if (!type || !articles || !Array.isArray(articles) || articles.length === 0) {
@@ -303,7 +290,7 @@ serve(async (req) => {
       console.log(`[Main] Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(articles.length/BATCH_SIZE)}`);
       
       try {
-        const batchSuggestions = await processArticleBatch(batch, type, systemPrompt, LOVABLE_API_KEY);
+        const batchSuggestions = await processArticleBatch(batch, type, systemPrompt);
         allSuggestions.push(...batchSuggestions);
         
         if (batchSuggestions.length === 0 && batch.length > 0) {

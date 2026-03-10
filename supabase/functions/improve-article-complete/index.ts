@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,17 +98,14 @@ serve(async (req) => {
 
     // If less than 2 visual blocks, we need to add some
     if (visualBlockCount < 2) {
-      // Use AI to generate appropriate visual blocks
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-      
-      if (LOVABLE_API_KEY) {
-        const blocksNeeded = 3 - visualBlockCount;
-        const blocksToAdd: string[] = [];
-        if (!hasInsight) blocksToAdd.push('💡 (Verdade Dura/Insight importante)');
-        if (!hasAlert) blocksToAdd.push('⚠️ (Alerta/Erro comum)');
-        if (!hasTip) blocksToAdd.push('📌 (Dica Prática)');
+      // Use AI (agnóstico) to generate appropriate visual blocks
+      const blocksNeeded = 3 - visualBlockCount;
+      const blocksToAdd: string[] = [];
+      if (!hasInsight) blocksToAdd.push('\ud83d\udca1 (Verdade Dura/Insight importante)');
+      if (!hasAlert) blocksToAdd.push('\u26a0\ufe0f (Alerta/Erro comum)');
+      if (!hasTip) blocksToAdd.push('\ud83d\udccc (Dica Prática)');
 
-        const blockPrompt = `Analise o seguinte artigo e gere ${blocksNeeded} blocos visuais para inserir.
+      const blockPrompt = `Analise o seguinte artigo e gere ${blocksNeeded} blocos visuais para inserir.
 
 Título: ${title}
 Conteúdo (resumo): ${improvedContent.substring(0, 2000)}
@@ -118,7 +116,7 @@ Para cada bloco, retorne EXATAMENTE neste formato JSON:
 {
   "blocks": [
     {
-      "emoji": "💡",
+      "emoji": "\ud83d\udca1",
       "text": "Texto do insight aqui (máximo 2 frases)",
       "insertAfterParagraph": 2
     }
@@ -126,67 +124,61 @@ Para cada bloco, retorne EXATAMENTE neste formato JSON:
 }
 
 Regras:
-- 💡 Verdade Dura: Uma verdade desconfortável mas importante sobre o tema
-- ⚠️ Alerta: Um erro comum que as pessoas cometem
-- 📌 Dica Prática: Uma ação concreta e imediata que o leitor pode fazer
+- \ud83d\udca1 Verdade Dura: Uma verdade desconfortável mas importante sobre o tema
+- \u26a0\ufe0f Alerta: Um erro comum que as pessoas cometem
+- \ud83d\udccc Dica Prática: Uma ação concreta e imediata que o leitor pode fazer
 
 Retorne APENAS o JSON, sem explicações.`;
 
-        try {
-          const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                { role: 'system', content: 'Você é a OMNISEEN AI, a assistente virtual inteligente da OMNISEEN, editora especialista em conteúdo para blogs. Retorne apenas JSON válido.' },
-                { role: 'user', content: blockPrompt }
-              ],
-            }),
-          });
+      try {
+        const aiResult = await callWriter({
+          messages: [
+            { role: 'system', content: 'Você é a OMNISEEN AI, editora especialista em conteúdo para blogs. Retorne apenas JSON válido.' },
+            { role: 'user', content: blockPrompt }
+          ],
+          temperature: 0.4,
+          maxTokens: 800,
+        });
 
-          if (aiResponse.ok) {
-            const aiData = await aiResponse.json();
-            const responseText = aiData.choices?.[0]?.message?.content || '';
-            
-            // Parse JSON from response
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              try {
-                const blocksData = JSON.parse(jsonMatch[0]);
-                const contentParagraphs = improvedContent.split('\n\n');
-                
-                if (blocksData.blocks && Array.isArray(blocksData.blocks)) {
-                  // Sort blocks by insert position descending to avoid index shifting
-                  const sortedBlocks = blocksData.blocks.sort((a: any, b: any) => 
-                    (b.insertAfterParagraph || 0) - (a.insertAfterParagraph || 0)
-                  );
-                  
-                  sortedBlocks.forEach((block: any) => {
-                    const insertIndex = Math.min(block.insertAfterParagraph || 2, contentParagraphs.length - 1);
-                    const blockText = `${block.emoji} ${block.text}`;
-                    contentParagraphs.splice(insertIndex + 1, 0, blockText);
-                    
-                    improvements.push({
-                      type: 'visual_block',
-                      description: `Bloco ${block.emoji} adicionado após parágrafo ${insertIndex + 1}`,
-                      location: blockText.substring(0, 50) + '...'
-                    });
+        if (aiResult.success && aiResult.data?.content) {
+          const responseText = aiResult.data.content;
+
+          // Parse JSON from response
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const blocksData = JSON.parse(jsonMatch[0]);
+              const contentParagraphs = improvedContent.split('\n\n');
+
+              if (blocksData.blocks && Array.isArray(blocksData.blocks)) {
+                // Sort blocks by insert position descending to avoid index shifting
+                const sortedBlocks = blocksData.blocks.sort((a: any, b: any) =>
+                  (b.insertAfterParagraph || 0) - (a.insertAfterParagraph || 0)
+                );
+
+                sortedBlocks.forEach((block: any) => {
+                  const insertIndex = Math.min(block.insertAfterParagraph || 2, contentParagraphs.length - 1);
+                  const blockText = `${block.emoji} ${block.text}`;
+                  contentParagraphs.splice(insertIndex + 1, 0, blockText);
+
+                  improvements.push({
+                    type: 'visual_block',
+                    description: `Bloco ${block.emoji} adicionado após parágrafo ${insertIndex + 1}`,
+                    location: blockText.substring(0, 50) + '...'
                   });
-                  
-                  improvedContent = contentParagraphs.join('\n\n');
-                }
-              } catch (parseError) {
-                console.error('Error parsing AI blocks response:', parseError);
+                });
+
+                improvedContent = contentParagraphs.join('\n\n');
               }
+            } catch (parseError) {
+              console.error('Error parsing AI blocks response:', parseError);
             }
           }
-        } catch (aiError) {
-          console.error('Error calling AI for blocks:', aiError);
+        } else {
+          console.warn('[IMPROVE] AI for blocks failed:', aiResult.fallbackReason);
         }
+      } catch (aiError) {
+        console.error('Error calling AI for blocks:', aiError);
       }
     }
 
