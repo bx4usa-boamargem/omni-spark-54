@@ -291,7 +291,9 @@ export default function ClientArticleEditor() {
   const derivedKeyword = title ? title.split(' ').slice(0, 4).join(' ') : '';
 
   // ====================================================================
-  // CONVERT OPPORTUNITY: Handle fromOpportunity param via edge function
+  // [LEGACY V1/V2 - ISOLADO] CONVERT OPPORTUNITY: Handle fromOpportunity param via edge function
+  // Pipeline ATIVO (V3): use createArticleFromOpportunity de @/lib/createArticleFromOpportunity
+  // NÃO criar novas chamadas a 'convert-opportunity-to-article' aqui
   // ====================================================================
   const handleConvertOpportunity = async (oppId: string, blogId: string) => {
     // A) Gerar request_id no início para rastreabilidade
@@ -315,6 +317,7 @@ export default function ClientArticleEditor() {
     setGenerationProgress(5);
 
     // V5.0: Fire-and-forget — invoke edge function, then poll DB for real progress
+    // ⚠️ LEGACY: Chama edge function V1 — não replicar este padrão
     const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
       body: { 
         opportunityId: oppId, 
@@ -351,6 +354,7 @@ export default function ClientArticleEditor() {
     console.log(`[${requestId}] Edge function success, activating polling for article:`, data.article_id);
     setPollingArticleId(data.article_id);
   };
+
 
   // Persist view mode
   useEffect(() => {
@@ -643,7 +647,7 @@ export default function ClientArticleEditor() {
         job_type: "article",
         language: "pt-BR",
         intent: "informational" as const,
-        target_words: formData.generationMode === "authority" ? 2500 : 1200,
+        target_words: formData.generationMode === "deep" ? 2500 : 1200,
         image_count: formData.generateImages ? 4 : 0,
       };
 

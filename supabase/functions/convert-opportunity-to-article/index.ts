@@ -1,3 +1,10 @@
+// =============================================================================
+// ⚠️  LEGACY V1/V2 — ISOLADO — NÃO CRIAR NOVOS CALLERS
+// =============================================================================
+// Esta edge function faz parte do pipeline V1/V2 (article_opportunities).
+// O pipeline ATIVO é: RadarV3 → create-generation-job → orchestrate-generation
+// Consulte: supabase/functions/convert-opportunity-to-article/LEGACY.md
+// =============================================================================
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // V6.0: Legacy rotation imports removed - orchestrator handles everything in generate-article-structured

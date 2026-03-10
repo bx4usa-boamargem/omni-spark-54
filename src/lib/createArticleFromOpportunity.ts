@@ -1,3 +1,13 @@
+// =============================================================================
+// ✅ PIPELINE ATIVO V3 — USE ESTE ARQUIVO PARA NOVAS FEATURES
+// =============================================================================
+// createArticleFromOpportunity() → Engine v1 (create-generation-job)
+// Suporta source: 'radar_v3' → atualiza radar_v3_opportunities
+// Suporta source: 'radar'    → atualiza article_opportunities (legacy)
+//
+// NÃO usar: autoCreateArticle.startFromOpportunity (V1 legacy)
+// NÃO usar: convert-opportunity-to-article (edge function legada)
+// =============================================================================
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { NavigateFunction } from 'react-router-dom';
@@ -8,7 +18,10 @@ export interface OpportunityInput {
   suggested_keywords?: string[] | null;
   territory?: { city?: string | null; state?: string | null } | null;
   goal?: string | null;
+  /** Origem da oportunidade. Use 'radar_v3' para oportunidades do Radar V3. */
+  source?: 'radar_v3' | 'radar' | 'manual';
 }
+
 
 /**
  * Creates an Engine v1 generation job directly from an opportunity.
@@ -126,12 +139,13 @@ export async function createArticleFromOpportunity(
   // --- ADJUSTMENT 4: Update opportunity status ---
   if (opportunity.id) {
     try {
-      await supabase
-        .from('article_opportunities')
-        .update({
-          status: 'generating',
-          generation_job_id: jobId,
-        } as any)
+      const table = opportunity.source === 'radar_v3'
+        ? 'radar_v3_opportunities'
+        : 'article_opportunities';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from(table)
+        .update({ status: 'generating', generation_job_id: jobId })
         .eq('id', opportunity.id);
     } catch {
       // Non-blocking

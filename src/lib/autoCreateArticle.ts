@@ -1,3 +1,12 @@
+// =============================================================================
+// ⚠️  LEGACY V1/V2 — ISOLADO
+// =============================================================================
+// `startQuickArticle` → redireciona para Engine v1 (ativo - pode ser chamado)
+// `startFromOpportunity` → chama edge function LEGADA `convert-opportunity-to-article`
+//
+// Pipeline ATIVO (V3): createArticleFromOpportunity.ts → create-generation-job
+// NÃO criar novos callers para `startFromOpportunity` ou `convert-opportunity-to-article`
+// =============================================================================
 import { NavigateFunction } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -29,7 +38,10 @@ export function startQuickArticle(
 }
 
 /**
- * Convert an opportunity to article via edge function.
+ * @deprecated LEGACY V1/V2 — Chama a edge function `convert-opportunity-to-article` (legada).
+ * Para novas oportunidades, use `createArticleFromOpportunity` de `@/lib/createArticleFromOpportunity`.
+ *
+ * Convert an opportunity to article via edge function (V1 legacy path).
  * This handles full article generation with images and redirects to editor.
  */
 export async function startFromOpportunity(
@@ -40,6 +52,7 @@ export async function startFromOpportunity(
   try {
     toast.info('Criando artigo a partir da oportunidade...');
     
+    // ⚠️ LEGACY: Chama edge function V1 — não replicar este padrão
     const { data, error } = await supabase.functions.invoke('convert-opportunity-to-article', {
       body: { opportunityId, blogId }
     });
@@ -65,3 +78,4 @@ export async function startFromOpportunity(
     return false;
   }
 }
+
