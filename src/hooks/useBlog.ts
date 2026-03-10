@@ -61,84 +61,54 @@ export function useBlog(): UseBlogResult {
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      console.log('useBlog: Usuário autenticado', {
-        userId: user?.id,
-        email: user?.email,
-        error: userError ? userError.message : null
-      });
+      console.log('useBlog: user.id =', user?.id, '| error =', userError?.message);
 
       if (!user) {
         console.warn('useBlog: Sem usuário autenticado');
-        setLoading(false);
         return;
       }
 
-      // 1. Check if user owns a blog
       const { data: ownedBlog, error: blogError } = await supabase
         .from("blogs")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
 
+      console.log('useBlog: ownedBlog =', ownedBlog, '| blogError =', blogError?.message);
+
       if (ownedBlog) {
         setBlog(ownedBlog as Blog);
         setIsOwner(true);
         setRole("owner");
-        console.log('useBlog: Blog carregado como owner', { blogId: ownedBlog.id });
-        setLoading(false);
         return;
       }
 
-      // 2. Check if user is a blog member (using blog_members table)
       const { data: membership, error: memberError } = await supabase
         .from("blog_members")
-        .select(`
-          blog_id,
-          role,
-          blogs (
-            id,
-            name,
-            slug,
-            logo_url,
-            primary_color,
-            user_id,
-            platform_subdomain,
-            custom_domain,
-            domain_verified
-          )
-        `)
+        .select(`blog_id, role, blogs(*)`)
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (membership && membership.blogs) {
+      console.log('useBlog: membership =', membership, '| memberError =', memberError?.message);
+
+      if (membership?.blogs) {
         const blogData = membership.blogs as unknown as Blog;
         setBlog(blogData);
         setRole(membership.role as TeamRole);
         setIsOwner(false);
-        console.log('useBlog: Blog carregado como membro', {
-          blogId: blogData.id,
-          role: membership.role
-        });
-        setLoading(false);
         return;
       }
 
-      console.log('useBlog: Nenhum blog encontrado para o usuário', user.id);
-      setLoading(false);
+      console.warn('useBlog: Nenhum blog encontrado para user_id =', user.id);
+
     } catch (error) {
       console.error("useBlog: Erro na tentativa", retryCount + 1, error);
-
       if (retryCount < 2) {
-        console.log(`useBlog: Tentando novamente em 2s...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         return fetchBlog(retryCount + 1);
       }
     } finally {
-      // Only stop loading if we succeeded OR we've exhausted all retries
-      if (retryCount >= 2) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 

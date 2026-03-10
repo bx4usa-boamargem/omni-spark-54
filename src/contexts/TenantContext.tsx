@@ -69,6 +69,48 @@ export function TenantProvider({ children }: TenantProviderProps) {
       return;
     }
 
+    // ==========================================
+    // DEV_ACCESS_OVERRIDE — intercepção ANTES de qualquer query
+    // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
+    // NUNCA vai para produção (variável não existe na Vercel)
+    // ==========================================
+    const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
+    const hostname = window.location.hostname;
+    const isLocal =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.');
+
+    if (isDEVMode && isLocal) {
+      console.log('[DEV_ACCESS_OVERRIDE] TenantContext: injetando tenant fake para dev local...');
+      const bioneTenantId = '44c4f7cd-05b0-4229-9828-2eb822d38bfd';
+      const fakeTenant: Tenant = {
+        id: bioneTenantId,
+        name: 'Bione Advocacia (DEV_OPERATOR)',
+        slug: 'bione-advocacia',
+        owner_user_id: user.id,
+        plan: 'business',
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+      const fakeMembership: TenantMembership = {
+        id: 'dev-override-membership',
+        tenant_id: bioneTenantId,
+        user_id: user.id,
+        role: 'owner',
+        created_at: new Date().toISOString(),
+        tenant: fakeTenant,
+      };
+      setAllMemberships([fakeMembership]);
+      setCurrentMembership(fakeMembership);
+      setCurrentTenant(fakeTenant);
+      setLoading(false);
+      console.log('[DEV_ACCESS_OVERRIDE] TenantContext: tenant fake injetado —', fakeTenant.name);
+      return;
+    }
+    // ==========================================
+
     try {
       setLoading(true);
       setError(null);
@@ -126,51 +168,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
       // Selecionar tenant atual: preferir owner, ou primeiro da lista
       const ownerMembership = formattedMemberships.find(m => m.role === 'owner');
-      let selectedMembership = ownerMembership || formattedMemberships[0];
-
-      // ==========================================
-      // DEV_ACCESS_OVERRIDE — LOCAL TENANT SESSION
-      // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
-      // NUNCA vai para produção (variável não existe na Vercel)
-      // ==========================================
-      const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
-      const hostname = window.location.hostname;
-      const isLocal =
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('10.');
-
-      if (isDEVMode && isLocal) {
-        console.log('[DEV_ACCESS_OVERRIDE] VITE_DEV_PREVIEW_MODE ativo. Forçando TenantContext para Bione Advocacia...');
-        const bioneTenantId = '44c4f7cd-05b0-4229-9828-2eb822d38bfd';
-
-        // Verifica se o usuário já tem no banco (run_init_bione.js executado)
-        let bioneMembership = formattedMemberships.find(m => m.tenant_id === bioneTenantId);
-
-        // Se não tem (bypassing RLS read na view do tenant local), forçamos na UI
-        if (!bioneMembership) {
-          bioneMembership = {
-            id: 'dev-override-membership',
-            tenant_id: bioneTenantId,
-            user_id: user.id,
-            role: 'owner',
-            created_at: new Date().toISOString(),
-            tenant: {
-              id: bioneTenantId,
-              name: 'Bione Advocacia (DEV_OPERATOR)',
-              slug: 'bione-advocacia',
-              owner_user_id: user.id,
-              plan: 'business',
-              status: 'active',
-              created_at: new Date().toISOString()
-            } as Tenant
-          };
-          formattedMemberships.push(bioneMembership);
-        }
-        selectedMembership = bioneMembership;
-      }
-      // ==========================================
+      const selectedMembership = ownerMembership || formattedMemberships[0];
 
       setAllMemberships(formattedMemberships);
 
