@@ -68,6 +68,7 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
+      // 1. Tenta buscar blog pelo user_id (dono direto)
       const { data: ownedBlog, error: blogError } = await supabase
         .from("blogs")
         .select("*")
@@ -83,6 +84,7 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
+      // 2. Tenta buscar por blog_members (subcontas)
       const { data: membership, error: memberError } = await supabase
         .from("blog_members")
         .select(`blog_id, role, blogs(*)`)
@@ -97,6 +99,38 @@ export function useBlog(): UseBlogResult {
         setRole(membership.role as TeamRole);
         setIsOwner(false);
         return;
+      }
+
+      // 3. Fallback: tabela blog_members ainda não aplicada no banco —
+      //    busca por tenant_members (tabela legada)
+      if (memberError?.message?.includes("blog_members")) {
+        console.warn('useBlog: tabela blog_members não encontrada, tentando tenant_members');
+        const { data: tenantMembership, error: tenantError } = await supabase
+          .from("tenant_members")
+          .select(`tenant_id, role, tenants:tenant_id(*)`)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        console.log('useBlog: tenantMembership =', tenantMembership, '| tenantError =', tenantError?.message);
+
+        if (tenantMembership?.tenants) {
+          // tenta buscar o blog associado a esse tenant
+          const tenantData = tenantMembership.tenants as unknown as { slug?: string };
+          if (tenantData?.slug) {
+            const { data: blogBySlug } = await supabase
+              .from("blogs")
+              .select("*")
+              .eq("slug", tenantData.slug)
+              .maybeSingle();
+
+            if (blogBySlug) {
+              setBlog(blogBySlug as Blog);
+              setRole(tenantMembership.role as TeamRole);
+              setIsOwner(false);
+              return;
+            }
+          }
+        }
       }
 
       console.warn('useBlog: Nenhum blog encontrado para user_id =', user.id);
