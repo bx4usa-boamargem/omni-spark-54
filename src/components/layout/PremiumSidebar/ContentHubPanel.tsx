@@ -1,5 +1,6 @@
 import { Radar, Sparkles, FileText, Globe, LayoutTemplate } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useHubMenu } from './HubMenuItem';
 
 interface ContentHubPanelProps {
   onNavigate: (path: string) => void;
@@ -52,9 +53,16 @@ const contentItems = [
 
 /**
  * Painel flutuante do hub "Conteúdo"
- * Exibe cards com ícones coloridos e descrições
+ * Usa useHubMenu() para fechar o painel ao navegar
  */
 export function ContentHubPanel({ onNavigate, currentPath }: ContentHubPanelProps) {
+  const { closeMenu } = useHubMenu();
+
+  const handleItemClick = (path: string) => {
+    closeMenu();
+    onNavigate(path);
+  };
+
   return (
     <div className="p-3 space-y-1">
       <div className="px-3 py-2 mb-2">
@@ -64,12 +72,12 @@ export function ContentHubPanel({ onNavigate, currentPath }: ContentHubPanelProp
       </div>
 
       {contentItems.map((item) => {
-        const isCurrentRoute = currentPath?.includes(item.path.replace('/client', ''));
+        const isCurrentRoute = currentPath?.startsWith(item.path);
 
         return (
           <button
             key={item.id}
-            onClick={() => onNavigate(item.path)}
+            onClick={() => handleItemClick(item.path)}
             className={cn(
               'w-full flex items-start gap-3 px-3 py-3 rounded-lg',
               'hover:bg-[#F9FAFB] dark:hover:bg-gray-800 transition-colors',

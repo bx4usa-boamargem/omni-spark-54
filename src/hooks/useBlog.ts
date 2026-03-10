@@ -83,7 +83,7 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 2. Tenta buscar por blog_members (subcontas)
+      // 2. Tenta buscar por blog_members (subcontas / time)
       const { data: membership, error: memberError } = await supabase
         .from("blog_members")
         .select(`blog_id, role, blogs(*)`)
@@ -100,10 +100,10 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 3. Fallback via tenant_members: resolve tenant_id → busca blog por tenant_id
-      //    Cobre o caso em que blogs.user_id não bate com o auth user
-      //    (ex: blog criado por outro user ou migrado)
-      console.warn('useBlog: Nenhum resultado direto, tentando fallback via tenant_members...');
+      // 3. Fallback via tenant_members → resolve tenant → busca blog
+      // Cobre o caso em que blogs.user_id não bate com o auth user
+      console.warn('useBlog: Nenhum resultado direto. Tentando fallback via tenant_members...');
+
       const { data: tenantMembership, error: tenantError } = await supabase
         .from("tenant_members")
         .select(`tenant_id, role`)
@@ -113,27 +113,33 @@ export function useBlog(): UseBlogResult {
       console.log('useBlog: tenantMembership =', tenantMembership, '| tenantError =', tenantError?.message);
 
       if (tenantMembership?.tenant_id) {
-        // 3a. Tenta buscar blog associado ao tenant pelo campo tenant_id
+        const tenantId = tenantMembership.tenant_id;
+        const memberRole = tenantMembership.role as TeamRole;
+        const isOwnerRole = memberRole === 'owner';
+
+        // 3a. Busca blog com tenant_id explícito (campo na tabela blogs)
         const { data: blogByTenantId } = await supabase
           .from("blogs")
           .select("*")
-          .eq("tenant_id", tenantMembership.tenant_id)
+          .eq("tenant_id", tenantId)
           .maybeSingle();
 
         if (blogByTenantId) {
-          console.log('useBlog: blog encontrado via tenant_id');
+          console.log('useBlog: blog encontrado via tenant_id direto');
           setBlog(blogByTenantId as Blog);
-          setRole(tenantMembership.role as TeamRole);
-          setIsOwner(tenantMembership.role === 'owner');
+          setRole(memberRole);
+          setIsOwner(isOwnerRole);
           return;
         }
 
-        // 3b. Tenta via slug do tenant (tenant slug === blog slug por convenção)
+        // 3b. Busca slug do tenant → busca blog por slug
         const { data: tenantData } = await supabase
           .from("tenants")
-          .select("slug")
-          .eq("id", tenantMembership.tenant_id)
+          .select("slug, owner_user_id")
+          .eq("id", tenantId)
           .maybeSingle();
+
+        console.log('useBlog: tenantData =', tenantData);
 
         if (tenantData?.slug) {
           const { data: blogBySlug } = await supabase
@@ -145,14 +151,37 @@ export function useBlog(): UseBlogResult {
           if (blogBySlug) {
             console.log('useBlog: blog encontrado via tenant slug');
             setBlog(blogBySlug as Blog);
-            setRole(tenantMembership.role as TeamRole);
-            setIsOwner(tenantMembership.role === 'owner');
+            setRole(memberRole);
+            setIsOwner(isOwnerRole);
+            return;
+          }
+        }
+
+        // 3c. Último recurso: pega o primeiro blog disponível na plataforma para este tenant
+        // (usado quando o blog foi criado com outro user_id e não tem tenant_id preenchido)
+        // Só tenta se owner_user_id do tenant bate com algum user que tem blog
+        if (tenantData?.owner_user_id) {
+          const { data: blogByOwner } = await supabase
+            .from("blogs")
+            .select("*")
+            .eq("user_id", tenantData.owner_user_id)
+            .maybeSingle();
+
+          if (blogByOwner) {
+            console.log('useBlog: blog encontrado via tenant.owner_user_id');
+            setBlog(blogByOwner as Blog);
+            setRole(memberRole);
+            setIsOwner(isOwnerRole);
             return;
           }
         }
       }
 
-      console.warn('useBlog: Nenhum blog encontrado para user_id =', user.id);
+      // Nenhum blog encontrado — log claro para debug no Supabase
+      console.error(
+        'useBlog: NENHUM BLOG ENCONTRADO para user_id =', user.id,
+        '\nVerifique: SELECT id, user_id, tenant_id, slug FROM blogs LIMIT 5;'
+      );
 
     } catch (error) {
       console.error("useBlog: Erro na tentativa", retryCount + 1, error);
