@@ -35,6 +35,7 @@ interface Blog {
   brand_description: string | null;
   footer_text: string | null;
   show_powered_by: boolean | null;
+  tenant_id?: string | null;
 }
 
 interface UseBlogResult {
@@ -45,8 +46,6 @@ interface UseBlogResult {
   isPlatformAdmin: boolean;
   refetch: () => Promise<void>;
 }
-
-// [SAFE MODE] Resilient blog fetch with retries
 
 export function useBlog(): UseBlogResult {
   const [blog, setBlog] = useState<Blog | null>(null);
@@ -101,34 +100,54 @@ export function useBlog(): UseBlogResult {
         return;
       }
 
-      // 3. Fallback: tabela blog_members ainda não aplicada no banco —
-      //    busca por tenant_members (tabela legada)
-      if (memberError?.message?.includes("blog_members")) {
-        console.warn('useBlog: tabela blog_members não encontrada, tentando tenant_members');
-        const { data: tenantMembership, error: tenantError } = await supabase
-          .from("tenant_members")
-          .select(`tenant_id, role, tenants:tenant_id(*)`)
-          .eq("user_id", user.id)
+      // 3. Fallback via tenant_members: resolve tenant_id → busca blog por tenant_id
+      //    Cobre o caso em que blogs.user_id não bate com o auth user
+      //    (ex: blog criado por outro user ou migrado)
+      console.warn('useBlog: Nenhum resultado direto, tentando fallback via tenant_members...');
+      const { data: tenantMembership, error: tenantError } = await supabase
+        .from("tenant_members")
+        .select(`tenant_id, role`)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      console.log('useBlog: tenantMembership =', tenantMembership, '| tenantError =', tenantError?.message);
+
+      if (tenantMembership?.tenant_id) {
+        // 3a. Tenta buscar blog associado ao tenant pelo campo tenant_id
+        const { data: blogByTenantId } = await supabase
+          .from("blogs")
+          .select("*")
+          .eq("tenant_id", tenantMembership.tenant_id)
           .maybeSingle();
 
-        console.log('useBlog: tenantMembership =', tenantMembership, '| tenantError =', tenantError?.message);
+        if (blogByTenantId) {
+          console.log('useBlog: blog encontrado via tenant_id');
+          setBlog(blogByTenantId as Blog);
+          setRole(tenantMembership.role as TeamRole);
+          setIsOwner(tenantMembership.role === 'owner');
+          return;
+        }
 
-        if (tenantMembership?.tenants) {
-          // tenta buscar o blog associado a esse tenant
-          const tenantData = tenantMembership.tenants as unknown as { slug?: string };
-          if (tenantData?.slug) {
-            const { data: blogBySlug } = await supabase
-              .from("blogs")
-              .select("*")
-              .eq("slug", tenantData.slug)
-              .maybeSingle();
+        // 3b. Tenta via slug do tenant (tenant slug === blog slug por convenção)
+        const { data: tenantData } = await supabase
+          .from("tenants")
+          .select("slug")
+          .eq("id", tenantMembership.tenant_id)
+          .maybeSingle();
 
-            if (blogBySlug) {
-              setBlog(blogBySlug as Blog);
-              setRole(tenantMembership.role as TeamRole);
-              setIsOwner(false);
-              return;
-            }
+        if (tenantData?.slug) {
+          const { data: blogBySlug } = await supabase
+            .from("blogs")
+            .select("*")
+            .eq("slug", tenantData.slug)
+            .maybeSingle();
+
+          if (blogBySlug) {
+            console.log('useBlog: blog encontrado via tenant slug');
+            setBlog(blogBySlug as Blog);
+            setRole(tenantMembership.role as TeamRole);
+            setIsOwner(tenantMembership.role === 'owner');
+            return;
           }
         }
       }
@@ -146,7 +165,6 @@ export function useBlog(): UseBlogResult {
     }
   };
 
-  // Wrapper to allow refetch without arguments in the result object
   const handleRefetch = () => fetchBlog(0);
 
   useEffect(() => {
