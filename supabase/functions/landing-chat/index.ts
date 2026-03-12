@@ -1,5 +1,12 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+/**
+ * landing-chat — Chatbot de vendas da landing page Omniseen
+ *
+ * V4: Migrado para callWriter() do aiProviders.ts (Primary: OpenAI GPT-4o, Fallback: Gemini)
+ * REGRA: Nenhuma chamada hardcoded fora do aiProviders.ts.
+ */
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +42,6 @@ Após entender o contexto, personalize sua resposta:
 - "Empresas como a sua economizam R$5.000+/mês comparado com agências"
 - "Um artigo bem posicionado pode gerar leads por ANOS"
 - "Nossa IA analisa milhões de buscas locais em tempo real"
-- Mencione casos similares ao nicho do lead quando possível
 
 ### 4. CALL-TO-ACTION (sempre termine guiando para ação)
 - "Que tal testar grátis por 7 dias e ver o Radar em ação no seu nicho?"
@@ -45,28 +51,18 @@ Após entender o contexto, personalize sua resposta:
 ## RESPOSTAS PARA OBJEÇÕES:
 
 ### "Quanto custa?"
-Foque no ROI: "O plano Pro custa $97/mês - menos que UM post de agência. Mas com a Omniseen você gera conteúdo ilimitado, otimizado para sua região. O retorno médio é 5x o investimento."
+Foque no ROI: "O plano Pro custa $97/mês — menos que UM post de agência. Com a Omniseen você gera conteúdo ilimitado, otimizado para sua região. O retorno médio é 5x o investimento."
 
 ### "Funciona pro meu nicho?"
-"Funciona especialmente bem para negócios locais como o seu! Deixa eu te mostrar: no nicho de [X], existem [estimativa] pessoas buscando soluções todo mês. Você está capturando esses clientes hoje?"
+"Funciona especialmente bem para negócios locais! Deixa eu te mostrar: no nicho de [X], existem [estimativa] pessoas buscando soluções todo mês. Você está capturando esses clientes hoje?"
 
 ### "Preciso saber de tecnologia?"
 "Zero! É 100% automatizado. A IA cria o conteúdo, otimiza o SEO, gera imagens. Você só revisa e publica com 1 clique. Leva 5 minutos por semana."
 
-### "Já tentei blog e não funcionou"
-"Blog tradicional não funciona porque falta estratégia de demanda. A Omniseen é diferente: o Radar identifica O QUE as pessoas estão buscando NA SUA REGIÃO. Você cria conteúdo pra demanda que JÁ existe."
-
-## GATILHOS MENTAIS:
-- Escassez: "Enquanto você espera, seus concorrentes estão capturando esses clientes"
-- Autoridade: "Nossa IA analisa milhões de buscas locais em tempo real"
-- Prova social: "Empresas economizam R$5.000/mês com a Omniseen"
-- Urgência: "O teste grátis dá acesso completo por 7 dias"
-- Exclusividade: "Você vai ter acesso a oportunidades que seus concorrentes nem sabem que existem"
-
 ## PLANOS (apenas se perguntarem):
-- Starter: $37/mês - 8 artigos, 1 blog, ideal para começar
-- Pro: $97/mês - 20 artigos, automação completa, MAIS POPULAR
-- Business: $147/mês - 100 artigos, 5 blogs, para agências
+- Starter: $37/mês — 8 artigos, 1 blog, ideal para começar
+- Pro: $97/mês — 20 artigos, automação completa, MAIS POPULAR
+- Business: $147/mês — 100 artigos, 5 blogs, para agências
 
 ## REGRAS DE RESPOSTA:
 1. Respostas curtas e impactantes (máx 100 palavras)
@@ -75,15 +71,7 @@ Foque no ROI: "O plano Pro custa $97/mês - menos que UM post de agência. Mas c
 4. Termine SEMPRE com pergunta ou CTA
 5. Personalize baseado no que o lead disse
 6. Responda no idioma que o usuário está usando
-7. Seja consultivo, NÃO vendedor agressivo
-8. Capture informações naturalmente (nicho, cidade, dor)
-
-## FLUXO IDEAL:
-1. Saudação + pergunta sobre negócio
-2. Lead responde
-3. Valide e faça pergunta sobre dor/desafio
-4. Conecte a dor com a solução (Radar, automação, SEO)
-5. Convide para teste grátis`;
+7. Seja consultivo, NÃO vendedor agressivo`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -97,55 +85,50 @@ serve(async (req) => {
       throw new Error("Message is required");
     }
 
-    const languageInstruction = language 
-      ? `\n\nIMPORTANT: The user's preferred language is ${language}. Respond in ${language === 'pt-BR' ? 'Brazilian Portuguese' : language === 'es' ? 'Spanish' : 'English'}.` 
-      : '';
+    const languageInstruction = language
+      ? `\n\nIMPORTANT: The user's preferred language is ${language}. Respond in ${
+          language === "pt-BR"
+            ? "Brazilian Portuguese"
+            : language === "es"
+            ? "Spanish"
+            : "English"
+        }.`
+      : "";
 
     const messages = [
-      { 
-        role: "system", 
-        content: SYSTEM_PROMPT + languageInstruction 
+      {
+        role: "system" as const,
+        content: SYSTEM_PROMPT + languageInstruction,
       },
-      ...(history || []).slice(-10),
-      { role: "user", content: message },
+      ...((history || []).slice(-10) as Array<{ role: "user" | "assistant"; content: string }>),
+      { role: "user" as const, content: message },
     ];
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages,
-        max_tokens: 400,
-        temperature: 0.8,
-      }),
+    // V4: Usa callWriter() — Primary OpenAI GPT-4o, Fallback Gemini
+    const result = await callWriter({
+      messages,
+      temperature: 0.8,
+      maxTokens: 400,
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("OpenAI API error:", error);
-      throw new Error(`OpenAI API error: ${response.status}`);
+    if (!result.success || !result.data?.content) {
+      throw new Error(result.fallbackReason || "AI provider unavailable");
     }
 
-    const data = await response.json();
-    const assistantResponse = data.choices?.[0]?.message?.content || "Desculpe, não consegui processar sua solicitação. Tente novamente!";
-
-    console.log("Landing chat (sales) response generated successfully");
+    console.log(`[landing-chat] Response via ${result.provider} (fallback: ${result.usedFallback})`);
 
     return new Response(
-      JSON.stringify({ response: assistantResponse }),
+      JSON.stringify({ response: result.data.content }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Landing chat error:", error);
+    console.error("[landing-chat] Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: errorMessage,
-        response: "Desculpe, estou com dificuldades técnicas. Que tal acessar nosso teste grátis diretamente? Clique em 'Começar grátis' no topo da página! 🚀"
+        response:
+          "Desculpe, estou com dificuldades técnicas. Que tal acessar nosso teste grátis diretamente? Clique em 'Começar grátis' no topo da página! 🚀",
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

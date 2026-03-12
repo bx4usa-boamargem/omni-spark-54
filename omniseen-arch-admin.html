@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OMNISEEN — Admin Architecture Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --bg2: #0e1117;
+    --bg3: #13161e;
+    --bg4: #1a1e2a;
+    --border: #1e2535;
+    --border2: #252c3d;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #ef4444;
+    --text: #e2e8f0;
+    --text2: #8892a4;
+    --text3: #4a5568;
+    --green: #00ff88;
+    --yellow: #ffd60a;
+    --red: #ff4757;
+    --purple: #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  .topbar-brand span { color: var(--text2); font-weight: 400; font-size: 10px; }
+  .topbar-version {
+    background: var(--bg4);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 3px;
+  }
+  .topbar-tabs {
+    display: flex;
+    gap: 2px;
+    margin-left: 8px;
+  }
+  .topbar-tab {
+    padding: 4px 14px;
+    font-size: 11px;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .topbar-tab:hover { background: var(--bg4); color: var(--text); }
+  .topbar-tab.active { background: var(--bg4); color: var(--accent); border-bottom: 2px solid var(--accent); }
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+  .badge {
+    background: var(--bg4);
+    border: 1px solid var(--border2);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 3px;
+    color: var(--text2);
+  }
+  .badge.green { border-color: var(--green); color: var(--green); }
+  .badge.blue { border-color: var(--accent); color: var(--accent); }
+  .badge.purple { border-color: var(--purple); color: var(--purple); }
+
+  /* LAYOUT */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 200px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .sidebar-section {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-label {
+    padding: 0 14px 6px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text3);
+  }
+  .sidebar-item {
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 11px;
+    color: var(--text2);
+    border-left: 2px solid transparent;
+  }
+  .sidebar-item:hover { background: var(--bg4); color: var(--text); }
+  .sidebar-item.active { background: var(--bg4); color: var(--accent); border-left-color: var(--accent); }
+  .sidebar-item .icon { font-size: 13px; }
+  .sidebar-count {
+    margin-left: auto;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    padding: 1px 6px;
+    font-size: 9px;
+    border-radius: 10px;
+    color: var(--text3);
+  }
+  .sidebar-count.live { border-color: var(--green); color: var(--green); }
+
+  /* MAIN AREA */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stat-card {
+    background: var(--bg2);
+    padding: 10px 14px;
+  }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-sub { font-size: 9px; color: var(--text3); margin-top: 3px; }
+
+  /* CONTENT AREA */
+  .content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    overflow: hidden;
+  }
+
+  /* ARCH PANEL */
+  .arch-panel {
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text3);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* LAYER CARD */
+  .layer {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .layer-header {
+    padding: 8px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .layer-title-accent { color: var(--accent); }
+  .layer-title-green { color: var(--green); }
+  .layer-title-purple { color: var(--purple); }
+  .layer-title-yellow { color: var(--yellow); }
+  .layer-body { padding: 10px 14px; }
+
+  /* GRID de chips */
+  .chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .chip {
+    background: var(--bg4);
+    border: 1px solid var(--border2);
+    padding: 3px 9px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text2);
+    cursor: default;
+    transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.green { border-color: #0d3320; color: var(--green); background: #060f0a; }
+  .chip.blue { border-color: #0a2233; color: var(--accent); background: #040d14; }
+  .chip.purple { border-color: #1e1040; color: var(--purple); background: #0a0620; }
+  .chip.yellow { border-color: #2a1f00; color: var(--yellow); background: #0f0900; }
+  .chip.red { border-color: #2a0a0a; color: var(--red); background: #0f0404; }
+
+  /* FUNCTION LIST */
+  .fn-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+  }
+  .fn-item {
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    font-size: 9px;
+    color: var(--text2);
+    border-radius: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+    transition: all 0.15s;
+  }
+  .fn-item:hover { border-color: var(--accent); color: var(--accent); }
+  .fn-item.active-fn { border-color: #0a3322; color: var(--green); background: #050f0a; }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px 0;
+  }
+  .flow-node {
+    background: var(--bg4);
+    border: 1px solid var(--border2);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 80px;
+  }
+  .flow-node.accent { border-color: var(--accent); color: var(--accent); background: #040d14; }
+  .flow-node.green { border-color: var(--green); color: var(--green); background: #050f0a; }
+  .flow-node.purple { border-color: var(--purple); color: var(--purple); background: #0a0620; }
+  .flow-node.yellow { border-color: var(--yellow); color: var(--yellow); background: #0f0900; }
+  .flow-arrow { color: var(--text3); font-size: 14px; flex-shrink: 0; }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .rp-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .rp-body { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* METRIC ROW */
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .metric-icon { font-size: 14px; }
+  .metric-info { flex: 1; }
+  .metric-name { font-size: 10px; color: var(--text); }
+  .metric-detail { font-size: 9px; color: var(--text3); }
+  .metric-bar-wrap { width: 80px; }
+  .metric-bar-bg { background: var(--bg4); height: 3px; border-radius: 2px; overflow: hidden; }
+  .metric-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .metric-val { font-size: 10px; font-weight: 700; text-align: right; min-width: 36px; }
+
+  /* LOG */
+  .log-entry {
+    display: flex;
+    gap: 8px;
+    font-size: 10px;
+    line-height: 1.6;
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .log-time { color: var(--text3); white-space: nowrap; font-size: 9px; }
+  .log-level { padding: 0 5px; border-radius: 2px; font-size: 9px; font-weight: 600; }
+  .log-level.ok { background: #0a2217; color: var(--green); }
+  .log-level.info { background: #0a1a2e; color: var(--accent); }
+  .log-level.warn { background: #1c1400; color: var(--yellow); }
+  .log-level.err { background: #1c0505; color: var(--red); }
+  .log-msg { color: var(--text2); flex: 1; }
+  .log-msg strong { color: var(--text); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* PROGRESS */
+  .progress-label { display: flex; justify-content: space-between; font-size: 9px; color: var(--text3); margin-bottom: 3px; }
+  .progress-bar { height: 3px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; }
+
+  /* SMALL GRID */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+  /* HEALTH ITEM */
+  .health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+  }
+  .health-name { color: var(--text2); }
+  .health-val { font-weight: 600; }
+  .ok-green { color: var(--green); }
+  .ok-yellow { color: var(--yellow); }
+  .ok-red { color: var(--red); }
+  .ok-blue { color: var(--accent); }
+
+  /* STACK ITEM */
+  .stack-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .stack-icon { font-size: 18px; }
+  .stack-name { font-size: 11px; font-weight: 600; color: var(--text); }
+  .stack-desc { font-size: 9px; color: var(--text3); }
+  .stack-badge { margin-left: auto; font-size: 9px; padding: 1px 7px; border-radius: 10px; border: 1px solid; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    ◈ OMNISEEN <span>/ ADMIN ARCH</span>
+  </div>
+  <div class="topbar-version">v4.0</div>
+  <div class="topbar-tabs">
+    <div class="topbar-tab active">Architecture</div>
+    <div class="topbar-tab">Edge Functions</div>
+    <div class="topbar-tab">Data Layer</div>
+    <div class="topbar-tab">AI Engine</div>
+    <div class="topbar-tab">Deployments</div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot"></div>
+    <span style="color:var(--green);font-size:10px;">SYSTEM ONLINE</span>
+    <div class="badge green">137 FUNCTIONS</div>
+    <div class="badge blue">SUPABASE</div>
+    <div class="badge purple">VERCEL</div>
+    <span style="color:var(--text3);font-size:9px;">localhost:5173</span>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Modules</div>
+      <div class="sidebar-item active"><span class="icon">⬡</span> Architecture <span class="sidebar-count live">LIVE</span></div>
+      <div class="sidebar-item"><span class="icon">⚡</span> Edge Functions <span class="sidebar-count">137</span></div>
+      <div class="sidebar-item"><span class="icon">🧠</span> AI Engine <span class="sidebar-count">8</span></div>
+      <div class="sidebar-item"><span class="icon">📊</span> Analytics <span class="sidebar-count">23</span></div>
+      <div class="sidebar-item"><span class="icon">🔗</span> Integrations <span class="sidebar-count">12</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Frontend Layers</div>
+      <div class="sidebar-item"><span class="icon">📄</span> Pages <span class="sidebar-count">50</span></div>
+      <div class="sidebar-item"><span class="icon">🧩</span> Components <span class="sidebar-count">40</span></div>
+      <div class="sidebar-item"><span class="icon">🪝</span> Hooks <span class="sidebar-count">30+</span></div>
+      <div class="sidebar-item"><span class="icon">🌍</span> Contexts <span class="sidebar-count">8</span></div>
+      <div class="sidebar-item"><span class="icon">🛣️</span> Routes <span class="sidebar-count">60+</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Infra</div>
+      <div class="sidebar-item"><span class="icon">🗄️</span> Supabase DB</div>
+      <div class="sidebar-item"><span class="icon">🔐</span> Auth / RLS</div>
+      <div class="sidebar-item"><span class="icon">📦</span> Storage</div>
+      <div class="sidebar-item"><span class="icon">🌐</span> Vercel CDN</div>
+      <div class="sidebar-item"><span class="icon">💳</span> Stripe</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Administration</div>
+      <div class="sidebar-item"><span class="icon">👤</span> Users</div>
+      <div class="sidebar-item"><span class="icon">📋</span> Tenants</div>
+      <div class="sidebar-item"><span class="icon">🔑</span> API Keys</div>
+      <div class="sidebar-item"><span class="icon">⚙️</span> Config</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- STATS ROW -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Edge Functions</div>
+        <div class="stat-value accent">137</div>
+        <div class="stat-sub">Supabase Deno</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Frontend Pages</div>
+        <div class="stat-value">50</div>
+        <div class="stat-sub">React + Vite</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Components</div>
+        <div class="stat-value yellow">40+</div>
+        <div class="stat-sub">40 módulos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">AI Models</div>
+        <div class="stat-value green">8</div>
+        <div class="stat-sub">GPT-4o · Claude · Flux</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">DB Tables</div>
+        <div class="stat-value purple">60+</div>
+        <div class="stat-sub">PostgreSQL + RLS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Integrations</div>
+        <div class="stat-value">12</div>
+        <div class="stat-sub">GSC · WP · Social</div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ARCH PANEL -->
+      <div class="arch-panel">
+
+        <!-- FLOW -->
+        <div class="layer">
+          <div class="layer-header">
+            <span style="color:var(--accent)">◈</span>
+            <span class="layer-title-accent">OMNISEEN — SYSTEM FLOW</span>
+          </div>
+          <div class="layer-body">
+            <div class="flow">
+              <div class="flow-node accent">🌐 Browser<br/><span style="font-size:8px">React/Vite</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node purple">🔐 Auth<br/><span style="font-size:8px">Supabase Auth</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node yellow">📡 API<br/><span style="font-size:8px">Edge Functions</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node green">🧠 AI Engine<br/><span style="font-size:8px">GPT-4o·Claude</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node accent">🗄️ Postgres<br/><span style="font-size:8px">Supabase DB</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node purple">🌍 Vercel<br/><span style="font-size:8px">CDN Deploy</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TECH STACK -->
+        <div>
+          <div class="section-title">Tech Stack</div>
+          <div class="two-col">
+            <div class="stack-item">
+              <div class="stack-icon">⚛️</div>
+              <div><div class="stack-name">React + Vite</div><div class="stack-desc">Frontend SPA · TypeScript</div></div>
+              <div class="stack-badge" style="border-color:var(--accent);color:var(--accent)">FRONTEND</div>
+            </div>
+            <div class="stack-item">
+              <div class="stack-icon">⚡</div>
+              <div><div class="stack-name">Supabase</div><div class="stack-desc">DB · Auth · Edge · Storage</div></div>
+              <div class="stack-badge" style="border-color:var(--green);color:var(--green)">BACKEND</div>
+            </div>
+            <div class="stack-item">
+              <div class="stack-icon">🌐</div>
+              <div><div class="stack-name">Vercel</div><div class="stack-desc">Deploy · CDN · Edge</div></div>
+              <div class="stack-badge" style="border-color:var(--purple);color:var(--purple)">INFRA</div>
+            </div>
+            <div class="stack-item">
+              <div class="stack-icon">💳</div>
+              <div><div class="stack-name">Stripe</div><div class="stack-desc">Subscriptions · Webhooks</div></div>
+              <div class="stack-badge" style="border-color:var(--yellow);color:var(--yellow)">BILLING</div>
+            </div>
+            <div class="stack-item">
+              <div class="stack-icon">🧠</div>
+              <div><div class="stack-name">OpenAI / Anthropic</div><div class="stack-desc">GPT-4o · Claude · Embeddings</div></div>
+              <div class="stack-badge" style="border-color:var(--green);color:var(--green)">AI</div>
+            </div>
+            <div class="stack-item">
+              <div class="stack-icon">🎨</div>
+              <div><div class="stack-name">Flux / Replicate</div><div class="stack-desc">Image Generation · AI Art</div></div>
+              <div class="stack-badge" style="border-color:var(--purple);color:var(--purple)">AI IMG</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FRONTEND MODULES -->
+        <div>
+          <div class="section-title">Frontend Pages (50)</div>
+          <div class="chip-grid">
+            <span class="chip blue">Dashboard</span>
+            <span class="chip blue">Analytics</span>
+            <span class="chip blue">NewArticle</span>
+            <span class="chip blue">EditArticle</span>
+            <span class="chip blue">Articles</span>
+            <span class="chip blue">Keywords</span>
+            <span class="chip blue">Clusters</span>
+            <span class="chip blue">Performance</span>
+            <span class="chip blue">Ebooks</span>
+            <span class="chip blue">EbookDetails</span>
+            <span class="chip blue">PublicBlog</span>
+            <span class="chip blue">PublicArticle</span>
+            <span class="chip blue">PublicLanding</span>
+            <span class="chip blue">Strategy</span>
+            <span class="chip blue">Calendar</span>
+            <span class="chip blue">Subscription</span>
+            <span class="chip blue">Pricing</span>
+            <span class="chip blue">Settings</span>
+            <span class="chip blue">Profile</span>
+            <span class="chip blue">Admin</span>
+            <span class="chip blue">Integrations</span>
+            <span class="chip blue">Referrals</span>
+            <span class="chip blue">Services</span>
+            <span class="chip blue">AutomationSettings</span>
+            <span class="chip blue">ValidationDashboard</span>
+            <span class="chip blue">QuickAccess</span>
+            <span class="chip blue">MyBlog</span>
+            <span class="chip">Account</span>
+            <span class="chip">Help</span>
+            <span class="chip">QueryDetails</span>
+            <span class="chip">ArticleQueue</span>
+            <span class="chip">NewArticleChat</span>
+            <span class="chip">ClientReview</span>
+            <span class="chip">SocialCallback</span>
+            <span class="chip">ResetPassword</span>
+            <span class="chip">AcceptInvite</span>
+            <span class="chip">CustomDomainBlog</span>
+            <span class="chip">CustomDomainArticle</span>
+            <span class="chip">PublicSmartLink</span>
+            <span class="chip">PublicEbook</span>
+            <span class="chip">Blocked</span>
+          </div>
+        </div>
+
+        <!-- COMPONENT MODULES -->
+        <div>
+          <div class="section-title">Component Modules (40)</div>
+          <div class="chip-grid">
+            <span class="chip green">admin</span>
+            <span class="chip green">analytics</span>
+            <span class="chip green">article</span>
+            <span class="chip green">article-chat</span>
+            <span class="chip green">articles</span>
+            <span class="chip green">auth</span>
+            <span class="chip green">automation</span>
+            <span class="chip green">blog-editor</span>
+            <span class="chip green">client</span>
+            <span class="chip green">cms</span>
+            <span class="chip green">company</span>
+            <span class="chip green">consultant</span>
+            <span class="chip green">content</span>
+            <span class="chip green">dashboard</span>
+            <span class="chip green">domains</span>
+            <span class="chip green">ebooks</span>
+            <span class="chip green">editor</span>
+            <span class="chip green">help</span>
+            <span class="chip green">integrations</span>
+            <span class="chip green">keywords</span>
+            <span class="chip green">layout</span>
+            <span class="chip green">mobile</span>
+            <span class="chip green">notifications</span>
+            <span class="chip green">onboarding</span>
+            <span class="chip green">profile</span>
+            <span class="chip green">public</span>
+            <span class="chip green">roi</span>
+            <span class="chip green">scheduling</span>
+            <span class="chip green">seo</span>
+            <span class="chip green">settings</span>
+            <span class="chip green">shared</span>
+            <span class="chip green">social</span>
+            <span class="chip green">strategy</span>
+            <span class="chip green">subscription</span>
+            <span class="chip green">support</span>
+            <span class="chip green">team</span>
+            <span class="chip green">templates</span>
+            <span class="chip green">ui</span>
+            <span class="chip green">validation</span>
+            <span class="chip green">workflow</span>
+          </div>
+        </div>
+
+        <!-- EDGE FUNCTIONS -->
+        <div>
+          <div class="section-title">Edge Functions — Supabase Deno (137)</div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--accent)">🧠 AI / Content Generation</div>
+            <div class="fn-list">
+              <div class="fn-item active-fn">orchestrate-generation</div>
+              <div class="fn-item active-fn">write-section</div>
+              <div class="fn-item active-fn">generate-concepts</div>
+              <div class="fn-item active-fn">build-article-outline</div>
+              <div class="fn-item active-fn">ai-router</div>
+              <div class="fn-item active-fn">review-article</div>
+              <div class="fn-item active-fn">quality-gate</div>
+              <div class="fn-item active-fn">polish-article-final</div>
+              <div class="fn-item active-fn">improve-article-complete</div>
+              <div class="fn-item active-fn">auto-fix-article</div>
+              <div class="fn-item active-fn">boost-content-score</div>
+              <div class="fn-item active-fn">research-context</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--green)">🔍 SEO / Keywords</div>
+            <div class="fn-list">
+              <div class="fn-item">analyze-serp</div>
+              <div class="fn-item">keyword-analysis</div>
+              <div class="fn-item">suggest-keywords</div>
+              <div class="fn-item">suggest-niche-keywords</div>
+              <div class="fn-item">batch-seo-suggestions</div>
+              <div class="fn-item">fix-seo-with-ai</div>
+              <div class="fn-item">seo-enhancer-job</div>
+              <div class="fn-item">seo-finalize</div>
+              <div class="fn-item">analyze-landing-page-seo</div>
+              <div class="fn-item">fix-landing-page-seo</div>
+              <div class="fn-item">calculate-content-score</div>
+              <div class="fn-item">save-seo-snapshot</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--yellow)">📡 Google / GSC</div>
+            <div class="fn-list">
+              <div class="fn-item">fetch-gsc-analytics</div>
+              <div class="fn-item">fetch-gsc-keywords</div>
+              <div class="fn-item">gsc-fetch-performance</div>
+              <div class="fn-item">gsc-list-properties</div>
+              <div class="fn-item">gsc-callback</div>
+              <div class="fn-item">gsc-select-site</div>
+              <div class="fn-item">import-gsc-keywords</div>
+              <div class="fn-item">check-gsc-alerts</div>
+              <div class="fn-item">get-gsc-config</div>
+              <div class="fn-item">disconnect-gsc</div>
+              <div class="fn-item">fetch-google-trends</div>
+              <div class="fn-item">google-native-healthcheck</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--purple)">🖼️ Imagem / Media</div>
+            <div class="fn-list">
+              <div class="fn-item">generate-image</div>
+              <div class="fn-item">generate-image-flux</div>
+              <div class="fn-item">generate-images-background</div>
+              <div class="fn-item">regenerate-article-images</div>
+              <div class="fn-item">regenerate-single-image</div>
+              <div class="fn-item">generate-article-pdf</div>
+              <div class="fn-item">parse-pdf</div>
+              <div class="fn-item">chunk-document</div>
+              <div class="fn-item">summarize-document</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--accent)">📤 Publicação / CMS</div>
+            <div class="fn-list">
+              <div class="fn-item">publish-article</div>
+              <div class="fn-item">publish-scheduled-articles</div>
+              <div class="fn-item">auto-publish-ready-articles</div>
+              <div class="fn-item">publish-to-cms</div>
+              <div class="fn-item">schedule-articles</div>
+              <div class="fn-item">index-article</div>
+              <div class="fn-item">notify-indexnow</div>
+              <div class="fn-item">interlink-article</div>
+              <div class="fn-item">content-api</div>
+              <div class="fn-item">article-chat</div>
+              <div class="fn-item">article-plan</div>
+              <div class="fn-item">translate-article</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--green)">📱 Social / OAuth</div>
+            <div class="fn-list">
+              <div class="fn-item">publish-social-content</div>
+              <div class="fn-item">generate-social-content</div>
+              <div class="fn-item">social-oauth-start</div>
+              <div class="fn-item">social-oauth-callback</div>
+              <div class="fn-item">social-oauth-revoke</div>
+              <div class="fn-item">import-instagram</div>
+              <div class="fn-item">import-youtube</div>
+              <div class="fn-item">wordpress-com-oauth</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--yellow)">💳 Billing / Stripe</div>
+            <div class="fn-list">
+              <div class="fn-item">stripe-webhook</div>
+              <div class="fn-item">create-checkout</div>
+              <div class="fn-item">manage-subscription</div>
+              <div class="fn-item">list-invoices</div>
+              <div class="fn-item">start-trial</div>
+              <div class="fn-item">check-trial-expiration</div>
+              <div class="fn-item">log-consumption</div>
+              <div class="fn-item">check-limits</div>
+              <div class="fn-item">migrate-retroactive-costs</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:8px;">
+            <div class="section-title" style="font-size:9px;color:var(--red)">🔄 Automação / Jobs</div>
+            <div class="fn-list">
+              <div class="fn-item">jobs-runner</div>
+              <div class="fn-item">scheduler-tick</div>
+              <div class="fn-item">process-queue</div>
+              <div class="fn-item">radar-orchestrator</div>
+              <div class="fn-item">radar-v3-refresh</div>
+              <div class="fn-item">funnel-autopilot</div>
+              <div class="fn-item">discovery-engine</div>
+              <div class="fn-item">generate-opportunities</div>
+              <div class="fn-item">process-weekly-intel-job</div>
+              <div class="fn-item">weekly-market-intel</div>
+              <div class="fn-item">cleanup-expired-opportunities</div>
+              <div class="fn-item">cleanup-orphaned-articles</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title" style="font-size:9px;color:var(--text3)">🔧 Infra / Util</div>
+            <div class="fn-list">
+              <div class="fn-item">provision-tenant</div>
+              <div class="fn-item">create-team-member</div>
+              <div class="fn-item">accept-invite</div>
+              <div class="fn-item">send-email</div>
+              <div class="fn-item">send-funnel-report</div>
+              <div class="fn-item">send-weekly-report</div>
+              <div class="fn-item">send-seo-weekly-report</div>
+              <div class="fn-item">send-notification-digest</div>
+              <div class="fn-item">run-healthcheck</div>
+              <div class="fn-item">check-cache</div>
+              <div class="fn-item">save-cache</div>
+              <div class="fn-item">verify-domain</div>
+              <div class="fn-item">check-domain-dns</div>
+              <div class="fn-item">rank-tracker</div>
+              <div class="fn-item">check-broken-links</div>
+              <div class="fn-item">fix-broken-link</div>
+              <div class="fn-item">find-authority-links</div>
+              <div class="fn-item">analyze-competitors</div>
+              <div class="fn-item">local-seo-intel</div>
+              <div class="fn-item">search-google-place</div>
+              <div class="fn-item">sync-google-place</div>
+              <div class="fn-item">support-chat</div>
+              <div class="fn-item">landing-chat</div>
+              <div class="fn-item">chat-sdr</div>
+              <div class="fn-item">brand-sales-agent</div>
+              <div class="fn-item">init-bione</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="right-panel">
+        <div class="rp-header">
+          <span>System Health</span>
+          <span style="color:var(--green)">● ONLINE</span>
+        </div>
+        <div class="rp-body">
+
+          <!-- HEALTH -->
+          <div class="section-title">Infrastructure</div>
+          <div class="health-item"><span class="health-name">Supabase DB</span><span class="health-val ok-green">● ONLINE</span></div>
+          <div class="health-item"><span class="health-name">Edge Runtime</span><span class="health-val ok-green">● ACTIVE</span></div>
+          <div class="health-item"><span class="health-name">Vercel CDN</span><span class="health-val ok-green">● RUNNING</span></div>
+          <div class="health-item"><span class="health-name">Stripe Webhook</span><span class="health-val ok-green">● LIVE</span></div>
+          <div class="health-item"><span class="health-name">OpenAI API</span><span class="health-val ok-green">● HEALTHY</span></div>
+          <div class="health-item"><span class="health-name">Anthropic API</span><span class="health-val ok-green">● HEALTHY</span></div>
+          <div class="health-item"><span class="health-name">GSC OAuth</span><span class="health-val ok-blue">● LINKED</span></div>
+          <div class="health-item"><span class="health-name">Flux / Replicate</span><span class="health-val ok-green">● READY</span></div>
+
+          <!-- PERFORMANCE -->
+          <div class="section-title" style="margin-top:8px">AI Engine Usage</div>
+          <div>
+            <div style="margin-bottom:6px">
+              <div class="progress-label"><span>GPT-4o turbo</span><span style="color:var(--accent)">72%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:72%;background:var(--accent)"></div></div>
+            </div>
+            <div style="margin-bottom:6px">
+              <div class="progress-label"><span>Claude 3.5 Sonnet</span><span style="color:var(--purple)">45%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:45%;background:var(--purple)"></div></div>
+            </div>
+            <div style="margin-bottom:6px">
+              <div class="progress-label"><span>text-embedding-3</span><span style="color:var(--green)">30%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:30%;background:var(--green)"></div></div>
+            </div>
+            <div style="margin-bottom:6px">
+              <div class="progress-label"><span>Flux Image Gen</span><span style="color:var(--yellow)">18%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:18%;background:var(--yellow)"></div></div>
+            </div>
+          </div>
+
+          <!-- METRICS -->
+          <div class="section-title" style="margin-top:8px">Key Metrics</div>
+          <div class="metric-row">
+            <div class="metric-icon">📝</div>
+            <div class="metric-info"><div class="metric-name">Articles Generated</div><div class="metric-detail">ultimo 30 dias</div></div>
+            <div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:88%;background:var(--accent)"></div></div></div>
+            <div class="metric-val" style="color:var(--accent)">2.4k</div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon">🔍</div>
+            <div class="metric-info"><div class="metric-name">SEO Optimizations</div><div class="metric-detail">autofix + enhance</div></div>
+            <div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:65%;background:var(--green)"></div></div></div>
+            <div class="metric-val" style="color:var(--green)">847</div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon">📤</div>
+            <div class="metric-info"><div class="metric-name">Published Today</div><div class="metric-detail">scheduled + auto</div></div>
+            <div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:30%;background:var(--yellow)"></div></div></div>
+            <div class="metric-val" style="color:var(--yellow)">14</div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon">🧠</div>
+            <div class="metric-info"><div class="metric-name">LLM Tokens (M)</div><div class="metric-detail">total consumido</div></div>
+            <div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:52%;background:var(--purple)"></div></div></div>
+            <div class="metric-val" style="color:var(--purple)">2.4M</div>
+          </div>
+
+          <!-- LIVE LOG -->
+          <div class="section-title" style="margin-top:8px">Live Activity Log</div>
+          <div class="log-entry">
+            <span class="log-time">19:58:11</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>orchestrate-generation</strong> — artigo gerado com sucesso (3.2s)</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:58:03</span>
+            <span class="log-level info">INFO</span>
+            <span class="log-msg"><strong>scheduler-tick</strong> — 3 artigos agendados na fila</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:57:44</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>boost-content-score</strong> SEO +14pts → score 91</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:57:22</span>
+            <span class="log-level info">INFO</span>
+            <span class="log-msg"><strong>stripe-webhook</strong> — subscription.updated recebido</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:56:55</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>gsc-fetch-performance</strong> — 1.2k keywords importadas</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:56:30</span>
+            <span class="log-level warn">WARN</span>
+            <span class="log-msg"><strong>check-limits</strong> — tenant XYZ próximo do limite (89%)</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:55:48</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>publish-article</strong> — publicado no WordPress (CMS)</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:55:11</span>
+            <span class="log-level info">INFO</span>
+            <span class="log-msg"><strong>radar-orchestrator</strong> — ciclo completo 42 nichos</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:54:33</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>generate-social-content</strong> — 5 posts gerados (IG+LI)</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:53:20</span>
+            <span class="log-level ok">OK</span>
+            <span class="log-msg"><strong>weekly-market-intel</strong> — relatório semanal enviado</span>
+          </div>
+          <div class="log-entry">
+            <span class="log-time">19:52:45</span>
+            <span class="log-level info">INFO</span>
+            <span class="log-msg"><strong>provision-tenant</strong> — novo tenant provisionado</span>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Animate log entries live
+const logPool = [
+  {level:'ok', fn:'orchestrate-generation', msg:'artigo gerado em 2.8s'},
+  {level:'info', fn:'scheduler-tick', msg:'processando fila — 2 pendentes'},
+  {level:'ok', fn:'boost-content-score', msg:'SEO score atualizado → 94'},
+  {level:'ok', fn:'publish-article', msg:'publicado com sucesso (CMS)'},
+  {level:'info', fn:'radar-orchestrator', msg:'iniciando novo ciclo'},
+  {level:'warn', fn:'check-limits', msg:'usage 91% do plano'},
+  {level:'ok', fn:'gsc-fetch-performance', msg:'988 queries importadas'},
+  {level:'ok', fn:'generate-image-flux', msg:'imagem gerada (1.1s)'},
+  {level:'info', fn:'jobs-runner', msg:'job #4821 concluído'},
+  {level:'ok', fn:'quality-gate', msg:'article score: 87 — APPROVED'},
+];
+
+function addLog() {
+  const logContainer = document.querySelector('.rp-body');
+  const logs = logContainer.querySelectorAll('.log-entry');
+  const entry = logPool[Math.floor(Math.random() * logPool.length)];
+  const now = new Date();
+  const time = now.toTimeString().slice(0,8);
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  const levelClass = {ok:'ok',info:'info',warn:'warn',err:'err'}[entry.level];
+  el.innerHTML = `<span class="log-time">${time}</span><span class="log-level ${levelClass}">${entry.level.toUpperCase()}</span><span class="log-msg"><strong>${entry.fn}</strong> — ${entry.msg}</span>`;
+  const firstLog = logContainer.querySelector('.log-entry');
+  if(firstLog) logContainer.insertBefore(el, firstLog);
+  else logContainer.appendChild(el);
+  // remove old logs
+  const allLogs = logContainer.querySelectorAll('.log-entry');
+  if(allLogs.length > 18) allLogs[allLogs.length-1].remove();
+}
+
+setInterval(addLog, 2800);
+
+// Tab switching
+document.querySelectorAll('.topbar-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.topbar-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+
+// Sidebar items
+document.querySelectorAll('.sidebar-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

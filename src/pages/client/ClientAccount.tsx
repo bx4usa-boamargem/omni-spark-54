@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, CreditCard, Globe, LogOut, Users, Plus, Trash2, Loader2, Mail, Moon, Camera, Link2 } from 'lucide-react';
+import { User, CreditCard, Globe, LogOut, Users, Plus, Trash2, Loader2, Mail, Camera, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
-import { ThemeToggle } from '@/components/client/ThemeToggle';
 import { AvatarUploadDialog } from '@/components/profile/AvatarUploadDialog';
 import { CustomDomainSettings } from '@/components/settings/CustomDomainSettings';
 import { LinkClickStats } from '@/components/dashboard/LinkClickStats';
@@ -269,24 +268,6 @@ export default function ClientAccount({ embedded }: { embedded?: boolean }) {
         </CardContent>
       </Card>
 
-      {/* Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Moon className="h-5 w-5" />
-            Aparência
-          </CardTitle>
-          <CardDescription>
-            Escolha o tema da interface
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Tema da Interface</span>
-            <ThemeToggle />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Team */}
       <Card>

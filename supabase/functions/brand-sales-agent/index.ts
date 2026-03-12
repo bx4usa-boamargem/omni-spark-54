@@ -18,6 +18,7 @@ interface RequestBody {
   article_title?: string;
   visitor_id: string;
   session_id: string;
+  conversation_id?: string; // Direct lookup — avoids visitor+session scan
   message: string;
   utm_source?: string;
   utm_medium?: string;
@@ -46,7 +47,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: RequestBody = await req.json();
-    const { blog_id, article_id, article_title, visitor_id, session_id, message, utm_source, utm_medium, utm_campaign } = body;
+    const { blog_id, article_id, article_title, visitor_id, session_id, conversation_id, message, utm_source, utm_medium, utm_campaign } = body;
 
     if (!blog_id || !visitor_id || !session_id || !message) {
       return new Response(
@@ -112,24 +113,31 @@ serve(async (req) => {
     }
 
     // 3. Get business profile and client strategy for context
-    const [businessProfileResult, clientStrategyResult, blogResult] = await Promise.all([
+    const [businessProfileResult, clientStrategyResult, blogResult, articleResult] = await Promise.all([
       supabase.from("business_profile").select("*").eq("blog_id", blog_id).maybeSingle(),
       supabase.from("client_strategy").select("*").eq("blog_id", blog_id).maybeSingle(),
-      supabase.from("blogs").select("name, primary_color, cta_text, cta_url").eq("id", blog_id).single()
+      supabase.from("blogs").select("name, primary_color, cta_text, cta_url").eq("id", blog_id).single(),
+      article_id
+        ? supabase.from("articles").select("title, content, meta_description, focus_keyword").eq("id", article_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     const businessProfile = businessProfileResult.data;
     const clientStrategy = clientStrategyResult.data;
     const blog = blogResult.data;
+    const articleContent = articleResult.data;
 
-    // 4. Get or create conversation
-    let { data: conversation, error: convError } = await supabase
-      .from("brand_agent_conversations")
-      .select("*")
-      .eq("blog_id", blog_id)
-      .eq("visitor_id", visitor_id)
-      .eq("session_id", session_id)
-      .maybeSingle();
+    // 4. Get or create conversation (direct lookup by ID or by visitor+session)
+    let convQuery = supabase.from("brand_agent_conversations").select("*");
+    if (conversation_id) {
+      convQuery = convQuery.eq("id", conversation_id).eq("blog_id", blog_id);
+    } else {
+      convQuery = convQuery
+        .eq("blog_id", blog_id)
+        .eq("visitor_id", visitor_id)
+        .eq("session_id", session_id);
+    }
+    let { data: conversation, error: convError } = await convQuery.maybeSingle();
 
     if (convError && convError.code !== "PGRST116") {
       console.error("Error fetching conversation:", convError);
@@ -217,14 +225,17 @@ Quando capturar dados do lead, inclua no FINAL da sua resposta (em uma linha sep
 [LEAD_DATA:{"name":"Nome","phone":"telefone","email":"email","whatsapp":"whatsapp","interest_summary":"resumo do interesse","lead_score":0-100}]
 
 ## CONTEXTO DO ARTIGO
-${article_title ? `O visitante está lendo: "${article_title}"` : "O visitante está no site."}
+${article_title || articleContent?.title ? `O visitante está lendo: "${article_title || articleContent?.title}"` : "O visitante está no site."}
+${articleContent?.meta_description ? `Descrição do artigo: ${articleContent.meta_description}` : ""}
+${articleContent?.focus_keyword ? `Palavra-chave foco: ${articleContent.focus_keyword}` : ""}
+${articleContent?.content ? `\nResumo do conteúdo (use para personalizar o atendimento):\n${articleContent.content.replace(/<[^>]*>/g, "").substring(0, 800)}...` : ""}
 
 Lembre-se: você é um vendedor humano da ${companyName}, não um bot.`;
 
     // 6. Prepare messages for AI
     const messagesForAI = [
       { role: "system", content: systemPrompt },
-      ...existingMessages.map((m) => ({ role: m.role, content: m.content })),
+      ...existingMessages.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       { role: "user", content: message },
     ];
 
@@ -242,8 +253,9 @@ Lembre-se: você é um vendedor humano da ${companyName}, não um bot.`;
     const aiData = { choices: [{ message: { content: aiResponseResult.data?.content || "" } }] };
     let assistantMessage = aiData.choices?.[0]?.message?.content || "Desculpe, não consegui processar sua mensagem. Pode repetir?";
     
-    // Calculate tokens used
-    const tokensUsed = (aiData.usage?.total_tokens || 0);
+    // Estimate tokens: 1 token ≈ 4 chars (used when API doesn't return usage)
+    const promptText = messagesForAI.map(m => (typeof m.content === "string" ? m.content : "")).join(" ");
+    const tokensUsed = Math.ceil((promptText.length + assistantMessage.length) / 4);
 
     // 8. Check for lead data in response
     let capturedLead: LeadData | null = null;
@@ -372,8 +384,8 @@ Lembre-se: você é um vendedor humano da ${companyName}, não um bot.`;
         action_type: "brand_agent_lead",
         action_description: `Lead captured: ${capturedLead.name || capturedLead.email || capturedLead.phone}`,
         model_used: "google/gemini-3-flash-preview",
-        input_tokens: aiData.usage?.prompt_tokens || 0,
-        output_tokens: aiData.usage?.completion_tokens || 0,
+        input_tokens: Math.round(tokensUsed * 0.8),
+        output_tokens: Math.round(tokensUsed * 0.2),
         estimated_cost_usd: tokensUsed * 0.00001, // Approximate cost
       });
     }
@@ -385,8 +397,8 @@ Lembre-se: você é um vendedor humano da ${companyName}, não um bot.`;
       action_type: "brand_agent_chat",
       action_description: `Chat message processed`,
       model_used: "google/gemini-3-flash-preview",
-      input_tokens: aiData.usage?.prompt_tokens || 0,
-      output_tokens: aiData.usage?.completion_tokens || 0,
+      input_tokens: Math.round(tokensUsed * 0.8),
+      output_tokens: Math.round(tokensUsed * 0.2),
       estimated_cost_usd: tokensUsed * 0.00001,
     });
 

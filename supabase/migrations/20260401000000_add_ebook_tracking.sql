@@ -4,14 +4,16 @@
 -- ============================================================
 
 -- 1. Colunas na tabela articles
+-- Nota: usamos replace(gen_random_uuid()::text, '-', '') para gerar token
+-- sem precisar da extensão pgcrypto (gen_random_bytes)
 ALTER TABLE public.articles
-  ADD COLUMN IF NOT EXISTS share_token      text UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
+  ADD COLUMN IF NOT EXISTS share_token      text UNIQUE DEFAULT replace(gen_random_uuid()::text, '-', ''),
   ADD COLUMN IF NOT EXISTS pdf_view_count   integer     DEFAULT 0,
   ADD COLUMN IF NOT EXISTS pdf_generated_at timestamptz;
 
 -- Preenche share_token para artigos que já existem sem um
 UPDATE public.articles
-SET share_token = encode(gen_random_bytes(16), 'hex')
+SET share_token = replace(gen_random_uuid()::text, '-', '')
 WHERE share_token IS NULL;
 
 -- 2. Tabela de rastreamento de visualizações de eBook
@@ -19,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.ebook_views (
   id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   article_id     uuid        REFERENCES public.articles(id) ON DELETE CASCADE,
   blog_id        uuid        REFERENCES public.blogs(id)    ON DELETE CASCADE,
-  share_token    text        UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
+  share_token    text        UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text, '-', ''),
   view_count     integer     DEFAULT 0,
   unique_ips     jsonb       DEFAULT '[]'::jsonb,
   created_at     timestamptz DEFAULT now(),

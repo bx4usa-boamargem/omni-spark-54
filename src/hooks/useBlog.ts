@@ -54,17 +54,46 @@ export function useBlog(): UseBlogResult {
   const [role, setRole] = useState<TeamRole | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-  const fetchBlog = async (retryCount = 0) => {
-    console.log(`useBlog: Iniciando fetch (tentativa ${retryCount + 1}/3)`);
+  const fetchBlog = async () => {
+    console.log('useBlog: Iniciando fetch...');
     setLoading(true);
 
     try {
+      // ==========================================
+      // DEV_ACCESS_OVERRIDE — igual ao TenantContext
+      // Só ativo se VITE_DEV_PREVIEW_MODE=true no .env
+      // ==========================================
+      const isDEVMode = import.meta.env.VITE_DEV_PREVIEW_MODE === 'true';
+      const hostname = window.location.hostname;
+      const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' ||
+        hostname.startsWith('192.168.') || hostname.startsWith('10.');
+
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       console.log('useBlog: user.id =', user?.id, '| error =', userError?.message);
 
       if (!user) {
         console.warn('useBlog: Sem usuário autenticado');
         return;
+      }
+
+      if (isDEVMode && isLocal) {
+        console.log('[DEV_ACCESS_OVERRIDE] useBlog: buscando blog real para sessão de desenvolvimento...');
+        // Usa o user_id real do dono do blog existente no banco
+        const DEV_BLOG_OWNER_USER_ID = '353461e4-04ed-493d-a02b-fe55afefb04e';
+        const { data: devBlog } = await supabase
+          .from('blogs')
+          .select('*')
+          .eq('user_id', DEV_BLOG_OWNER_USER_ID)
+          .maybeSingle();
+
+        if (devBlog) {
+          console.log('[DEV_ACCESS_OVERRIDE] useBlog: blog injetado —', devBlog.name);
+          setBlog(devBlog as Blog);
+          setIsOwner(true);
+          setRole('owner');
+          return;
+        }
+        console.warn('[DEV_ACCESS_OVERRIDE] useBlog: blog DEV não encontrado, continuando fluxo normal...');
       }
 
       // 1. Tenta buscar blog pelo user_id (dono direto)
@@ -184,17 +213,13 @@ export function useBlog(): UseBlogResult {
       );
 
     } catch (error) {
-      console.error("useBlog: Erro na tentativa", retryCount + 1, error);
-      if (retryCount < 2) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return fetchBlog(retryCount + 1);
-      }
+      console.error('useBlog: Erro ao buscar blog', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefetch = () => fetchBlog(0);
+  const handleRefetch = () => fetchBlog();
 
   useEffect(() => {
     fetchBlog();

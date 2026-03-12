@@ -1,5 +1,7 @@
+// V4: Fallback Gemini hardcoded → callResearcher() do aiProviders.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callResearch } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,7 +93,6 @@ async function generateIntelForTerritory(
 ): Promise<{ success: boolean; id?: string; error?: string; intelPackage?: MarketIntelPackage }> {
   
   const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
-  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY") || Deno.env.get("GEMINI_API_KEY");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -289,58 +290,47 @@ Return only valid JSON, no markdown.`;
     provider = "fallback";
   }
 
-  // Fallback to Google Gemini API
-  if (!intelPackage && GOOGLE_API_KEY) {
-    console.log(`Using Google Gemini API fallback for territory: ${territoryLocation || 'default'}...`);
+  // Fallback via callResearch() — Primary: Google Gemini, auto-fallback: Perplexity
+  if (!intelPackage) {
+    console.log(`Using callResearch() fallback for territory: ${territoryLocation || 'default'}...`);
     provider = "fallback";
 
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
-
-    const geminiResponse = await fetch(geminiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.5 }
-      }),
-    });
-
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error("Google Gemini API error:", geminiResponse.status, errorText);
-      return { success: false, error: `Google Gemini API error: ${geminiResponse.status}` };
-    }
-
-    const geminiData = await geminiResponse.json();
-    const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
     try {
-      const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
+      const aiResult = await callResearch({
+        systemPrompt,
+        query: userPrompt,
+        maxTokens: 2000,
+      });
+
+      if (!aiResult.success || !aiResult.data?.content) {
+        return { success: false, error: aiResult.fallbackReason || 'AI provider unavailable' };
+      }
+
+      const cleanContent = aiResult.data.content.replace(/```json\n?|\n?```/g, '').trim();
       const parsed = JSON.parse(cleanContent);
-      
+
       intelPackage = {
         meta: {
           country,
           week_of: weekOf,
           query_cost_estimate_usd: 0,
           sources_count: 0,
-          source: "fallback",
+          source: 'fallback',
           territory_id: territoryId || undefined,
-          territory_location: territoryLocation || undefined
+          territory_location: territoryLocation || undefined,
         },
-        market_snapshot: parsed.market_snapshot || "",
+        market_snapshot: parsed.market_snapshot || '',
         trends: parsed.trends || [],
         questions: parsed.questions || [],
         keywords: parsed.keywords || [],
         competitor_gaps: parsed.competitor_gaps || [],
-        content_ideas: parsed.content_ideas || []
+        content_ideas: parsed.content_ideas || [],
       };
 
-      console.log(`Google Gemini API response parsed successfully for territory: ${territoryLocation || 'default'}`);
-    } catch (parseError) {
-      console.error("Failed to parse Google Gemini API response:", content);
-      return { success: false, error: "Failed to parse AI response" };
+      console.log(`callResearch() (${aiResult.provider}) parsed for territory: ${territoryLocation || 'default'}`);
+    } catch (fallbackError) {
+      console.error('callResearch fallback failed:', fallbackError);
+      return { success: false, error: 'Failed to parse AI response' };
     }
   }
 

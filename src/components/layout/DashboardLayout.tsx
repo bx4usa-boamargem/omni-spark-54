@@ -84,7 +84,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  if (!user || !blog) {
+  if (!user) {
     return null;
   }
 
@@ -95,7 +95,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen flex w-full bg-background">
       {/* Desktop Sidebar - visible on lg (1024px+) */}
       <div className="hidden lg:flex">
-        <Sidebar blogSlug={blog.slug} userRole={role} onSignOut={handleSignOut} />
+        <Sidebar blogSlug={blog?.slug ?? ''} userRole={role} onSignOut={handleSignOut} />
       </div>
 
       {/* Mobile Header - visible below lg (< 1024px) */}
@@ -116,7 +116,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-64">
-                <Sidebar blogSlug={blog.slug} userRole={role} onSignOut={handleSignOut} />
+                <Sidebar blogSlug={blog?.slug ?? ''} userRole={role} onSignOut={handleSignOut} />
               </SheetContent>
             </Sheet>
           </div>

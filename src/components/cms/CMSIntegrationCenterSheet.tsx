@@ -106,6 +106,19 @@ const PLATFORMS: PlatformConfig[] = [
     helpLink: "https://dev.wix.com/docs/rest/getting-started/api-keys",
   },
   {
+    id: "gohighlevel",
+    name: "GoHighLevel",
+    description: "Publique em blogs de sites GHL para captura de leads via SEO",
+    icon: "🚀",
+    authType: "api-key",
+    fields: [
+      { key: "siteUrl", label: "URL do Site GHL", type: "text", placeholder: "https://meusite.myclients.io", required: true },
+      { key: "apiKey", label: "Private Integration Key", type: "password", placeholder: "eyJhbGci...", required: true, helpText: "Gere em Agency Settings → Private Integrations" },
+      { key: "locationId", label: "Location ID (CRM)", type: "text", placeholder: "ABC123...", required: true, helpText: "Encontre em Settings → Business Profile → Location ID" },
+    ],
+    helpLink: "https://highlevel.stoplight.io/docs/integrations/",
+  },
+  {
     id: "domain",
     name: "Domínio Próprio",
     description: "Publique diretamente no seu subdomínio OmniSeen ou domínio customizado",
@@ -325,6 +338,7 @@ export function CMSIntegrationCenterSheet({
       username: formData.username,
       apiKey: formData.apiKey,
       apiSecret: formData.apiSecret,
+      locationId: formData.locationId,
     });
 
     if (result.success) {
@@ -818,7 +832,7 @@ export function CMSIntegrationCenterSheet({
                   value={selectedPlatform || undefined}
                   onValueChange={(v) => setSelectedPlatform(v as ExtendedPlatform)}
                 >
-                  <TabsList className="grid grid-cols-4 w-full">
+                  <TabsList className="grid grid-cols-5 w-full">
                     {PLATFORMS.map((platform) => (
                       <TabsTrigger key={platform.id} value={platform.id} className="gap-1 text-xs">
                         <span>{platform.icon}</span>

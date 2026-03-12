@@ -1,5 +1,7 @@
+// V4: Migrado de callGemini hardcoded → callWriter() do aiProviders.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,33 +37,19 @@ interface SocialContent {
   };
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  const apiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 4096,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini error: ${err}`);
+/**
+ * callAI — usa callWriter() do aiProviders.ts (Primary: Google Gemini, Fallback: OpenAI)
+ */
+async function callAI(prompt: string): Promise<string> {
+  const result = await callWriter({
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.8,
+    maxTokens: 4096,
+  });
+  if (!result.success || !result.data?.content) {
+    throw new Error(result.fallbackReason || 'AI provider unavailable');
   }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  return result.data.content;
 }
 
 serve(async (req) => {
@@ -198,12 +186,12 @@ Regras importantes:
     let socialContent: SocialContent = {};
 
     try {
-      const jsonText = await callGemini(prompt);
+      const jsonText = await callAI(prompt);
       // Sanitize: às vezes o model retorna ```json ... ```
       const clean = jsonText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
       socialContent = JSON.parse(clean);
     } catch (parseError) {
-      console.error('Error parsing Gemini response:', parseError);
+      console.error('Error parsing AI response:', parseError);
       return new Response(JSON.stringify({ error: 'Failed to parse AI response' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

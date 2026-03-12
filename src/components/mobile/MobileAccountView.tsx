@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/client/ThemeToggle';
+
 import { 
   User,
   Building2,
@@ -11,8 +11,7 @@ import {
   Globe,
   CreditCard,
   LogOut,
-  ChevronRight,
-  Moon
+  ChevronRight
 } from 'lucide-react';
 
 interface MobileAccountViewProps {
@@ -107,21 +106,6 @@ export function MobileAccountView({ blogName }: MobileAccountViewProps) {
         })}
       </div>
 
-      {/* Theme Toggle Card */}
-      <div className="bg-card rounded-xl border border-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-muted">
-              <Moon className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="font-medium text-foreground">Tema</p>
-              <p className="text-xs text-muted-foreground">Claro / Escuro</p>
-            </div>
-          </div>
-          <ThemeToggle />
-        </div>
-      </div>
 
       {/* Logout Button */}
       <Button

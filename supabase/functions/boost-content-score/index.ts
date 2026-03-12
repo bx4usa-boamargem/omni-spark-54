@@ -11,10 +11,12 @@
 // - Dados de mercado lidos de market_radar_cache (via discovery-engine)
 // ═══════════════════════════════════════════════════════════════════
 
+// V4: Migrado de Gemini hardcoded → callWriter() do aiProviders.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { calculateContentScore, extractArticleMetrics } from "../_shared/contentScoring.ts";
 import { SERPMatrix } from "../_shared/serpTypes.ts";
+import { callWriter } from "../_shared/aiProviders.ts";
 import { 
   isVersionedContentEnabled, 
   logScoreChange, 
@@ -295,70 +297,27 @@ ${filteredMissingTerms.slice(0, 5).join(', ')}
 Retorne APENAS o artigo com as mínimas alterações em HTML/Markdown.
 Se a mudança necessária for muito grande, retorne o artigo ORIGINAL sem alterações.`;
 
-    // Call AI for optimization with retry logic
-    console.log(`[BOOST-SCORE] Calling AI for optimization...`);
-    
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [2000, 5000, 10000];
-    let aiResponse: Response | null = null;
-    let lastError: string = '';
+    // Call AI for optimization via callWriter (Primary: Google, Fallback: OpenAI)
+    console.log(`[BOOST-SCORE] Calling callWriter() for optimization...`);
 
-    if (!GOOGLE_API_KEY) {
-      throw new Error("GOOGLE_API_KEY is required for AI optimization");
+    const aiResult = await callWriter({
+      messages: [
+        {
+          role: 'system',
+          content: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários. REGRA CRÍTICA: Mantenha TODA a estrutura HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>). NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições.",
+        },
+        { role: 'user', content: optimizePrompt },
+      ],
+      temperature: 0.3,
+      maxTokens: 8000,
+    });
+
+    if (!aiResult.success || !aiResult.data?.content) {
+      throw new Error(`AI optimization failed: ${aiResult.fallbackReason || 'provider unavailable'}`);
     }
 
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        aiResponse = await fetch(geminiEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: "Você é um editor SEO especialista. Retorne APENAS o conteúdo otimizado em formato HTML/Markdown, sem explicações ou comentários. REGRA CRÍTICA: Mantenha TODA a estrutura HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>). NÃO converta HTML para Markdown ou texto plano. Mantenha todos os marcadores <!--IMG_PLACEHOLDER_N--> nas suas posições." }]
-            },
-            contents: [{ role: "user", parts: [{ text: optimizePrompt }] }],
-            generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
-          }),
-        });
-
-        if (aiResponse.ok) {
-          console.log(`[BOOST-SCORE] AI call successful on attempt ${attempt + 1}`);
-          break;
-        }
-
-        // Log error details
-        const errorBody = await aiResponse.text();
-        lastError = `Status ${aiResponse.status}: ${errorBody}`;
-        console.error(`[BOOST-SCORE] AI attempt ${attempt + 1} failed: ${lastError}`);
-
-        // Don't retry for client errors (4xx except 429)
-        if (aiResponse.status >= 400 && aiResponse.status < 500 && aiResponse.status !== 429) {
-          throw new Error(`AI optimization failed: ${lastError}`);
-        }
-
-        // Retry for 5xx or 429
-        if (attempt < MAX_RETRIES) {
-          console.log(`[BOOST-SCORE] Retrying in ${RETRY_DELAYS[attempt]}ms...`);
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-        }
-      } catch (fetchError) {
-        lastError = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
-        console.error(`[BOOST-SCORE] Fetch error on attempt ${attempt + 1}: ${lastError}`);
-        
-        if (attempt < MAX_RETRIES) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-        }
-      }
-    }
-
-    if (!aiResponse || !aiResponse.ok) {
-      throw new Error(`AI optimization failed after ${MAX_RETRIES + 1} attempts: ${lastError}`);
-    }
-
-    const aiData = await aiResponse.json();
-    let optimizedContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || content;
+    console.log(`[BOOST-SCORE] Optimization via ${aiResult.provider} (fallback: ${aiResult.usedFallback})`);
+    let optimizedContent = aiResult.data.content || content;
 
     // =========================================================================
     // IMAGE RE-INJECTION: Restaurar imagens após IA

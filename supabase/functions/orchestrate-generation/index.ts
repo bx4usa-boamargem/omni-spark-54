@@ -10,6 +10,7 @@ import { executeBlueprintBuilder } from "./agents/blueprintBuilder.ts";
 import { executeSectionWriter, executeEntityCoverage } from "./agents/sectionWriter.ts";
 import { executeSchemaAndQuality } from "./agents/schemaAndQuality.ts";
 import { executeImageGenerator } from "./agents/imageGenerator.ts";
+import { executeResearchContext } from "./agents/researchContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,10 +22,11 @@ const LOCK_TTL_MS = 120_000;
 
 const PUBLIC_STAGE_MAP: Record<string, { stage: string; progress: number; message: string }> = {
   'INPUT_VALIDATION': { stage: 'ANALYZING_MARKET', progress: 5, message: 'Inicializando...' },
-  'SERP_SCOUT': { stage: 'ANALYZING_MARKET', progress: 15, message: 'Scout: Analisando mercado local e concorrentes (Agent 1)...' },
-  'ENTITY_MAPPER': { stage: 'ANALYZING_MARKET', progress: 25, message: 'Extraindo entidades semânticas E-E-A-T (Agent 2)...' },
-  'TREND_ANALYST': { stage: 'ANALYZING_MARKET', progress: 35, message: 'Analisando tendências e lacunas (Agent 3 & 4)...' },
-  'BLUEPRINT_BUILDER': { stage: 'ANALYZING_MARKET', progress: 45, message: 'Montando o Blueprint SEO (Agent 5)...' },
+  'RESEARCH_CONTEXT': { stage: 'ANALYZING_MARKET', progress: 10, message: 'Pesquisando contexto e fontes autoritativas (Perplexity)...' },
+  'SERP_SCOUT': { stage: 'ANALYZING_MARKET', progress: 18, message: 'Scout: Analisando mercado local e concorrentes (Agent 1)...' },
+  'ENTITY_MAPPER': { stage: 'ANALYZING_MARKET', progress: 28, message: 'Extraindo entidades semânticas E-E-A-T (Agent 2)...' },
+  'TREND_ANALYST': { stage: 'ANALYZING_MARKET', progress: 38, message: 'Analisando tendências e lacunas (Agent 3 & 4)...' },
+  'BLUEPRINT_BUILDER': { stage: 'ANALYZING_MARKET', progress: 48, message: 'Montando o Blueprint SEO (Agent 5)...' },
   'SECTION_WRITER': { stage: 'WRITING_CONTENT', progress: 70, message: 'Escrevendo artigo por Chunking (Agent 6)...' },
   'SAVE_ARTICLE': { stage: 'FINALIZING', progress: 80, message: 'Salvando artigo...' },
   'IMAGE_GEN': { stage: 'FINALIZING', progress: 90, message: 'Images: Inserindo Mídia Contextual...' },
@@ -188,6 +190,36 @@ async function orchestrate(
       status: 'completed', output: valOutput, completed_at: new Date().toISOString()
     }).eq('id', valStepId);
     await updatePublicStatus(supabase, jobId, 'INPUT_VALIDATION', true, lockId);
+
+    // STEP 1.5: RESEARCH CONTEXT (Perplexity Sonar + Google CSE Authority Links) — non-blocking
+    await updatePublicStatus(supabase, jobId, 'RESEARCH_CONTEXT', false, lockId);
+    let researchOutput = { research: null as any, authority_links: [] as any[], costUsd: 0, warnings: [] as string[] };
+    try {
+      researchOutput = await withTimeout(
+        executeResearchContext(jobInput, supabaseUrl, serviceKey),
+        40_000,
+        'RESEARCH_CONTEXT'
+      );
+      totalCostUsd += researchOutput.costUsd || 0;
+      if (researchOutput.warnings.length > 0) {
+        console.warn('[RESEARCH_CONTEXT] Avisos:', researchOutput.warnings.join(' | '));
+      }
+      const resCtxStep = await createStepOrFail(supabase, jobId, 'RESEARCH_CONTEXT', { keyword: jobInput.keyword });
+      await supabase.from('generation_steps').update({
+        status: 'completed',
+        output: {
+          has_research: researchOutput.research !== null,
+          authority_links_count: researchOutput.authority_links.length,
+          costUsd: researchOutput.costUsd,
+        },
+        cost_usd: researchOutput.costUsd,
+        completed_at: new Date().toISOString(),
+      }).eq('id', resCtxStep);
+      console.log(`[RESEARCH_CONTEXT] ✅ research=${researchOutput.research !== null} | links=${researchOutput.authority_links.length}`);
+    } catch (e) {
+      console.warn('[RESEARCH_CONTEXT] ❌ Falhou — pipeline continua sem contexto extra. Causa:', e instanceof Error ? e.message : String(e));
+    }
+    await updatePublicStatus(supabase, jobId, 'RESEARCH_CONTEXT', true, lockId);
 
     // STEP 2: LOCAL SERP SCOUT (AGENT 1)
     await updatePublicStatus(supabase, jobId, 'SERP_SCOUT', false, lockId);

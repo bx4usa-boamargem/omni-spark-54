@@ -146,6 +146,12 @@ interface WixCredentials {
   apiKey: string;
 }
 
+interface GoHighLevelCredentials {
+  apiKey: string;       // Private API Key (Bearer token)
+  locationId: string;  // Location ID (sub-account ID)
+  blogId?: string;     // Optional: Blog ID for multi-blog sites
+}
+
 interface ArticleData {
   title: string;
   content: string;
@@ -570,6 +576,174 @@ async function updateWordPressComPost(creds: WordPressComCredentials, postId: st
   }
 }
 
+// GoHighLevel / ClickOne API Functions
+async function testGoHighLevelConnection(creds: GoHighLevelCredentials): Promise<{ success: boolean; message: string }> {
+  try {
+    const response = await fetch(
+      `https://services.leadconnectorhq.com/locations/${creds.locationId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${creds.apiKey}`,
+          Version: "2021-07-28",
+        },
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const locationName = data?.location?.name || data?.name || creds.locationId;
+      return { success: true, message: `Conectado à localização: ${locationName}` };
+    } else if (response.status === 401) {
+      return { success: false, message: "API Key inválida. Vá em Settings → Integrations → Private Keys no GoHighLevel." };
+    } else if (response.status === 403) {
+      return { success: false, message: "Sem permissão. Certifique-se de que a chave tem o scope de Blogs ativo." };
+    } else {
+      const errorText = await response.text().catch(() => "");
+      return { success: false, message: `Erro ao conectar: HTTP ${response.status}. ${errorText.slice(0, 200)}` };
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return { success: false, message: `Erro de conexão: ${errorMessage}` };
+  }
+}
+
+async function createGoHighLevelPost(
+  creds: GoHighLevelCredentials,
+  article: ArticleData
+): Promise<{ success: boolean; postId?: string; postUrl?: string; message?: string }> {
+  try {
+    // Generate slug from title
+    const urlSlug = article.title
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .slice(0, 90);
+
+    const postPayload: Record<string, unknown> = {
+      title: article.title,
+      rawHTML: article.content,
+      status: article.status === "publish" ? "PUBLISHED" : "DRAFT",
+      locationId: creds.locationId,
+      urlSlug,
+      authorName: "OmniSeen",
+      categories: article.category ? [article.category] : [],
+      tags: article.tags || [],
+    };
+
+    if (article.featuredImageUrl) {
+      postPayload.imageUrl = article.featuredImageUrl;
+      postPayload.imageAltText = article.title;
+    }
+
+    if (article.excerpt) {
+      postPayload.description = article.excerpt;
+    }
+
+    // If blogId is provided, include it
+    if (creds.blogId) {
+      postPayload.blogId = creds.blogId;
+    }
+
+    console.log(`[GoHighLevel] Creating post for locationId: ${creds.locationId}`);
+
+    const response = await fetch(
+      `https://services.leadconnectorhq.com/blogs/posts`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${creds.apiKey}`,
+          "Content-Type": "application/json",
+          Version: "2021-07-28",
+        },
+        body: JSON.stringify(postPayload),
+      }
+    );
+
+    const responseText = await response.text();
+    console.log(`[GoHighLevel] HTTP ${response.status}: ${responseText.slice(0, 500)}`);
+
+    if (!responseText.trim()) {
+      return { success: false, message: `GoHighLevel respondeu vazio. HTTP ${response.status}` };
+    }
+
+    let post;
+    try {
+      post = JSON.parse(responseText);
+    } catch {
+      return { success: false, message: `Resposta inválida do GoHighLevel (não é JSON). HTTP ${response.status}` };
+    }
+
+    if (response.ok && post && (post.id || post._id)) {
+      const postId = post.id || post._id;
+      const postUrl = post.url || post.slug
+        ? `${post.url || `https://blog/${post.slug}`}`
+        : undefined;
+      console.log(`[GoHighLevel] Post criado com sucesso: ID=${postId}`);
+      return { success: true, postId: String(postId), postUrl };
+    }
+
+    const errorMsg = post?.message || post?.error || post?.msg || `HTTP ${response.status}`;
+    return { success: false, message: `Falha ao criar post no GoHighLevel: ${errorMsg}` };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return { success: false, message: `Erro de conexão GoHighLevel: ${errorMessage}` };
+  }
+}
+
+async function updateGoHighLevelPost(
+  creds: GoHighLevelCredentials,
+  postId: string,
+  article: ArticleData
+): Promise<{ success: boolean; postUrl?: string; message?: string }> {
+  try {
+    const postPayload: Record<string, unknown> = {
+      title: article.title,
+      rawHTML: article.content,
+      status: article.status === "publish" ? "PUBLISHED" : "DRAFT",
+    };
+
+    if (article.excerpt) postPayload.description = article.excerpt;
+    if (article.featuredImageUrl) {
+      postPayload.imageUrl = article.featuredImageUrl;
+      postPayload.imageAltText = article.title;
+    }
+
+    console.log(`[GoHighLevel] Updating post ID: ${postId}`);
+
+    const response = await fetch(
+      `https://services.leadconnectorhq.com/blogs/posts/${postId}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${creds.apiKey}`,
+          "Content-Type": "application/json",
+          Version: "2021-07-28",
+        },
+        body: JSON.stringify(postPayload),
+      }
+    );
+
+    const responseText = await response.text();
+    console.log(`[GoHighLevel] Update HTTP ${response.status}: ${responseText.slice(0, 300)}`);
+
+    if (response.ok) {
+      let post;
+      try { post = JSON.parse(responseText); } catch { post = {}; }
+      return { success: true, postUrl: post?.url };
+    }
+
+    let errBody;
+    try { errBody = JSON.parse(responseText); } catch { errBody = {}; }
+    return { success: false, message: errBody?.message || `Erro ao atualizar post: HTTP ${response.status}` };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return { success: false, message: `Erro: ${errorMessage}` };
+  }
+}
+
 // Wix API Functions
 async function testWixConnection(creds: WixCredentials): Promise<{ success: boolean; message: string }> {
   try {
@@ -759,6 +933,16 @@ Deno.serve(async (req) => {
           siteUrl: integration.site_url,
           apiKey: integration.api_key,
         });
+      } else if (platform === "gohighlevel") {
+        if (!integration.api_key || !integration.location_id) {
+          result = { success: false, message: "API Key ou Location ID ausentes. Reconfigure a integração GoHighLevel." };
+        } else {
+          result = await testGoHighLevelConnection({
+            apiKey: integration.api_key,
+            locationId: integration.location_id,
+            blogId: integration.extra_config?.blogId,
+          });
+        }
       } else {
         result = { success: false, message: `Plataforma ${platform} não suportada ainda` };
       }
@@ -800,6 +984,8 @@ Deno.serve(async (req) => {
         });
       } else if (platform === "wix") {
         result = { success: true, hasBlog: true, postsEndpoint: true, categories: true, message: "Wix Blog API disponível" };
+      } else if (platform === "gohighlevel") {
+        result = { success: true, hasBlog: true, postsEndpoint: true, categories: true, message: "GoHighLevel Blog API disponível" };
       } else {
         result = { success: false, hasBlog: false, postsEndpoint: false, categories: false, message: `Plataforma ${platform} não suportada` };
       }
@@ -913,6 +1099,22 @@ Deno.serve(async (req) => {
           apiKey: integration.api_key,
         };
         result = await createWixPost(creds, articleData);
+      } else if (platform === "gohighlevel") {
+        if (!integration.api_key || !integration.location_id) {
+          result = { success: false, message: "API Key ou Location ID ausentes na integração GoHighLevel." };
+        } else {
+          const ghlCreds: GoHighLevelCredentials = {
+            apiKey: integration.api_key,
+            locationId: integration.location_id,
+            blogId: integration.extra_config?.blogId,
+          };
+          if (action === "create" || !article.external_post_id) {
+            result = await createGoHighLevelPost(ghlCreds, articleData);
+          } else {
+            const updateResult = await updateGoHighLevelPost(ghlCreds, article.external_post_id, articleData);
+            result = { ...updateResult, postId: article.external_post_id };
+          }
+        }
       } else {
         result = { success: false, message: `Plataforma ${platform} não suportada ainda` };
       }

@@ -169,6 +169,45 @@ serve(async (req) => {
       targetAudience: profile?.target_audience || "clientes em geral",
     };
 
+    // Fetch most recent market intel to enrich analysis with real web data
+    const { data: marketIntel } = await supabase
+      .from("market_intel_weekly")
+      .select("id, competitor_gaps, trends, keywords, content_ideas, source, week_of")
+      .eq("blog_id", blogId)
+      .order("week_of", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Build real-data context block when market intel is available
+    const intelContext = marketIntel
+      ? `
+## DADOS REAIS DA SEMANA (${marketIntel.week_of}) — fonte: ${marketIntel.source === "perplexity" ? "Perplexity/Web" : "IA Gemini"}
+
+### Gaps identificados nos concorrentes (dados reais):
+${(marketIntel.competitor_gaps as Array<{ competitor_topic: string; who_is_using_it: string; gap_opportunity: string }> || []).map(
+  (g) => `- Tópico: "${g.competitor_topic}" | Quem usa: ${g.who_is_using_it} | Oportunidade: ${g.gap_opportunity}`
+).join("\n")}
+
+### Tendências em alta nesta semana:
+${(marketIntel.trends as Array<{ topic: string; why_trending: string }> || []).slice(0, 3).map(
+  (t) => `- ${t.topic}: ${t.why_trending}`
+).join("\n")}
+
+### Keywords emergentes:
+${(marketIntel.keywords as Array<{ keyword: string; context: string }> || []).slice(0, 5).map(
+  (k) => `- "${k.keyword}": ${k.context}`
+).join("\n")}
+
+Use estes dados reais como base principal para identificar os gaps. Priorize oportunidades alinhadas com as tendências e keywords acima.
+`
+      : "";
+
+    if (marketIntel) {
+      console.log(`Market intel found for week ${marketIntel.week_of} (source: ${marketIntel.source}), enriching analysis...`);
+    } else {
+      console.log("No market intel available, using AI inference only.");
+    }
+
     // Use AI to analyze competitor patterns and identify gaps
     const competitorInfo = competitors.map(c => ({
       name: c.name,
@@ -191,7 +230,7 @@ ${existingTitles.slice(0, 5).join(", ") || "nenhum"}
 
 Oportunidades já identificadas (evitar duplicatas):
 ${existingOpportunityTitles.slice(0, 5).join(", ") || "nenhuma"}
-
+${intelContext}
 IMPORTANTE: Retorne APENAS JSON puro, sem markdown, sem explicações.
 Mantenha o "rationale" curto (máximo 25 palavras).
 O campo "competitor" deve ser EXATAMENTE o nome de um dos concorrentes listados.
@@ -291,14 +330,15 @@ Responda APENAS com o JSON, sem explicações adicionais.`;
           blog_id: blogId,
           suggested_title: gap.suggested_title,
           suggested_keywords: gap.keywords || [],
-          source: 'competitors',
-          trend_source: 'competitors',
+          source: marketIntel ? 'competitors+intel' : 'competitors',
+          trend_source: marketIntel ? `competitors+${marketIntel.source}` : 'competitors',
           competitor_id: matchedCompetitor?.id || null,
           competitor_name: gap.competitor || matchedCompetitor?.name || 'Concorrente',
           why_now: gap.rationale,
           status: 'pending',
           relevance_score: relevanceScore,
           funnel_stage: funnelStage,
+          intel_week_id: marketIntel?.id || null,
         })
         .select()
         .single();
@@ -329,6 +369,9 @@ Responda APENAS com o JSON, sem explicações adicionais.`;
         gaps_created: insertedGaps.length,
         gaps_analyzed: analysis.gaps.length,
         gaps: insertedGaps,
+        intel_used: !!marketIntel,
+        intel_week: marketIntel?.week_of || null,
+        intel_source: marketIntel?.source || null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

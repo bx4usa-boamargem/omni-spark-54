@@ -1,6 +1,7 @@
+// V4: Migrado de OpenAI SDK hardcoded → callWriter() do aiProviders.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import OpenAI from "https://esm.sh/openai@4.52.0";
+import { callWriter } from "../_shared/aiProviders.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -21,16 +22,9 @@ serve(async (req: Request) => {
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const openaiKey = Deno.env.get("OPENAI_API_KEY");
-
-        if (!openaiKey) {
-            throw new Error("Missing OPENAI_API_KEY");
-        }
 
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        // Context resolution (optional extra business data could be fetched here based on articleId)
-        // For now we will construct the base SDR identity using the title.
         const systemPrompt = `Você é um SDR (Sales Development Representative) ágil, persuasivo e altamente focado na qualificação de leads MQL. 
 Seu objetivo é transformar visitantes do nosso blog em clientes potenciais (leads).
 Mantenha respostas curtas e humanas.
@@ -45,23 +39,23 @@ O usuário está acessando um artigo/página com o tema: ${articleTitle || 'Serv
 
 NUNCA dê a impressão de ser uma "IA estúpida de atendimento longo". Seja proativo na venda.`;
 
-        const openai = new OpenAI({ apiKey: openaiKey });
-
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini", // Cost efficient for chat
+        const aiResult = await callWriter({
             messages: [
-                { role: "system", content: systemPrompt },
-                ...messages.map((m: any) => ({
-                    role: m.role || "user",
-                    content: m.content || "",
+                { role: 'system', content: systemPrompt },
+                ...messages.map((m: { role?: string; content?: string }) => ({
+                    role: (m.role || 'user') as 'user' | 'assistant' | 'system',
+                    content: m.content || '',
                 })),
             ],
             temperature: 0.7,
-            max_tokens: 250, // Keep responses short and agile
-            stream: false, // For simplicity in MVP we use non-streaming or full duplex depending on frontend. Let's do non-streaming for now.
+            maxTokens: 250,
         });
 
-        const aiMessage = response.choices?.[0]?.message?.content || "No response";
+        if (!aiResult.success || !aiResult.data?.content) {
+            throw new Error(aiResult.fallbackReason || 'AI provider unavailable');
+        }
+
+        const aiMessage = aiResult.data.content;
 
         return new Response(JSON.stringify({ reply: aiMessage }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -14,7 +14,7 @@ import { getGlobalKey } from "./getGlobalKey.ts";
 
 export interface LocalImageResult {
   url: string;
-  source: "custom_search" | "places_photo" | "custom_search_fallback" | "none";
+  source: "custom_search" | "places_photo" | "custom_search_fallback" | "unsplash" | "none";
   query_used?: string;
   title?: string;
   contextLink?: string;
@@ -381,7 +381,78 @@ async function searchViaPlacesPhotos(
 }
 
 // ============================================================================
-// ORQUESTRADOR PRINCIPAL — busca em 3 camadas
+// CAMADA 4: Unsplash API (fallback global, sem dependência geográfica)
+// ============================================================================
+
+async function searchViaUnsplash(
+  niche: string,
+  language: string
+): Promise<LocalImageResult | null> {
+  const accessKey = Deno.env.get('UNSPLASH_ACCESS_KEY');
+  if (!accessKey) {
+    console.warn('[LocalImage] UNSPLASH_ACCESS_KEY não configurada — pulando Unsplash');
+    return null;
+  }
+
+  // Unsplash funciona melhor em inglês — usa sempre o keyword em inglês como fallback global
+  const nicheKeywordsEn = NICHE_KEYWORDS_BY_LANG[niche]?.['en'] || NICHE_KEYWORDS_BY_LANG[niche]?.['default'] || niche;
+  const query = nicheKeywordsEn.split(' ').slice(0, 3).join(',');
+
+  try {
+    const url = new URL('https://api.unsplash.com/search/photos');
+    url.searchParams.set('query', query);
+    url.searchParams.set('per_page', '10');
+    url.searchParams.set('orientation', 'landscape');
+    url.searchParams.set('content_filter', 'high');
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Client-ID ${accessKey}`,
+        'Accept-Version': 'v1',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[LocalImage] Unsplash HTTP ${res.status}: ${errBody.substring(0, 100)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const results = data.results as Array<{
+      urls?: { regular?: string; full?: string };
+      alt_description?: string;
+      links?: { html?: string };
+    }> | undefined;
+
+    if (!results?.length) {
+      console.warn(`[LocalImage] Unsplash: sem resultados para "${query}"`);
+      return null;
+    }
+
+    // Pega a primeira imagem com URL
+    const photo = results.find(r => r.urls?.regular || r.urls?.full);
+    if (!photo?.urls?.regular && !photo?.urls?.full) return null;
+
+    const photoUrl = photo.urls?.regular || photo.urls?.full || '';
+    console.log(`[LocalImage] ✅ Unsplash: imagem encontrada para "${query}"`);
+
+    return {
+      url: photoUrl,
+      source: 'unsplash',
+      query_used: query,
+      title: photo.alt_description || query,
+      contextLink: photo.links?.html,
+    };
+  } catch (e) {
+    console.warn('[LocalImage] Unsplash falhou:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// ============================================================================
+// ORQUESTRADOR PRINCIPAL — busca em 4 camadas
 // ============================================================================
 
 export interface LocalImageSearchParams {
@@ -410,54 +481,63 @@ export async function fetchLocalEditorialImage(
     imageIndex = 0,
   } = params;
 
-  let apiKey: string;
-  let cx: string;
+  // Tenta obter chaves Google (opcional — o Unsplash funciona sem elas)
+  let apiKey = '';
+  let cx = '';
+  let hasGoogleKey = false;
 
   try {
     const keys = getGlobalKey('search');
     apiKey = keys.apiKey;
     cx = keys.cx || '';
+    hasGoogleKey = true;
   } catch {
-    console.warn('[LocalImage] getGlobalKey falhou — verificar GOOGLE_GLOBAL_API_KEY');
-    return { url: '', source: 'none' };
+    console.warn('[LocalImage] GOOGLE_GLOBAL_API_KEY ausente — pulando camadas 1-3, indo direto ao Unsplash');
   }
 
   const countryCode = resolveCountryCode(language, country);
   const langCode = language.toLowerCase();
 
-  console.log(`[LocalImage] Editor local: niche="${niche}" city="${city}" lang="${langCode}" country="${countryCode}"`);
+  console.log(`[LocalImage] Editor local: niche="${niche}" city="${city}" lang="${langCode}" country="${countryCode}" google=${hasGoogleKey}`);
 
-  // ── CAMADA 1: Custom Search Image — query editorial contextual ──
-  if (cx) {
-    const query1 = buildEditorialQuery(niche, city, articleContext, language, imageIndex);
-    console.log(`[LocalImage] 🔍 Camada 1a — Custom Search: "${query1}"`);
+  if (hasGoogleKey) {
+    // ── CAMADA 1: Custom Search Image — query editorial contextual ──
+    if (cx) {
+      const query1 = buildEditorialQuery(niche, city, articleContext, language, imageIndex);
+      console.log(`[LocalImage] 🔍 Camada 1a — Custom Search: "${query1}"`);
 
-    const result1 = await searchImagesViaCustomSearch(query1, apiKey, cx, langCode, countryCode, 'LARGE');
-    if (result1?.url) return result1;
+      const result1 = await searchImagesViaCustomSearch(query1, apiKey, cx, langCode, countryCode, 'LARGE');
+      if (result1?.url) return result1;
 
-    // Tenta query alternativa (estratégia diferente)
-    const query1b = buildEditorialQuery(niche, city, articleContext, language, imageIndex + 2);
-    if (query1b !== query1) {
-      console.log(`[LocalImage] 🔍 Camada 1b — Custom Search alt: "${query1b}"`);
-      const result1b = await searchImagesViaCustomSearch(query1b, apiKey, cx, langCode, countryCode, 'MEDIUM');
-      if (result1b?.url) return result1b;
+      // Tenta query alternativa (estratégia diferente)
+      const query1b = buildEditorialQuery(niche, city, articleContext, language, imageIndex + 2);
+      if (query1b !== query1) {
+        console.log(`[LocalImage] 🔍 Camada 1b — Custom Search alt: "${query1b}"`);
+        const result1b = await searchImagesViaCustomSearch(query1b, apiKey, cx, langCode, countryCode, 'MEDIUM');
+        if (result1b?.url) return result1b;
+      }
+    }
+
+    // ── CAMADA 2: Google Places Photos ──
+    console.log(`[LocalImage] 🔍 Camada 2 — Places Photos: ${niche} em ${city}`);
+    const result2 = await searchViaPlacesPhotos(niche, city, language, apiKey);
+    if (result2?.url) return result2;
+
+    // ── CAMADA 3: Custom Search — query ampliada sem restrição local ──
+    if (cx) {
+      const nicheKeywords = resolveNicheKeywords(niche, language);
+      const broadQuery = `${nicheKeywords} professional service`;
+      console.log(`[LocalImage] 🔍 Camada 3 — Custom Search broad: "${broadQuery}"`);
+
+      const result3 = await searchImagesViaCustomSearch(broadQuery, apiKey, cx, langCode, countryCode, 'MEDIUM');
+      if (result3?.url) return { ...result3, source: 'custom_search_fallback' };
     }
   }
 
-  // ── CAMADA 2: Google Places Photos ──
-  console.log(`[LocalImage] 🔍 Camada 2 — Places Photos: ${niche} em ${city}`);
-  const result2 = await searchViaPlacesPhotos(niche, city, language, apiKey);
-  if (result2?.url) return result2;
-
-  // ── CAMADA 3: Custom Search — query ampliada sem restrição local ──
-  if (cx) {
-    const nicheKeywords = resolveNicheKeywords(niche, language);
-    const broadQuery = `${nicheKeywords} professional service`;
-    console.log(`[LocalImage] 🔍 Camada 3 — Custom Search broad: "${broadQuery}"`);
-
-    const result3 = await searchImagesViaCustomSearch(broadQuery, apiKey, cx, langCode, countryCode, 'MEDIUM');
-    if (result3?.url) return { ...result3, source: 'custom_search_fallback' };
-  }
+  // ── CAMADA 4: Unsplash — fallback global garantido (independente do Google) ──
+  console.log(`[LocalImage] 🔍 Camada 4 — Unsplash: ${niche}`);
+  const result4 = await searchViaUnsplash(niche, language);
+  if (result4?.url) return result4;
 
   console.warn(`[LocalImage] ⚠️ Todas as camadas falharam: ${niche} / ${city} (${langCode})`);
   return { url: '', source: 'none' };
@@ -468,13 +548,15 @@ export async function fetchLocalEditorialImage(
  */
 export function toImageGenerationResult(local: LocalImageResult): {
   url: string;
-  generated_by: 'gemini_image' | 'places_photo' | 'none';
+  generated_by: 'gemini_image' | 'places_photo' | 'unsplash_fallback' | 'none';
 } {
   return {
     url: local.url,
     generated_by:
       local.source === 'none'
         ? 'none'
-        : 'places_photo', // 'places_photo' = foto real encontrada (custom_search ou places)
+        : local.source === 'unsplash'
+          ? 'unsplash_fallback'
+          : 'places_photo',
   };
 }

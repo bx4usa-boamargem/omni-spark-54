@@ -62,30 +62,40 @@ Include:
 
 Keep it under 300 words. This will be used as semantic context for the Super Page architecture.`;
 
-    const aiResult = await callAIRouter(supabaseUrl, serviceKey, 'serp_summary', [
-        { role: 'system', content: 'You are an advanced SEO analyst specializing in Local SEO. Provide concise competitive analysis based on the input SERP data.' },
-        { role: 'user', content: prompt },
-    ], {
-        tracking: {
-            tenant_id: jobInput.tenant_id ?? null,
-            blog_id: jobInput.blog_id ?? null,
-            user_id: jobInput.user_id ?? null,
-            article_id: null,
-            job_id: jobInput.job_id ?? null,
-        }
-    });
+    // ── LLM Summarization (graceful fallback se AI falhar) ──────────────────
+    let serpSummary = "";
+    let aiResult: AIRouterResult = { success: false, content: "", error: "SERP_SCOUT_AI_SKIPPED", costUsd: 0, model: "", provider: "", tokensIn: 0, tokensOut: 0, latencyMs: 0 };
 
-    if (!aiResult.success) {
-        throw new Error(`SERP_SCOUT_FAILED: ${aiResult.error}`);
+    try {
+        aiResult = await callAIRouter(supabaseUrl, serviceKey, 'serp_summary', [
+            { role: 'system', content: 'You are an advanced SEO analyst specializing in Local SEO. Provide concise competitive analysis based on the input SERP data.' },
+            { role: 'user', content: prompt },
+        ], {
+            tracking: {
+                tenant_id: jobInput.tenant_id ?? null,
+                blog_id: jobInput.blog_id ?? null,
+                user_id: jobInput.user_id ?? null,
+                article_id: null,
+                job_id: jobInput.job_id ?? null,
+            }
+        });
+
+        if (aiResult.success) {
+            serpSummary = aiResult.content;
+        } else {
+            console.warn(`[AGENT_1_SERP_SCOUT] LLM falhou (non-fatal): ${aiResult.error}. Continuando sem resumo de SERP.`);
+        }
+    } catch (e) {
+        console.warn(`[AGENT_1_SERP_SCOUT] Exceção no LLM (non-fatal): ${e instanceof Error ? e.message : String(e)}. Continuando sem resumo de SERP.`);
     }
 
     return {
         output: {
-            serp_summary: aiResult.content,
+            serp_summary: serpSummary,
             custom_search_results: customSearchResults,
             places_results: placesResults
         },
         aiResult,
-        rawCostUsd: aiResult.costUsd
+        rawCostUsd: aiResult.costUsd || 0
     };
 }

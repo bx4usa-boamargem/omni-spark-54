@@ -18,6 +18,7 @@ import { BlogRoutes } from "@/routes/BlogRoutes";
 // New Auth Pages
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
+import Onboarding from "./pages/auth/Onboarding";
 import PublicLanding from "./pages/PublicLanding";
 
 // Legacy pages (to be migrated)
@@ -111,6 +112,8 @@ import WordPressCallback from "./pages/cms/WordPressCallback";
 import DebugGenerate from "./pages/DebugGenerate";
 import { WorkflowMonitor } from "./pages/admin/WorkflowMonitor";
 import ArticleLinksDashboard from "./pages/client/ArticleLinksDashboard";
+import AIOSCommandCenter from "./pages/admin/AIOSCommandCenter";
+import ClientROIDashboard from "./pages/client/ClientROIDashboard";
 
 const queryClient = new QueryClient();
 
@@ -222,6 +225,7 @@ const AdminRoutes = () => (
   <PlatformAdminGuard>
     <Routes>
       <Route index element={<Admin />} />
+      <Route path="command-center" element={<AIOSCommandCenter />} />
       <Route path="validation" element={<ValidationDashboard />} />
       <Route path="workflows" element={<WorkflowMonitor />} />
       <Route path="*" element={<NotFound />} />
@@ -242,6 +246,7 @@ const ClientRoutes = () => (
       >
         <Routes>
           <Route path="dashboard" element={<ClientDashboard />} />
+          <Route path="roi" element={<ClientROIDashboard />} />
 
           {/* Resultados & ROI */}
           <Route path="results" element={<ClientConsultantMetrics />} />
@@ -319,7 +324,7 @@ const PlatformRoutes = () => (
     {/* New Auth routes */}
     <Route path="/login" element={<Login />} />
     <Route path="/signup" element={<Signup />} />
-    {/* /onboarding removido - auto-provisioning nos guards */}
+    <Route path="/onboarding" element={<Onboarding />} />
     <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/blocked" element={<Blocked />} />
     <Route path="/access-denied" element={<AccessDenied />} />
@@ -508,8 +513,8 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
-        defaultTheme="system"
-        enableSystem
+        defaultTheme="light"
+        forcedTheme="light"
         disableTransitionOnChange
       >
         <AuthProvider>
