@@ -74,16 +74,16 @@ export function useRadarOpportunities(blogId: string | undefined, limit = 5): Us
       // Fetch last market intel update
       const { data: lastIntel, error: intelError } = await supabase
         .from('market_intel_weekly')
-        .select('generated_at')
+        .select('created_at')
         .eq('blog_id', blogId)
-        .order('generated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (intelError) {
         console.error('Error fetching last intel:', intelError);
-      } else if (lastIntel?.generated_at) {
-        setLastUpdatedAt(new Date(lastIntel.generated_at));
+      } else if (lastIntel?.created_at) {
+        setLastUpdatedAt(new Date(lastIntel.created_at));
       }
     } catch (error) {
       console.error('Error in useRadarOpportunities:', error);
