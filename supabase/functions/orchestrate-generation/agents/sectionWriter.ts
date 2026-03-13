@@ -75,14 +75,23 @@ Return ONLY HTML (no markdown wrappers).`;
         totalCostUsd += introAiResult.costUsd || 0;
     }
 
-    // Write Sections (Chunking Process)
-    for (let i = 0; i < outline.h2.length; i++) {
-        const section = outline.h2[i];
-        const sectionEntities = entityCoverage.assignment[i]?.terms || [];
+    // AIOS FASE 1 — Paralelismo: seções escritas em batches de 3 simultâneas
+    // Antes: ~8s × N seções (sequencial + delay 1s)
+    // Depois: ~8s × ceil(N/3) batches (paralelo, sem delay artificial)
+    const BATCH_SIZE = 3;
+    const sectionResults: Array<{ index: number; html: string; costUsd: number }> = [];
 
-        console.log(`[AGENT_6_SECTION_WRITER] Writing Section ${i + 1}/${outline.h2.length}: ${section.title}`);
+    for (let batchStart = 0; batchStart < outline.h2.length; batchStart += BATCH_SIZE) {
+        const batchSections = outline.h2.slice(batchStart, batchStart + BATCH_SIZE);
+        console.log(`[AIOS] Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: escrevendo ${batchSections.length} seção(ões) em paralelo...`);
 
-        const sectionPrompt = `You are a premium Local SEO writer. Your task is to write EXACTLY one section of a larger article.
+        const batchPromises = batchSections.map(async (section, batchIdx) => {
+            const globalIndex = batchStart + batchIdx;
+            const sectionEntities = entityCoverage.assignment[globalIndex]?.terms || [];
+
+            console.log(`[AGENT_6_SECTION_WRITER] Writing Section ${globalIndex + 1}/${outline.h2.length}: ${section.title}`);
+
+            const sectionPrompt = `You are a premium Local SEO writer. Your task is to write EXACTLY one section of a larger article.
 Current Section H2: ${section.title}
 Required H3 Subsections: ${section.h3.length > 0 ? section.h3.join(', ') : 'None, just write the content under H2.'}
 
@@ -103,21 +112,34 @@ Rules:
 4. Use formatting like <ul>, <li>, <strong> where appropriate.
 5. Return ONLY HTML syntax. DO NOT wrap with \`\`\`html. No explanations.`;
 
-        const sectionAiResult = await callAIRouter(supabaseUrl, serviceKey, 'section_gen', [
-            { role: 'system', content: 'You are an SEO Writer. Output valid HTML starting with the <h2> tag.' },
-            { role: 'user', content: sectionPrompt }
-        ]);
+            const sectionAiResult = await callAIRouter(supabaseUrl, serviceKey, 'section_gen', [
+                { role: 'system', content: 'You are an SEO Writer. Output valid HTML starting with the <h2> tag.' },
+                { role: 'user', content: sectionPrompt }
+            ]);
 
-        if (sectionAiResult.success) {
-            fullHtml += sectionAiResult.content.replace(/```html|```/g, '').trim() + '\n';
-            totalCostUsd += sectionAiResult.costUsd || 0;
-        } else {
-            console.warn(`[AGENT_6_SECTION_WRITER] Failed to write section ${i + 1}. Skipping.`);
-        }
+            if (sectionAiResult.success) {
+                return {
+                    index: globalIndex,
+                    html: sectionAiResult.content.replace(/```html|```/g, '').trim() + '\n',
+                    costUsd: sectionAiResult.costUsd || 0,
+                };
+            } else {
+                console.warn(`[AGENT_6_SECTION_WRITER] Failed to write section ${globalIndex + 1}. Skipping.`);
+                return { index: globalIndex, html: '', costUsd: 0 };
+            }
+        });
 
-        // Add small delay to prevent rate limit spikes if multiple chunks
-        await new Promise(r => setTimeout(r, 1000));
+        const batchResults = await Promise.all(batchPromises);
+        sectionResults.push(...batchResults);
     }
+
+    // Reorder results by index to preserve article structure
+    sectionResults.sort((a, b) => a.index - b.index);
+    for (const result of sectionResults) {
+        fullHtml += result.html;
+        totalCostUsd += result.costUsd;
+    }
+
 
     // Write FAQ
     console.log(`[AGENT_6_SECTION_WRITER] Writing FAQ...`);

@@ -52,6 +52,7 @@ interface Profile {
 import { DashboardProofOfValue } from "@/components/dashboard/DashboardProofOfValue";
 import { DashboardRadarWidget } from "@/components/dashboard/DashboardRadarWidget";
 import { DashboardTerritoryPerformance } from "@/components/dashboard/DashboardTerritoryPerformance";
+import { AgentsStatusWidget } from "@/components/dashboard/AgentsStatusWidget";
 
 interface RoiDashboardData {
   total_articles: number;
@@ -348,6 +349,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Agentes AIOS */}
+        <AgentsStatusWidget tenantId={user?.id} />
 
         {/* Proof of Value Component */}
         <DashboardProofOfValue />

@@ -140,10 +140,7 @@ export default function SuperPageBuilder() {
             const { data, error } = await supabase.functions.invoke('create-generation-job', { body: payload });
 
             if (error) throw error;
-
-            // A edge function pode retornar graph_id (pipeline DAG) ou job_id (pipeline legado)
-            const jobId = data?.job_id || data?.graph_id;
-            if (!jobId) throw new Error(data?.error || 'Resposta inválida do servidor');
+            if (!data?.job_id) throw new Error(data?.error || 'Resposta inválida do servidor');
 
             if (isMounted.current) {
                 toast.success('Super Page em geração! Acompanhe o progresso.');

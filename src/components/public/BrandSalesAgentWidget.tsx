@@ -28,12 +28,6 @@ interface Message {
   content: string;
 }
 
-interface ChatState {
-  messages: Message[];
-  conversationId: string | null;
-  leadCaptured: boolean;
-}
-
 // Generate a unique visitor ID
 const getVisitorId = (): string => {
   const key = 'omniseen_visitor_id';
@@ -80,7 +74,6 @@ export function BrandSalesAgentWidget({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [leadCaptured, setLeadCaptured] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -119,10 +112,9 @@ export function BrandSalesAgentWidget({
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
-        const data: ChatState = JSON.parse(saved);
+        const data = JSON.parse(saved);
         setMessages(data.messages || []);
         setConversationId(data.conversationId || null);
-        setLeadCaptured(data.leadCaptured || false);
       } catch (e) {
         console.error('Failed to load saved conversation:', e);
       }
@@ -133,14 +125,12 @@ export function BrandSalesAgentWidget({
   useEffect(() => {
     if (messages.length > 0) {
       const key = `omniseen_chat_${blogId}_${sessionId.current}`;
-      const state: ChatState = { messages, conversationId, leadCaptured };
-      localStorage.setItem(key, JSON.stringify(state));
+      localStorage.setItem(key, JSON.stringify({ messages, conversationId }));
     }
-  }, [messages, conversationId, leadCaptured, blogId]);
+  }, [messages, conversationId, blogId]);
 
   const sendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
-
 
     const userMessage: Message = { role: 'user', content: messageText.trim() };
     setMessages(prev => [...prev, userMessage]);
@@ -156,7 +146,6 @@ export function BrandSalesAgentWidget({
           article_title: articleTitle,
           visitor_id: visitorId.current,
           session_id: sessionId.current,
-          conversation_id: conversationId, // Send existing ID to resume without lookup
           message: messageText.trim(),
           ...utmParams.current,
         },
@@ -171,9 +160,6 @@ export function BrandSalesAgentWidget({
       } else if (data) {
         if (data.conversation_id) {
           setConversationId(data.conversation_id);
-        }
-        if (data.lead_captured) {
-          setLeadCaptured(true);
         }
         setMessages(prev => [...prev, {
           role: 'assistant',

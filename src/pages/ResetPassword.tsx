@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { OmniseenLogo } from "@/components/ui/OmniseenLogo";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 import { Mail, Lock, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
@@ -43,7 +43,11 @@ export default function ResetPassword() {
     try {
       const validation = emailSchema.safeParse(email);
       if (!validation.success) {
-        toast.error(validation.error.errors[0].message);
+        toast({
+          title: t('auth.errors.validationError'),
+          description: validation.error.errors[0].message,
+          variant: "destructive",
+        });
         setIsLoading(false);
         return;
       }
@@ -60,13 +64,19 @@ export default function ResetPassword() {
 
       // Always show success message (don't reveal if email exists)
       setSuccess(true);
-      toast(t('auth.reset.emailSent'), { description: t('auth.reset.checkInbox') });
+      toast({
+        title: t('auth.reset.emailSent'),
+        description: t('auth.reset.checkInbox'),
+      });
 
     } catch (err) {
       console.error('[ResetPassword] Unexpected error:', err);
       // Still show success to not reveal if email exists
       setSuccess(true);
-      toast(t('auth.reset.emailSent'), { description: t('auth.reset.checkInbox') });
+      toast({
+        title: t('auth.reset.emailSent'),
+        description: t('auth.reset.checkInbox'),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -79,13 +89,21 @@ export default function ResetPassword() {
     try {
       const validation = passwordSchema.safeParse(password);
       if (!validation.success) {
-        toast.error(validation.error.errors[0].message);
+        toast({
+          title: t('auth.errors.validationError'),
+          description: validation.error.errors[0].message,
+          variant: "destructive",
+        });
         setIsLoading(false);
         return;
       }
 
       if (password !== confirmPassword) {
-        toast.error(t('auth.errors.passwordMismatch'));
+        toast({
+          title: t('common.error'),
+          description: t('auth.errors.passwordMismatch'),
+          variant: "destructive",
+        });
         setIsLoading(false);
         return;
       }
@@ -93,13 +111,24 @@ export default function ResetPassword() {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        toast.error(t('auth.errors.resetFailed'));
+        toast({
+          title: t('common.error'),
+          description: t('auth.errors.resetFailed'),
+          variant: "destructive",
+        });
       } else {
-        toast.success(t('auth.reset.passwordUpdated'));
+        toast({
+          title: t('auth.reset.passwordReset'),
+          description: t('auth.reset.passwordUpdated'),
+        });
         navigate("/login");
       }
     } catch {
-      toast.error(t('auth.errors.unexpectedError'));
+      toast({
+        title: t('common.error'),
+        description: t('auth.errors.unexpectedError'),
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

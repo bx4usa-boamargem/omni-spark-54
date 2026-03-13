@@ -77,25 +77,17 @@ export default function ClientCompany({ embedded }: { embedded?: boolean }) {
           .maybeSingle();
 
         if (profile) {
-          // Usar business_name (nome correto da coluna no banco)
-          setCompanyName(profile.business_name || '');
-          // city_state é a coluna para "Cidade / Estado" com fallback para country
-          setCityState(profile.city_state || profile.country || '');
-          // business_segment é o nome correto da coluna no banco
-          setBusinessType(profile.business_segment || '');
-          // long_description não existe na tabela; setWhatYouDo fica vazio por ora
-          setWhatYouDo('');
+          setCompanyName(profile.company_name || '');
+          setCityState(profile.country || '');
+          setBusinessType(profile.niche || '');
+          setWhatYouDo(profile.long_description || '');
           setTargetAudience(profile.target_audience || '');
-          // whatsapp não é coluna de business_profile — acesso via rawProfile como fallback
-          const rawProfile = profile as Record<string, unknown>;
-          setWhatsapp((rawProfile.whatsapp as string) || '');
-          setCity(profile.city || '');
-          // services é JSON no banco — converter para string se necessário
-          setServices(typeof profile.services === 'string' ? profile.services : (profile.services ? JSON.stringify(profile.services) : ''));
-          setFullAddress(profile.full_address || '');
-          setWhatsappTemplate((rawProfile.whatsapp_lead_template as string) || '');
-          if (Array.isArray(profile.brand_keywords) && profile.brand_keywords.length > 0) {
-            setDifferentiator((profile.brand_keywords as string[]).join(', '));
+          setWhatsapp((profile as Record<string, unknown>).whatsapp as string || '');
+          setCity((profile as Record<string, unknown>).city as string || '');
+          setServices((profile as Record<string, unknown>).services as string || '');
+          setWhatsappTemplate((profile as Record<string, unknown>).whatsapp_lead_template as string || '');
+          if (profile.brand_keywords && profile.brand_keywords.length > 0) {
+            setDifferentiator(profile.brand_keywords.join(', '));
           }
         }
 
@@ -192,27 +184,35 @@ export default function ClientCompany({ embedded }: { embedded?: boolean }) {
     setSaved(false);
 
     try {
-      // Upsert com todos os campos do business_profile em uma única operação
+      // Update business profile with whatsapp
+      const profileData = {
+        blog_id: blog.id,
+        company_name: companyName,
+        country: cityState,
+        niche: businessType,
+        long_description: whatYouDo,
+        target_audience: targetAudience,
+        brand_keywords: differentiator ? differentiator.split(',').map(k => k.trim()) : [],
+      };
+
       const { error: profileError } = await supabase
         .from('business_profile')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .upsert({
-          blog_id: blog.id,
-          business_name: companyName,
-          business_segment: businessType,
-          // whatYouDo não tem coluna equivalente em business_profile
-          target_audience: targetAudience,
-          brand_keywords: differentiator ? differentiator.split(',').map(k => k.trim()) : [],
-          // whatsapp e whatsapp_lead_template não estão no tipo gerado mas existem na tabela
-          whatsapp: whatsapp || null,
-          city: city || null,
-          services: services || null,
-          whatsapp_lead_template: whatsappTemplate || null,
-          full_address: fullAddress || null,
-          city_state: cityState || null,
-        } as any, { onConflict: 'blog_id' });
+        .upsert(profileData, { onConflict: 'blog_id' });
 
       if (profileError) throw profileError;
+
+      // Update whatsapp, city, services, whatsapp_lead_template separately
+      if (whatsapp !== undefined || city || services || whatsappTemplate !== undefined) {
+        await supabase
+          .from('business_profile')
+          .update({ 
+            whatsapp: whatsapp || null,
+            city: city || null,
+            services: services || null,
+            whatsapp_lead_template: whatsappTemplate || null
+          } as Record<string, unknown>)
+          .eq('blog_id', blog.id);
+      }
 
       // Update blog name and platform_subdomain
       const { error: blogError } = await supabase

@@ -29,3 +29,14 @@ supabase/.temp/
 
 # Local auth helper (never commit)
 .git-askpass-gh.sh
+
+# Arquivos locais de design e documentos (não vão para o repo)
+*.pdf
+*.PDF
+*.PNG
+*.png
+Favicon*
+*Plano_Lancamento*
+*Prompt_Antigravity*
+*.html
+omniseen-arch-admin.html

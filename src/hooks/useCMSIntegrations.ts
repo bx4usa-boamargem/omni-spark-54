@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type CMSPlatform = "wordpress" | "wordpress-com" | "wix" | "webflow" | "gohighlevel" | "custom";
+export type CMSPlatform = "wordpress" | "wordpress-com" | "wix" | "webflow" | "custom";
 
 export interface CMSIntegration {
   id: string;
@@ -18,8 +18,6 @@ export interface CMSIntegration {
   last_sync_status: string | null;
   auth_type: string | null;
   wordpress_site_id: string | null;
-  location_id: string | null;
-  extra_config: Record<string, unknown> | null;
   token_expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -66,7 +64,7 @@ export function useCMSIntegrations(blogId: string) {
   const addIntegration = async (
     platform: CMSPlatform,
     siteUrl: string,
-    credentials: { username?: string; apiKey?: string; apiSecret?: string; locationId?: string }
+    credentials: { username?: string; apiKey?: string; apiSecret?: string }
   ): Promise<{ success: boolean; integrationId?: string; message?: string }> => {
     try {
       const { data, error } = await supabase
@@ -78,7 +76,6 @@ export function useCMSIntegrations(blogId: string) {
           username: credentials.username || null,
           api_key: credentials.apiKey || null,
           api_secret: credentials.apiSecret || null,
-          location_id: credentials.locationId || null,
         })
         .select()
         .single();

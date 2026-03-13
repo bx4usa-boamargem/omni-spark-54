@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName?: string) => {
-    const redirectUrl = `${window.location.origin}/oauth/callback`;
+    const redirectUrl = `${window.location.origin}/`;
 
     const { error } = await supabase.auth.signUp({
       email,
@@ -146,12 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     // Callback centralizado em app.omniseen.app para suporte a subdomínios
     // O return_to codifica a origem para redirecionamento final
-    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const callbackBase = isLocalDev
-      ? window.location.origin
-      : 'https://app.omniseen.app';
     const returnTo = encodeURIComponent(window.location.origin + '/client/dashboard');
-    const redirectTo = `${callbackBase}/oauth/callback?return_to=${returnTo}`;
+    const redirectTo = `https://app.omniseen.app/oauth/callback?return_to=${returnTo}`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

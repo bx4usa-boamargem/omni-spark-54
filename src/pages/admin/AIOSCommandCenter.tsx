@@ -24,11 +24,14 @@ import {
   Sparkles,
   Shield,
   Database,
+  Bot,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { SquadCard, type Squad } from '@/components/aios/SquadCard';
+import { TaskDispatchModal } from '@/components/aios/TaskDispatchModal';
 
 /* ─── Paleta OmniSeen ─── */
 const C = {
@@ -74,7 +77,17 @@ interface GenerationRun {
   completed_at?: string;
   total_articles?: number;
   blog?: { name: string };
+  squad_id?: string;
+  task_type?: string;
 }
+
+/* ─── Squads AIOS estáticos com meta ─── */
+const SQUADS_META: Squad[] = [
+  { id: 'omniseen-conteudo',         name: 'Squad Conteúdo',       description: '6 agentes · Writer, SEO, Publisher',  agentCount: 6, runningAgents: 0, status: 'idle', color: '#7C3AED', colorSoft: 'rgba(124,58,237,0.12)', icon: '✍️' },
+  { id: 'omniseen-presenca-digital', name: 'Squad Presença',       description: '4 agentes · Local SEO, GMB, SERP',    agentCount: 4, runningAgents: 0, status: 'idle', color: '#F97316', colorSoft: 'rgba(249,115,22,0.12)',  icon: '📡' },
+  { id: 'omniseen-comercial',        name: 'Squad Comercial',      description: '4 agentes · SDR, Funil, Analytics',   agentCount: 4, runningAgents: 0, status: 'idle', color: '#3B82F6', colorSoft: 'rgba(59,130,246,0.12)',  icon: '🎯' },
+  { id: 'claude-code-mastery',       name: 'Meta-AIOS',            description: '3 agentes · Swarm, MCP, Skills',      agentCount: 3, runningAgents: 0, status: 'idle', color: '#10B981', colorSoft: 'rgba(16,185,129,0.12)', icon: '⚙️' },
+];
 
 /* ─── Widgets de Métrica ─── */
 function MetricCard({
@@ -166,6 +179,8 @@ export function AIOSCommandCenter() {
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [engineOnline, setEngineOnline] = useState(true);
+  const [squads, setSquads] = useState<Squad[]>(SQUADS_META);
+  const [dispatchTarget, setDispatchTarget] = useState<Squad | null>(null);
 
   const fetchPlatformData = useCallback(async () => {
     setLoading(true);
@@ -220,9 +235,50 @@ export function AIOSCommandCenter() {
 
   useEffect(() => {
     fetchPlatformData();
-    const interval = setInterval(fetchPlatformData, 60_000); // auto-refresh 60s
+    const interval = setInterval(fetchPlatformData, 60_000);
     return () => clearInterval(interval);
   }, [fetchPlatformData]);
+
+  /* ─── Realtime: aios_task_runs ─── */
+  useEffect(() => {
+    let sub: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      sub = supabase
+        .channel('aios-runs-realtime')
+        .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'aios_task_runs' }, (payload: any) => {
+          const row = payload.new as GenerationRun;
+          if (!row) return;
+          setRecentRuns(prev => {
+            const filtered = prev.filter(r => r.id !== row.id);
+            return [row, ...filtered].slice(0, 10);
+          });
+          if (row.squad_id) {
+            setSquads(prev => prev.map(s =>
+              s.id === row.squad_id
+                ? { ...s, status: row.status === 'running' ? 'running' as const : 'idle' as const,
+                    lastRun: format(new Date(row.created_at), 'dd/MM HH:mm') }
+                : s
+            ));
+          }
+        })
+        .subscribe();
+    } catch { /* tabela ainda não existe */ }
+    return () => { if (sub) supabase.removeChannel(sub); };
+  }, []);
+
+  /* ─── Dispatch task ao orquestrador ─── */
+  const handleDispatch = async (squad: Squad, task: string, params: Record<string, string>) => {
+    setSquads(prev => prev.map(s => s.id === squad.id ? { ...s, status: 'running' as const, runningAgents: 1 } : s));
+    try {
+      await supabase.functions.invoke('aios-orchestrator', {
+        body: { squad: squad.id, task, params },
+      });
+    } catch (err) {
+      console.warn('[Dispatch] Orquestrador ainda não deployado:', err);
+      // Simula execução por 3s para demo
+      setTimeout(() => setSquads(prev => prev.map(s => s.id === squad.id ? { ...s, status: 'idle' as const, runningAgents: 0 } : s)), 3000);
+    }
+  };
 
   const articleTrend =
     stats.articlesLastWeek > 0
@@ -322,8 +378,38 @@ export function AIOSCommandCenter() {
         </div>
       </header>
 
+      {/* ── DISPATCH MODAL ── */}
+      <TaskDispatchModal
+        squad={dispatchTarget}
+        onClose={() => setDispatchTarget(null)}
+        onDispatch={handleDispatch}
+      />
+
       {/* ── CONTENT ── */}
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8 space-y-8">
+
+        {/* ── SQUADS OVERVIEW ── */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot size={16} style={{ color: C.purple }} />
+              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Exército AIOS</h2>
+            </div>
+            <Badge variant="outline" className="border-purple-500/30 text-purple-400 bg-purple-500/10 text-xs">
+              {squads.filter(s => s.status === 'running').length} rodando
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {squads.map(squad => (
+              <SquadCard
+                key={squad.id}
+                squad={squad}
+                onDispatch={(s) => setDispatchTarget(s)}
+                onViewDetail={() => {}}
+              />
+            ))}
+          </div>
+        </section>
 
         {/* ── MÉTRICAS TOPO ── */}
         <section>

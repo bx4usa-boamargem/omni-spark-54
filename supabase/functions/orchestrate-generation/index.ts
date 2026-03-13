@@ -13,9 +13,11 @@ import { executeImageGenerator } from "./agents/imageGenerator.ts";
 import { executeResearchContext } from "./agents/researchContext.ts";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get('ALLOWED_ORIGIN') ?? '*',
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+
 
 const ZOMBIE_THRESHOLD_MS = 20 * 60 * 1000;
 const LOCK_TTL_MS = 120_000;

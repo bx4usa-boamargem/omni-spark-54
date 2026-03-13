@@ -27,10 +27,7 @@ export function DashboardRadarWidget({ blogId }: { blogId?: string }) {
     useEffect(() => {
         let isMounted = true;
         async function fetchOpportunities() {
-            if (!blogId) {
-                if (isMounted) setLoading(false);
-                return;
-            }
+            if (!blogId) return;
             setLoading(true);
             try {
                 const thirtyDays = new Date();
