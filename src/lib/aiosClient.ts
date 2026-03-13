@@ -2,12 +2,12 @@
  * aiosClient.ts — OmniSeen V4
  *
  * SDK de cliente para os squads AIOS integrados ao OmniSeen.
- * Referencia os squads criados em /aios-oficial/squads/omniseen-*/
+ * Referencia os squads criados em /aios-oficial/squads/omniseen-*
  *
- * Squads disponíveis:
- *  - omniseen-conteudo        → Geração, revisão e publicação de artigos
- *  - omniseen-presenca-digital → SEO local, GMB, análise de SERP
- *  - omniseen-comercial        → SDR, funis, landing pages, relatórios
+ * Squads disponiveis:
+ *  - omniseen-conteudo        - Geracao, revisao e publicacao de artigos
+ *  - omniseen-presenca-digital - SEO local, GMB, analise de SERP
+ *  - omniseen-comercial        - SDR, funis, landing pages, relatorios
  */
 
 import { supabase } from '@/integrations/supabase/client';

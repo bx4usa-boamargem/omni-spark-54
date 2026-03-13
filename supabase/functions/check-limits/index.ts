@@ -145,16 +145,41 @@ serve(async (req) => {
       .eq('user_id', userId)
       .single();
 
-    // No subscription = blocked (no free plan exists)
+    // No subscription = treat as trialing user with essential limits (fail-open)
     if (!subscription) {
+      const fallbackLimits = PLAN_LIMITS.essential;
+      
+      if (action === 'check') {
+        return new Response(
+          JSON.stringify({
+            plan: 'free',
+            isBlocked: false,
+            limitReached: false,
+            isUnlimited: false,
+            remaining: fallbackLimits.articles_per_month,
+            limits: {
+              articles_limit: fallbackLimits.articles_per_month,
+              images_limit: fallbackLimits.images_per_month,
+              keywords_limit: fallbackLimits.keywords_limit,
+              ebooks_limit: fallbackLimits.ebooks_per_month,
+              blogs_limit: fallbackLimits.blogs_limit,
+              team_members_limit: fallbackLimits.team_members,
+              territories_limit: fallbackLimits.territories_limit,
+              radar_limit: fallbackLimits.radar_searches,
+            },
+            usage: {
+              articles_used: 0, images_used: 0, keywords_used: 0,
+              ebooks_used: 0, blogs_used: 0, team_members_used: 0,
+              territories_used: 0, radar_used: 0,
+            },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      // For increment without subscription, allow but warn
       return new Response(
-        JSON.stringify({ 
-          error: 'No active subscription',
-          plan: null,
-          isBlocked: true,
-          limitReached: true,
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, plan: 'free', remaining: -1 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
